@@ -1,0 +1,41 @@
+# Python cache/build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Local environment/config
+.env
+.env.*
+!.env.example
+
+# Training outputs and checkpoints
+runs/*
+!runs/.gitkeep
+*.pkl
+*.ckpt
+*.pt
+*.pth
+*.npz
+
+# Logs
+*.log
+
+# IDE/OS noise
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,4 @@
+gymnasium==1.2.2
+jax>=0.5.0
+tqdm>=4.66
+loguru>=0.7
