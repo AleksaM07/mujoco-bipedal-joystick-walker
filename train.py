@@ -1,28 +1,41 @@
-from __future__ import annotations
-
 import argparse
+import functools
 import json
-import pickle
-import random
 from datetime import datetime
 from pathlib import Path
 
 import jax
-import numpy as np
+from brax.training.agents.ppo import networks as ppo_networks
+from brax.training.agents.ppo import train as ppo
 from loguru import logger
+from mujoco_playground import locomotion
+from mujoco_playground._src import wrapper
+from mujoco_playground.config import locomotion_params
 
 try:
-    from .config import RUNS_DIR, EnvConfig
-    from .deep_rl import ReplayBuffer, TrainConfig, make_agent
-    from .env_factory import make_env
+    from .config import RUNS_DIR, EnvConfig, TrainConfig
+    from .playground_env import playground_env_name
 except ImportError:
-    from config import RUNS_DIR, EnvConfig
-    from deep_rl import ReplayBuffer, TrainConfig, make_agent
-    from env_factory import make_env
+    from config import RUNS_DIR, EnvConfig, TrainConfig
+    from playground_env import playground_env_name
+
+
+class TrainingProgressLogger:
+    """Prima PPO evaluacione metrike i upisuje ih u loguru logger."""
+
+    def __call__(self, step: int, metrics: dict) -> None:
+        reward = metrics.get("eval/episode_reward")
+        episode_length = metrics.get("eval/episode_length")
+        logger.info(
+            "eval | step={} | reward={} | episode_length={}",
+            step,
+            None if reward is None else float(reward),
+            None if episode_length is None else float(episode_length),
+        )
 
 
 def choose_device(name: str, allow_cpu: bool):
-    """Bira JAX uredjaj. Ako trazis GPU, kod ne nastavlja tiho na CPU."""
+    """Bira JAX uredjaj i eksplicitno odbija tihi fallback sa GPU-a na CPU."""
     if name == "cpu":
         return jax.devices("cpu")[0]
 
@@ -34,25 +47,13 @@ def choose_device(name: str, allow_cpu: bool):
         return gpus[0]
     if allow_cpu:
         return jax.devices("cpu")[0]
-    raise RuntimeError("JAX ne vidi GPU. Pokreni sa --allow-cpu samo za mali CPU test.")
-
-
-def save_checkpoint(path: Path, algo: str, agent, obs_dim: int, action_dim: int, cfg: TrainConfig, env_config: EnvConfig) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    data = {
-        "algo": algo,
-        "obs_dim": obs_dim,
-        "action_dim": action_dim,
-        "hidden": cfg.hidden,
-        "env_config": env_config.__dict__,
-        "agent": agent.save_dict(),
-    }
-    with path.open("wb") as f:
-        pickle.dump(data, f)
+    raise RuntimeError(
+        "JAX ne vidi GPU. Dodaj --allow-cpu samo za mali CPU run."
+    )
 
 
 def format_steps(steps: int) -> str:
-    """200000 -> 200k, 1500000 -> 1m5, 500 -> 500."""
+    """Formatira broj stepova za ime run foldera."""
     if steps >= 1_000_000:
         whole = steps // 1_000_000
         rest = (steps % 1_000_000) // 100_000
@@ -62,119 +63,156 @@ def format_steps(steps: int) -> str:
     return str(steps)
 
 
-def make_run_dir(base_dir: Path, algo: str, timesteps: int, seed: int) -> Path:
+def make_run_dir(base_dir: Path, env_name: str, timesteps: int, seed: int) -> Path:
+    """Pravi deterministicki citljivo ime run foldera."""
     stamp = datetime.now().strftime("%Y%m%d_%H%M")
-    return base_dir / f"{algo}_{stamp}_{format_steps(timesteps)}_seed{seed}"
+    return base_dir / f"ppo_{env_name}_{stamp}_{format_steps(timesteps)}_seed{seed}"
 
 
-def train_off_policy(env, agent, cfg: TrainConfig, save_path: Path, algo: str) -> None:
-    obs_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.shape[0]
-    replay = ReplayBuffer(obs_dim, action_dim, cfg.replay_size)
-
-    obs, _ = env.reset(seed=cfg.seed)
-    episode_reward = 0.0
-    episode = 1
-
-    logger.info("petlja start | total_steps={} | random_start_steps={}", cfg.timesteps, cfg.start_steps)
-    for step in range(1, cfg.timesteps + 1):
-        if step < cfg.start_steps:
-            action = env.action_space.sample()
-        else:
-            action = agent.act(obs, deterministic=False)
-
-        next_obs, reward, terminated, truncated, _ = env.step(action)
-        done = terminated or truncated
-        replay.add(obs, action, reward, next_obs, float(done))
-        obs = next_obs
-        episode_reward += float(reward)
-
-        if done:
-            logger.info("episode={} step={} reward={:.2f}", episode, step, episode_reward)
-            obs, _ = env.reset()
-            episode_reward = 0.0
-            episode += 1
-
-        if len(replay) >= cfg.batch_size and step >= cfg.start_steps:
-            for _ in range(cfg.updates_per_step):
-                agent.update(replay)
-
-        if step == 1 or step % 1_000 == 0 or step == cfg.timesteps:
-            logger.info(
-                "progress | step={}/{} | replay_size={} | current_episode={} | current_episode_reward={:.2f}",
-                step,
-                cfg.timesteps,
-                len(replay),
-                episode,
-                episode_reward,
-            )
-
-        if step % 10_000 == 0:
-            save_checkpoint(save_path, algo, agent, obs_dim, action_dim, cfg, env.config)
-            logger.info("checkpoint sacuvan | step={} | path={}", step, save_path)
-
-    save_checkpoint(save_path, algo, agent, obs_dim, action_dim, cfg, env.config)
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="JAX deep RL trening bez Stable-Baselines3 i bez PyTorch-a.")
-    parser.add_argument("--algo", choices=["sac", "td3"], default="sac")
-    parser.add_argument("--timesteps", type=int, default=200_000)
-    parser.add_argument("--seed", type=int, default=7)
-    parser.add_argument("--device", choices=["gpu", "cpu"], default="gpu")
-    parser.add_argument("--allow-cpu", action="store_true")
-    parser.add_argument("--env-backend", choices=["playground", "biomech"], default="playground")
-    parser.add_argument("--env-version", choices=["standard", "hardcore"], default="standard")
-    parser.add_argument("--playground-impl", choices=["jax", "warp"], default="jax")
-    parser.add_argument("--out", type=Path, default=RUNS_DIR / "jax")
-    args = parser.parse_args()
-
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    device = choose_device(args.device, args.allow_cpu)
-    jax.config.update("jax_default_device", device)
-    print(f"jax_device={device}")
-
-    cfg = TrainConfig(algo=args.algo, timesteps=args.timesteps, seed=args.seed, device=args.device)
-    env_config = EnvConfig(
-        env_backend=args.env_backend,
-        env_version=args.env_version,
-        playground_impl=args.playground_impl,
+def make_ppo_config(
+    env_name: str,
+    env_config: EnvConfig,
+    train_config: TrainConfig,
+):
+    """Uzima tuned Playground PPO config i primenjuje samo eksplicitne override-e."""
+    rl_config = locomotion_params.brax_ppo_config(
+        env_name,
+        impl=env_config.playground_impl,
     )
-    env = make_env(config=env_config, seed=args.seed)
-    obs_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.shape[0]
-    key = jax.random.PRNGKey(args.seed)
-    agent = make_agent(args.algo, obs_dim, action_dim, cfg, key)
+    overrides = {
+        "num_timesteps": train_config.num_timesteps,
+        "num_evals": train_config.num_evals,
+        "num_envs": train_config.num_envs,
+        "batch_size": train_config.batch_size,
+        "learning_rate": train_config.learning_rate,
+    }
+    for key, value in overrides.items():
+        if value is not None:
+            rl_config[key] = value
 
-    run_dir = make_run_dir(args.out, args.algo, args.timesteps, args.seed)
+    network_config = dict(rl_config.network_factory)
+    rl_config.network_factory = functools.partial(
+        ppo_networks.make_ppo_networks,
+        **network_config,
+    )
+    return rl_config
+
+
+def save_run_config(
+    run_dir: Path,
+    env_config: EnvConfig,
+    train_config: TrainConfig,
+    rl_config,
+) -> None:
+    """Snima nas config i finalni Brax PPO config koji stvarno ide u trening."""
+    serializable_rl_config = rl_config.to_dict()
+    serializable_rl_config["network_factory"] = (
+        "brax.training.agents.ppo.networks.make_ppo_networks"
+    )
+    data = {
+        "env": env_config.__dict__,
+        "train": train_config.__dict__,
+        "brax_ppo": serializable_rl_config,
+    }
+    (run_dir / "config.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def run_training(
+    env_config: EnvConfig,
+    train_config: TrainConfig,
+    out_dir: Path,
+) -> Path:
+    """Pokrece MuJoCo Playground env kroz Brax PPO/MJX training pipeline."""
+    env_name = playground_env_name(env_config)
+    rl_config = make_ppo_config(env_name, env_config, train_config)
+    run_dir = make_run_dir(
+        out_dir,
+        env_name,
+        rl_config.num_timesteps,
+        train_config.seed,
+    )
+    checkpoint_dir = run_dir / "checkpoints"
     run_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
     logger.remove()
     logger.add(lambda msg: print(msg, end=""), level="INFO")
     logger.add(run_dir / "train.log", level="INFO", encoding="utf-8", mode="w")
+    save_run_config(run_dir, env_config, train_config, rl_config)
 
-    save_path = run_dir / "policy.pkl"
-    run_config = {"train": cfg.__dict__, "env": env_config.__dict__}
-    (run_dir / "config.json").write_text(json.dumps(run_config, indent=2), encoding="utf-8")
-
-    logger.info("trening start")
+    env = locomotion.load(
+        env_name,
+        config_overrides={"impl": env_config.playground_impl},
+    )
     logger.info(
-        "algo={} backend={} env_version={} seed={} timesteps={} run_dir={}",
-        args.algo,
-        args.env_backend,
-        args.env_version,
-        args.seed,
-        args.timesteps,
+        "trening start | env={} | impl={} | run_dir={}",
+        env_name,
+        env_config.playground_impl,
         run_dir,
     )
-    logger.info("jax_device={} available_devices={}", device, jax.devices())
-    logger.info("obs_dim={} action_dim={}", obs_dim, action_dim)
-    logger.info("batch_size={} replay_size={} start_steps={} lr={}", cfg.batch_size, cfg.replay_size, cfg.start_steps, cfg.lr)
+    logger.info(
+        "ppo | timesteps={} | num_envs={} | batch_size={} | lr={}",
+        rl_config.num_timesteps,
+        rl_config.num_envs,
+        rl_config.batch_size,
+        rl_config.learning_rate,
+    )
 
-    train_off_policy(env, agent, cfg, save_path, args.algo)
+    train_kwargs = rl_config.to_dict()
+    ppo.train(
+        environment=env,
+        seed=train_config.seed,
+        progress_fn=TrainingProgressLogger(),
+        save_checkpoint_path=str(checkpoint_dir),
+        wrap_env_fn=wrapper.wrap_for_brax_training,
+        **train_kwargs,
+    )
+    logger.info("trening gotov | checkpoints={}", checkpoint_dir)
+    return run_dir
 
-    env.close()
-    logger.info("trening gotov | model={}", save_path)
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="MuJoCo Playground/Brax PPO trening."
+    )
+    parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--device", choices=["gpu", "cpu"], default="gpu")
+    parser.add_argument("--allow-cpu", action="store_true")
+    parser.add_argument(
+        "--env-version",
+        choices=["standard", "hardcore"],
+        default="standard",
+    )
+    parser.add_argument(
+        "--playground-impl",
+        choices=["jax", "warp"],
+        default="jax",
+    )
+    parser.add_argument("--timesteps", type=int, default=None)
+    parser.add_argument("--num-envs", type=int, default=None)
+    parser.add_argument("--num-evals", type=int, default=None)
+    parser.add_argument("--batch-size", type=int, default=None)
+    parser.add_argument("--learning-rate", type=float, default=None)
+    parser.add_argument("--out", type=Path, default=RUNS_DIR / "brax_ppo")
+    args = parser.parse_args()
+
+    device = choose_device(args.device, args.allow_cpu)
+    jax.config.update("jax_default_device", device)
+
+    env_config = EnvConfig(
+        env_backend="playground",
+        env_version=args.env_version,
+        playground_impl=args.playground_impl,
+    )
+    train_config = TrainConfig(
+        seed=args.seed,
+        num_timesteps=args.timesteps,
+        num_evals=args.num_evals,
+        num_envs=args.num_envs,
+        batch_size=args.batch_size,
+        learning_rate=args.learning_rate,
+    )
+    run_training(env_config, train_config, args.out)
 
 
 if __name__ == "__main__":

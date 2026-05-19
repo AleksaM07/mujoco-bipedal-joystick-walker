@@ -116,3 +116,25 @@ class EnvConfig:
     # Kazne za jake i nagle akcije, da politika ne nauci trzanje.
     control_cost: float = 0.001
     action_rate_cost: float = 0.01
+
+
+# Dataclass iz istog razloga kao EnvConfig: trening skripti treba kratak
+# konstruktor, checkpoint cuva __dict__, a load moze da uradi TrainConfig(**...).
+@dataclass
+class TrainConfig:
+    # Fiksan seed daje ponovljivost dok uporedjujemo izmene.
+    seed: int = 7
+
+    # None znaci: koristi tuned vrednost iz MuJoCo Playground locomotion_params.
+    # Za Berkeley humanoid Playground default je PPO sa 150M stepova, 8192
+    # paralelna env-a, policy MLP (512, 256, 128) i privileged critic obs.
+    num_timesteps: int | None = None
+    num_evals: int | None = None
+    num_envs: int | None = None
+    batch_size: int | None = None
+    learning_rate: float | None = None
+
+    # PPO je izabran jer Playground vec ima podesen Brax/MJX PPO config za
+    # Berkeley humanoid joystick env. SAC/TD3 nisu odbaceni teorijski, nego nisu
+    # tuned/provided put za ovaj locomotion env u Playground paketu koji koristimo.
+    algorithm: str = "ppo"
