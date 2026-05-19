@@ -8,7 +8,10 @@ from pathlib import Path
 import mujoco
 import numpy as np
 
-from .config import BIOMECH_DIR, LOCOMOTION_JOINTS, RUNS_DIR, EnvConfig
+try:
+    from .config import BIOMECH_DIR, LOCOMOTION_JOINTS, RUNS_DIR, EnvConfig
+except ImportError:
+    from config import BIOMECH_DIR, LOCOMOTION_JOINTS, RUNS_DIR, EnvConfig
 
 
 @dataclass

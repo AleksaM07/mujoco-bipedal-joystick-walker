@@ -11,9 +11,14 @@ import jax
 import numpy as np
 from loguru import logger
 
-from .config import RUNS_DIR
-from .deep_rl import ReplayBuffer, TrainConfig, make_agent
-from .env import HumanWalkEnv
+try:
+    from .config import RUNS_DIR, EnvConfig
+    from .deep_rl import ReplayBuffer, TrainConfig, make_agent
+    from .env_factory import make_env
+except ImportError:
+    from config import RUNS_DIR, EnvConfig
+    from deep_rl import ReplayBuffer, TrainConfig, make_agent
+    from env_factory import make_env
 
 
 def choose_device(name: str, allow_cpu: bool):
@@ -32,13 +37,14 @@ def choose_device(name: str, allow_cpu: bool):
     raise RuntimeError("JAX ne vidi GPU. Pokreni sa --allow-cpu samo za mali CPU test.")
 
 
-def save_checkpoint(path: Path, algo: str, agent, obs_dim: int, action_dim: int, cfg: TrainConfig) -> None:
+def save_checkpoint(path: Path, algo: str, agent, obs_dim: int, action_dim: int, cfg: TrainConfig, env_config: EnvConfig) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     data = {
         "algo": algo,
         "obs_dim": obs_dim,
         "action_dim": action_dim,
         "hidden": cfg.hidden,
+        "env_config": env_config.__dict__,
         "agent": agent.save_dict(),
     }
     with path.open("wb") as f:
@@ -61,7 +67,7 @@ def make_run_dir(base_dir: Path, algo: str, timesteps: int, seed: int) -> Path:
     return base_dir / f"{algo}_{stamp}_{format_steps(timesteps)}_seed{seed}"
 
 
-def train_off_policy(env: HumanWalkEnv, agent, cfg: TrainConfig, save_path: Path, algo: str) -> None:
+def train_off_policy(env, agent, cfg: TrainConfig, save_path: Path, algo: str) -> None:
     obs_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
     replay = ReplayBuffer(obs_dim, action_dim, cfg.replay_size)
@@ -104,10 +110,10 @@ def train_off_policy(env: HumanWalkEnv, agent, cfg: TrainConfig, save_path: Path
             )
 
         if step % 10_000 == 0:
-            save_checkpoint(save_path, algo, agent, obs_dim, action_dim, cfg)
+            save_checkpoint(save_path, algo, agent, obs_dim, action_dim, cfg, env.config)
             logger.info("checkpoint sacuvan | step={} | path={}", step, save_path)
 
-    save_checkpoint(save_path, algo, agent, obs_dim, action_dim, cfg)
+    save_checkpoint(save_path, algo, agent, obs_dim, action_dim, cfg, env.config)
 
 
 def main() -> None:
@@ -117,6 +123,9 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--device", choices=["gpu", "cpu"], default="gpu")
     parser.add_argument("--allow-cpu", action="store_true")
+    parser.add_argument("--env-backend", choices=["playground", "biomech"], default="playground")
+    parser.add_argument("--env-version", choices=["standard", "hardcore"], default="standard")
+    parser.add_argument("--playground-impl", choices=["jax", "warp"], default="jax")
     parser.add_argument("--out", type=Path, default=RUNS_DIR / "jax")
     args = parser.parse_args()
 
@@ -127,7 +136,12 @@ def main() -> None:
     print(f"jax_device={device}")
 
     cfg = TrainConfig(algo=args.algo, timesteps=args.timesteps, seed=args.seed, device=args.device)
-    env = HumanWalkEnv(seed=args.seed)
+    env_config = EnvConfig(
+        env_backend=args.env_backend,
+        env_version=args.env_version,
+        playground_impl=args.playground_impl,
+    )
+    env = make_env(config=env_config, seed=args.seed)
     obs_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
     key = jax.random.PRNGKey(args.seed)
@@ -140,10 +154,19 @@ def main() -> None:
     logger.add(run_dir / "train.log", level="INFO", encoding="utf-8", mode="w")
 
     save_path = run_dir / "policy.pkl"
-    (run_dir / "config.json").write_text(json.dumps(cfg.__dict__, indent=2), encoding="utf-8")
+    run_config = {"train": cfg.__dict__, "env": env_config.__dict__}
+    (run_dir / "config.json").write_text(json.dumps(run_config, indent=2), encoding="utf-8")
 
     logger.info("trening start")
-    logger.info("algo={} seed={} timesteps={} run_dir={}", args.algo, args.seed, args.timesteps, run_dir)
+    logger.info(
+        "algo={} backend={} env_version={} seed={} timesteps={} run_dir={}",
+        args.algo,
+        args.env_backend,
+        args.env_version,
+        args.seed,
+        args.timesteps,
+        run_dir,
+    )
     logger.info("jax_device={} available_devices={}", device, jax.devices())
     logger.info("obs_dim={} action_dim={}", obs_dim, action_dim)
     logger.info("batch_size={} replay_size={} start_steps={} lr={}", cfg.batch_size, cfg.replay_size, cfg.start_steps, cfg.lr)

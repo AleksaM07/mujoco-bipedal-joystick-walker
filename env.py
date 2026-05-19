@@ -5,8 +5,12 @@ import mujoco
 import numpy as np
 from gymnasium import spaces
 
-from .config import LOCOMOTION_JOINTS, EnvConfig
-from .model_factory import HumanModelFactory, HumanSpec
+try:
+    from .config import LOCOMOTION_JOINTS, EnvConfig
+    from .model_factory import HumanModelFactory, HumanSpec
+except ImportError:
+    from config import LOCOMOTION_JOINTS, EnvConfig
+    from model_factory import HumanModelFactory, HumanSpec
 
 
 class HumanWalkEnv(gym.Env):
@@ -142,8 +146,7 @@ class HumanWalkEnv(gym.Env):
         tracking = np.exp(-(velocity_error / self.config.velocity_sigma) ** 2)
         effort = self.config.control_cost * float(np.square(action).sum())
         smooth = self.config.action_rate_cost * float(np.square(action - self.prev_action).sum())
-        side_drift = self.config.lateral_height_cost * abs(float(self.data.qpos[1]))
-        return float(tracking + self.config.healthy_reward - effort - smooth - side_drift)
+        return float(tracking + self.config.healthy_reward - effort - smooth)
 
     def _is_healthy(self) -> bool:
         height = float(self.data.qpos[2])
@@ -171,5 +174,7 @@ class HumanWalkEnv(gym.Env):
             "mass": self.spec.mass,
             "height": self.spec.height,
             "sex": self.spec.sex,
+            "backend": "biomech",
+            "env_version": self.config.env_version,
             "velocity": None if velocity is None else velocity.copy(),
         }

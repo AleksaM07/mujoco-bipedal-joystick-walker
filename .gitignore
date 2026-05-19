@@ -33,6 +33,7 @@ runs/*
 
 # Logs
 *.log
+MUJOCO_LOG.TXT
 
 # IDE/OS noise
 .idea/
