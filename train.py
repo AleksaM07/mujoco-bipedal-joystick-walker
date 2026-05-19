@@ -12,12 +12,7 @@ from mujoco_playground import locomotion
 from mujoco_playground._src import wrapper
 from mujoco_playground.config import locomotion_params
 
-try:
-    from .config import RUNS_DIR, EnvConfig, TrainConfig
-    from .playground_env import playground_env_name
-except ImportError:
-    from config import RUNS_DIR, EnvConfig, TrainConfig
-    from playground_env import playground_env_name
+from config import RUNS_DIR, EnvConfig, TrainConfig
 
 
 class TrainingProgressLogger:
@@ -123,7 +118,7 @@ def run_training(
     out_dir: Path,
 ) -> Path:
     """Pokrece MuJoCo Playground env kroz Brax PPO/MJX training pipeline."""
-    env_name = playground_env_name(env_config)
+    env_name = env_config.playground_env_name()
     rl_config = make_ppo_config(env_name, env_config, train_config)
     run_dir = make_run_dir(
         out_dir,
@@ -200,7 +195,6 @@ def main() -> None:
     jax.config.update("jax_default_device", device)
 
     env_config = EnvConfig(
-        env_backend="playground",
         env_version=args.env_version,
         playground_impl=args.playground_impl,
     )

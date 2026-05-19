@@ -12,19 +12,7 @@ from brax.training.agents.ppo import networks as ppo_networks
 from mujoco import mjx
 from mujoco_playground import locomotion
 
-try:
-    from .config import EnvConfig
-    from .playground_env import playground_env_name
-except ImportError:
-    from config import EnvConfig
-    from playground_env import playground_env_name
-
-
-KEY_SPACE = 32
-KEY_LEFT = 263
-KEY_RIGHT = 262
-KEY_DOWN = 264
-KEY_UP = 265
+from config import EnvConfig, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_SPACE, KEY_UP
 
 
 class JoystickController:
@@ -125,11 +113,10 @@ def main():
     jax.config.update("jax_default_device", device)
 
     env_config = EnvConfig(
-        env_backend="playground",
         env_version=args.env_version,
         playground_impl=args.playground_impl,
     )
-    env_name = playground_env_name(env_config)
+    env_name = env_config.playground_env_name()
     env = locomotion.load(
         env_name,
         config_overrides={"impl": env_config.playground_impl},
