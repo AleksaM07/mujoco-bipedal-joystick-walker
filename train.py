@@ -5,8 +5,11 @@ from datetime import datetime
 from pathlib import Path
 
 import jax
+import jax.numpy as jnp
+import numpy as np
 from brax.training.agents.ppo import networks as ppo_networks
 from brax.training.agents.ppo import train as ppo
+from jax.sharding import Mesh, NamedSharding, PartitionSpec
 from loguru import logger
 from mujoco_playground import locomotion
 from mujoco_playground._src import wrapper
@@ -27,6 +30,30 @@ class TrainingProgressLogger:
             None if reward is None else float(reward),
             None if episode_length is None else float(episode_length),
         )
+
+
+def patch_jax_for_brax_compatibility() -> None:
+    """Vraca API koji Brax jos koristi, a JAX 0.10 ga je uklonio.
+
+    Brax 0.14 jos poziva `jax.device_put_replicated`. U novom JAX-u je taj
+    helper uklonjen, a zvanicna zamena koristi `jax.device_put` sa sharding-om.
+    Ovaj patch je lokalni most dok se Brax/Playground ne usklade sa JAX 0.10.
+    """
+    if hasattr(jax, "device_put_replicated"):
+        return
+
+    def device_put_replicated(x, devices):
+        mesh = Mesh(np.array(devices), ("x",))
+        sharding = NamedSharding(mesh, PartitionSpec("x"))
+        return jax.tree.map(
+            lambda leaf: jax.device_put(
+                jnp.stack([leaf] * len(devices)),
+                sharding,
+            ),
+            x,
+        )
+
+    jax.device_put_replicated = device_put_replicated
 
 
 def choose_device(name: str, allow_cpu: bool):
@@ -85,12 +112,15 @@ def make_ppo_config(
         if value is not None:
             rl_config[key] = value
 
-    network_config = dict(rl_config.network_factory)
-    rl_config.network_factory = functools.partial(
-        ppo_networks.make_ppo_networks,
-        **network_config,
-    )
     return rl_config
+
+
+def make_network_factory(rl_config):
+    """Pretvara Playground network config u Brax PPO network factory callable."""
+    return functools.partial(
+        ppo_networks.make_ppo_networks,
+        **dict(rl_config.network_factory),
+    )
 
 
 def save_run_config(
@@ -101,7 +131,7 @@ def save_run_config(
 ) -> None:
     """Snima nas config i finalni Brax PPO config koji stvarno ide u trening."""
     serializable_rl_config = rl_config.to_dict()
-    serializable_rl_config["network_factory"] = (
+    serializable_rl_config["network_factory_fn"] = (
         "brax.training.agents.ppo.networks.make_ppo_networks"
     )
     data = {
@@ -118,6 +148,8 @@ def run_training(
     out_dir: Path,
 ) -> Path:
     """Pokrece MuJoCo Playground env kroz Brax PPO/MJX training pipeline."""
+    patch_jax_for_brax_compatibility()
+
     env_name = env_config.playground_env_name()
     rl_config = make_ppo_config(env_name, env_config, train_config)
     run_dir = make_run_dir(
@@ -154,6 +186,7 @@ def run_training(
     )
 
     train_kwargs = rl_config.to_dict()
+    train_kwargs["network_factory"] = make_network_factory(rl_config)
     ppo.train(
         environment=env,
         seed=train_config.seed,
@@ -188,7 +221,7 @@ def main() -> None:
     parser.add_argument("--num-evals", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--learning-rate", type=float, default=None)
-    parser.add_argument("--out", type=Path, default=RUNS_DIR / "brax_ppo")
+    parser.add_argument("--out", type=Path, default=RUNS_DIR)
     args = parser.parse_args()
 
     device = choose_device(args.device, args.allow_cpu)

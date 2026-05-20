@@ -10,6 +10,18 @@ KEY_LEFT = 263
 KEY_RIGHT = 262
 KEY_DOWN = 264
 KEY_UP = 265
+KEY_A = 65
+KEY_D = 68
+KEY_E = 69
+KEY_Q = 81
+KEY_S = 83
+KEY_W = 87
+KEY_NUMPAD_2 = 322
+KEY_NUMPAD_4 = 324
+KEY_NUMPAD_6 = 326
+KEY_NUMPAD_7 = 327
+KEY_NUMPAD_8 = 328
+KEY_NUMPAD_9 = 329
 
 
 # Dataclass ovde nije safety/filler sloj. Treba nam zato sto:
