@@ -25,6 +25,7 @@ ENV/
 # Training outputs and checkpoints
 runs/*
 !runs/.gitkeep
+generated_models/
 *.pkl
 *.ckpt
 *.pt

@@ -1,6 +1,8 @@
 import argparse
 import functools
 import json
+import time
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -11,25 +13,97 @@ from brax.training.agents.ppo import networks as ppo_networks
 from brax.training.agents.ppo import train as ppo
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 from loguru import logger
+from ml_collections import config_dict
 from mujoco_playground import locomotion
 from mujoco_playground._src import wrapper
 from mujoco_playground.config import locomotion_params
 
+from biomechanics_env import BiomechanicsJoystickEnv, domain_randomize
 from config import RUNS_DIR, EnvConfig, TrainConfig
 
 
+@contextmanager
+def logged_stage(name: str):
+    """Loguje pocetak, kraj i trajanje jedne faze."""
+    start_time = time.perf_counter()
+    logger.info("stage start | {}", name)
+    try:
+        yield
+    finally:
+        duration = time.perf_counter() - start_time
+        logger.info("stage done | {} | {:.2f}s", name, duration)
+
+
 class TrainingProgressLogger:
-    """Prima PPO evaluacione metrike i upisuje ih u loguru logger."""
+    """Prima PPO metrike i upisuje samo korisne linije."""
 
     def __call__(self, step: int, metrics: dict) -> None:
         reward = metrics.get("eval/episode_reward")
         episode_length = metrics.get("eval/episode_length")
+        if reward is None and episode_length is None:
+            logger.info("train progress callback | step={}", step)
+            return
+
         logger.info(
             "eval | step={} | reward={} | episode_length={}",
             step,
             None if reward is None else float(reward),
             None if episode_length is None else float(episode_length),
         )
+
+
+class PpoPercentLogger:
+    """Loguje grubi PPO progres bez oslanjanja na evaluaciju."""
+
+    def __init__(self, total_timesteps: int, percent_step: int = 5):
+        self.total_timesteps = total_timesteps
+        self.percent_step = percent_step
+        self.next_percent = 0
+        self.start_time = time.perf_counter()
+        self.last_log_time = self.start_time
+
+    def __call__(self, step: int, make_policy, params) -> None:
+        del make_policy, params
+        percent = min(100, int(step * 100 / self.total_timesteps))
+        if percent < self.next_percent:
+            return
+
+        now = time.perf_counter()
+        elapsed = now - self.start_time
+        since_last = now - self.last_log_time
+        eta = estimate_eta(elapsed, percent)
+        logger.info(
+            "ppo progress | step={} / {} | {}% | elapsed={} | "
+            "last={} | eta={}",
+            step,
+            self.total_timesteps,
+            percent,
+            format_duration(elapsed),
+            format_duration(since_last),
+            format_duration(eta),
+        )
+        self.last_log_time = now
+        while self.next_percent <= percent:
+            self.next_percent += self.percent_step
+
+
+def estimate_eta(elapsed: float, percent: int) -> float:
+    """Proceni preostalo vreme iz procenta i proteklog vremena."""
+    if percent <= 0:
+        return 0.0
+    return elapsed * (100 - percent) / percent
+
+
+def format_duration(seconds: float) -> str:
+    """Formatira trajanje kao 1h23m, 12m04s ili 8s."""
+    seconds = max(0, int(seconds))
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    if hours:
+        return f"{hours}h{minutes:02d}m"
+    if minutes:
+        return f"{minutes}m{seconds:02d}s"
+    return f"{seconds}s"
 
 
 def patch_jax_for_brax_compatibility() -> None:
@@ -85,10 +159,48 @@ def format_steps(steps: int) -> str:
     return str(steps)
 
 
-def make_run_dir(base_dir: Path, env_name: str, timesteps: int, seed: int) -> Path:
+def make_run_dir(
+    base_dir: Path,
+    env_source: str,
+    env_name: str,
+    timesteps: int,
+    seed: int,
+) -> Path:
     """Pravi deterministicki citljivo ime run foldera."""
     stamp = datetime.now().strftime("%Y%m%d_%H%M")
-    return base_dir / f"ppo_{env_name}_{stamp}_{format_steps(timesteps)}_seed{seed}"
+    return (
+        base_dir
+        / (
+            f"{env_source}_ppo_{env_name}_{stamp}_"
+            f"{format_steps(timesteps)}_seed{seed}_running"
+        )
+    )
+
+
+def mark_run_status(run_dir: Path, status: str) -> Path:
+    """Preimenuje run folder na `_s` ili `_f` suffix."""
+    if status not in {"s", "f"}:
+        raise ValueError("status mora biti 's' ili 'f'.")
+
+    name = run_dir.name
+    if name.endswith("_running"):
+        new_name = name.removesuffix("_running") + f"_{status}"
+    elif name.endswith("_s") or name.endswith("_f"):
+        new_name = name[:-2] + f"_{status}"
+    else:
+        new_name = f"{name}_{status}"
+
+    target = run_dir.with_name(new_name)
+    if target.exists():
+        target = run_dir.with_name(f"{new_name}_{datetime.now().strftime('%H%M%S')}")
+    run_dir.rename(target)
+    return target
+
+
+def close_file_logger() -> None:
+    """Zatvori loguru sinkove da Windows/WSL dozvoli rename run foldera."""
+    logger.remove()
+    logger.add(lambda msg: print(msg, end=""), level="INFO")
 
 
 def make_ppo_config(
@@ -96,16 +208,24 @@ def make_ppo_config(
     env_config: EnvConfig,
     train_config: TrainConfig,
 ):
-    """Uzima tuned Playground PPO config i primenjuje samo eksplicitne override-e."""
-    rl_config = locomotion_params.brax_ppo_config(
-        env_name,
-        impl=env_config.playground_impl,
-    )
+    """Pravi PPO config za prototip ili biomehanicki human env."""
+    if env_config.env_source == "prototip":
+        rl_config = locomotion_params.brax_ppo_config(
+            env_name,
+            impl=env_config.playground_impl,
+        )
+    else:
+        rl_config = biomechanics_ppo_config()
+
     overrides = {
         "num_timesteps": train_config.num_timesteps,
         "num_evals": train_config.num_evals,
         "num_envs": train_config.num_envs,
+        "episode_length": train_config.episode_length,
+        "unroll_length": train_config.unroll_length,
         "batch_size": train_config.batch_size,
+        "num_minibatches": train_config.num_minibatches,
+        "num_updates_per_batch": train_config.num_updates_per_batch,
         "learning_rate": train_config.learning_rate,
     }
     for key, value in overrides.items():
@@ -113,6 +233,36 @@ def make_ppo_config(
             rl_config[key] = value
 
     return rl_config
+
+
+def biomechanics_ppo_config():
+    """PPO polazne vrednosti za nas custom human joystick env."""
+    return config_dict.create(
+        num_timesteps=20_000_000,
+        num_evals=5,
+        num_envs=512,
+        num_eval_envs=16,
+        episode_length=300,
+        action_repeat=1,
+        learning_rate=1e-4,
+        entropy_cost=1e-4,
+        discounting=0.97,
+        unroll_length=10,
+        batch_size=256,
+        num_minibatches=4,
+        num_updates_per_batch=2,
+        normalize_observations=True,
+        normalize_observations_std_eps=1e-3,
+        reward_scaling=1.0,
+        clipping_epsilon=0.2,
+        gae_lambda=0.95,
+        max_grad_norm=1.0,
+        network_factory=config_dict.create(
+            policy_hidden_layer_sizes=(256, 128),
+            value_hidden_layer_sizes=(256, 128),
+            activation=jax.nn.silu,
+        ),
+    )
 
 
 def make_network_factory(rl_config):
@@ -130,7 +280,7 @@ def save_run_config(
     rl_config,
 ) -> None:
     """Snima nas config i finalni Brax PPO config koji stvarno ide u trening."""
-    serializable_rl_config = rl_config.to_dict()
+    serializable_rl_config = make_json_safe(rl_config.to_dict())
     serializable_rl_config["network_factory_fn"] = (
         "brax.training.agents.ppo.networks.make_ppo_networks"
     )
@@ -142,6 +292,17 @@ def save_run_config(
     (run_dir / "config.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+def make_json_safe(value):
+    """Pretvori config vrednosti u JSON-safe oblik za run/config.json."""
+    if isinstance(value, dict):
+        return {key: make_json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [make_json_safe(item) for item in value]
+    if callable(value):
+        return f"{value.__module__}.{value.__name__}"
+    return value
+
+
 def run_training(
     env_config: EnvConfig,
     train_config: TrainConfig,
@@ -150,10 +311,11 @@ def run_training(
     """Pokrece MuJoCo Playground env kroz Brax PPO/MJX training pipeline."""
     patch_jax_for_brax_compatibility()
 
-    env_name = env_config.playground_env_name()
+    env_name = env_display_name(env_config)
     rl_config = make_ppo_config(env_name, env_config, train_config)
     run_dir = make_run_dir(
         out_dir,
+        env_config.env_source,
         env_name,
         rl_config.num_timesteps,
         train_config.seed,
@@ -167,10 +329,11 @@ def run_training(
     logger.add(run_dir / "train.log", level="INFO", encoding="utf-8", mode="w")
     save_run_config(run_dir, env_config, train_config, rl_config)
 
-    env = locomotion.load(
-        env_name,
-        config_overrides={"impl": env_config.playground_impl},
-    )
+    with logged_stage("make_environment"):
+        env = make_environment(env_config, enable_erfi=True)
+        eval_env = make_environment(env_config, enable_erfi=False)
+    log_environment_summary(env)
+    log_eval_environment_summary(eval_env)
     logger.info(
         "trening start | env={} | impl={} | run_dir={}",
         env_name,
@@ -184,19 +347,179 @@ def run_training(
         rl_config.batch_size,
         rl_config.learning_rate,
     )
+    logger.info(
+        "ppo detail | episode_length={} | unroll_length={} | "
+        "num_minibatches={} | updates_per_batch={} | num_evals={} | "
+        "num_eval_envs={} | env_steps_per_training_block={}",
+        rl_config.episode_length,
+        rl_config.unroll_length,
+        rl_config.num_minibatches,
+        rl_config.num_updates_per_batch,
+        rl_config.num_evals,
+        rl_config.get("num_eval_envs", None),
+        env_steps_per_training_block(rl_config),
+    )
+    if rl_config.num_timesteps < env_steps_per_training_block(rl_config):
+        logger.warning(
+            "requested timesteps is smaller than one PPO block; "
+            "run will overshoot to at least {} env steps",
+            env_steps_per_training_block(rl_config),
+        )
+    if env_config.env_source == "biomechanics" and rl_config.num_envs < 512:
+        logger.warning(
+            "biomechanics run uses only {} envs; GPU throughput is usually "
+            "better with --num-envs 512 or 1024",
+            rl_config.num_envs,
+        )
 
     train_kwargs = rl_config.to_dict()
     train_kwargs["network_factory"] = make_network_factory(rl_config)
-    ppo.train(
-        environment=env,
-        seed=train_config.seed,
-        progress_fn=TrainingProgressLogger(),
-        save_checkpoint_path=str(checkpoint_dir),
-        wrap_env_fn=wrapper.wrap_for_brax_training,
-        **train_kwargs,
+    if rl_config.num_evals == 0:
+        train_kwargs["run_evals"] = False
+        train_kwargs["num_evals"] = 11
+    train_kwargs_extra = {}
+    if (
+        env_config.env_source == "biomechanics"
+        and not train_config.no_domain_randomization
+    ):
+        train_kwargs_extra["randomization_fn"] = domain_randomize
+    if train_config.no_domain_randomization:
+        logger.info("domain randomization disabled for this run")
+
+    if train_config.debug_run:
+        with logged_stage("debug_preflight"):
+            debug_preflight(env, train_config.seed)
+
+    logger.info("calling ppo.train")
+    try:
+        with logged_stage("ppo.train"):
+            ppo.train(
+                environment=env,
+                eval_env=eval_env,
+                seed=train_config.seed,
+                progress_fn=TrainingProgressLogger(),
+                policy_params_fn=PpoPercentLogger(rl_config.num_timesteps),
+                save_checkpoint_path=str(checkpoint_dir),
+                wrap_env_fn=wrapper.wrap_for_brax_training,
+                **train_kwargs_extra,
+                **train_kwargs,
+            )
+    except Exception:
+        logger.exception("trening pukao pre status rename-a")
+        close_file_logger()
+        failed_dir = mark_run_status(run_dir, "f")
+        logger.error("trening pukao | run_dir={}", failed_dir)
+        raise
+
+    close_file_logger()
+    success_dir = mark_run_status(run_dir, "s")
+    logger.info(
+        "trening gotov | run_dir={} | checkpoints={}",
+        success_dir,
+        success_dir / "checkpoints",
     )
-    logger.info("trening gotov | checkpoints={}", checkpoint_dir)
-    return run_dir
+    return success_dir
+
+
+def log_environment_summary(env) -> None:
+    """Ispise dimenzije modela pre treninga."""
+    model = env.mj_model
+    logger.info(
+        "env summary | nq={} | nv={} | nu={} | nbody={} | ngeom={} | "
+        "nsite={} | action_size={} | substeps={} | rfi_limit={} | "
+        "rao_limit={} | xml={}",
+        model.nq,
+        model.nv,
+        model.nu,
+        model.nbody,
+        model.ngeom,
+        model.nsite,
+        env.action_size,
+        getattr(env, "n_substeps", None),
+        getattr(env._config, "rfi_torque_limit", None),
+        getattr(env._config, "rao_torque_limit", None),
+        getattr(env, "xml_path", None),
+    )
+
+
+def log_eval_environment_summary(env) -> None:
+    """Ispise najbitniju razliku eval env-a."""
+    logger.info(
+        "eval env | erfi_enabled={} | rfi_limit={} | rao_limit={}",
+        getattr(env._config, "enable_erfi", None),
+        getattr(env._config, "rfi_torque_limit", None),
+        getattr(env._config, "rao_torque_limit", None),
+    )
+
+
+def env_steps_per_training_block(rl_config) -> int:
+    """Vraca koliko env koraka Brax PPO napravi u jednom training bloku."""
+    return int(
+        rl_config.batch_size
+        * rl_config.unroll_length
+        * rl_config.num_minibatches
+        * rl_config.action_repeat
+    )
+
+
+def debug_preflight(env, seed: int) -> None:
+    """Proveri reset/step/JIT pre ulaska u Brax PPO."""
+    rng = jax.random.PRNGKey(seed)
+    action = None
+
+    with logged_stage("preflight reset"):
+        state = env.reset(rng)
+        obs_shape = getattr(state.obs, "shape", None)
+        logger.info(
+            "preflight reset ok | obs_shape={} | reward_dtype={} | done_dtype={}",
+            obs_shape,
+            state.reward.dtype,
+            state.done.dtype,
+        )
+
+    with logged_stage("preflight eager step"):
+        action = jnp.zeros(env.action_size)
+        next_state = env.step(state, action)
+        logger.info(
+            "preflight eager step ok | reward={} | done={}",
+            float(next_state.reward),
+            float(next_state.done),
+        )
+
+    with logged_stage("preflight jit step compile"):
+        jit_step = jax.jit(env.step)
+        compiled_state = jit_step(state, action)
+        jax.block_until_ready(compiled_state.reward)
+        logger.info(
+            "preflight jit step ok | reward={} | done={}",
+            float(compiled_state.reward),
+            float(compiled_state.done),
+        )
+
+
+def env_display_name(env_config: EnvConfig) -> str:
+    """Vraca ime env-a za logove i run foldere."""
+    if env_config.env_source == "prototip":
+        return env_config.prototype_env_name()
+    return f"BiomechanicsHumanJoystick{env_config.env_version.title()}"
+
+
+def make_environment(env_config: EnvConfig, enable_erfi: bool = True):
+    """Napravi prototip ili pravi biomehanicki joystick env."""
+    if env_config.env_source == "prototip":
+        return locomotion.load(
+            env_config.prototype_env_name(),
+            config_overrides={"impl": env_config.playground_impl},
+        )
+    if env_config.env_source == "biomechanics":
+        return BiomechanicsJoystickEnv(
+            env_version=env_config.env_version,
+            config_overrides={
+                "impl": env_config.playground_impl,
+                "enable_erfi": enable_erfi,
+            },
+        )
+    raise ValueError("env_source mora biti 'biomechanics' ili 'prototip'.")
 
 
 def main() -> None:
@@ -206,6 +529,11 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--device", choices=["gpu", "cpu"], default="gpu")
     parser.add_argument("--allow-cpu", action="store_true")
+    parser.add_argument(
+        "--env-source",
+        choices=["biomechanics", "prototip"],
+        default="biomechanics",
+    )
     parser.add_argument(
         "--env-version",
         choices=["standard", "hardcore"],
@@ -219,8 +547,14 @@ def main() -> None:
     parser.add_argument("--timesteps", type=int, default=None)
     parser.add_argument("--num-envs", type=int, default=None)
     parser.add_argument("--num-evals", type=int, default=None)
+    parser.add_argument("--episode-length", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--learning-rate", type=float, default=None)
+    parser.add_argument(
+        "--debug-run",
+        action="store_true",
+        help="Mali izolacioni run bez domain randomization.",
+    )
     parser.add_argument("--out", type=Path, default=RUNS_DIR)
     args = parser.parse_args()
 
@@ -228,18 +562,48 @@ def main() -> None:
     jax.config.update("jax_default_device", device)
 
     env_config = EnvConfig(
+        env_source=args.env_source,
         env_version=args.env_version,
         playground_impl=args.playground_impl,
     )
+    debug_defaults = debug_run_defaults(args.debug_run)
     train_config = TrainConfig(
         seed=args.seed,
-        num_timesteps=args.timesteps,
-        num_evals=args.num_evals,
-        num_envs=args.num_envs,
-        batch_size=args.batch_size,
+        num_timesteps=args.timesteps or debug_defaults.get("num_timesteps"),
+        num_evals=args.num_evals
+        if args.num_evals is not None
+        else debug_defaults.get("num_evals"),
+        num_envs=args.num_envs or debug_defaults.get("num_envs"),
+        episode_length=args.episode_length or debug_defaults.get("episode_length"),
+        unroll_length=debug_defaults.get("unroll_length"),
+        batch_size=args.batch_size or debug_defaults.get("batch_size"),
+        num_minibatches=debug_defaults.get("num_minibatches"),
+        num_updates_per_batch=debug_defaults.get("num_updates_per_batch"),
         learning_rate=args.learning_rate,
+        no_domain_randomization=debug_defaults.get(
+            "no_domain_randomization",
+            False,
+        ),
+        debug_run=args.debug_run,
     )
     run_training(env_config, train_config, args.out)
+
+
+def debug_run_defaults(enabled: bool) -> dict:
+    """Vraca mali debug preset umesto gomile CLI opcija."""
+    if not enabled:
+        return {}
+    return {
+        "num_timesteps": 1000,
+        "num_envs": 4,
+        "num_evals": 0,
+        "episode_length": 20,
+        "unroll_length": 5,
+        "batch_size": 4,
+        "num_minibatches": 1,
+        "num_updates_per_batch": 1,
+        "no_domain_randomization": True,
+    }
 
 
 if __name__ == "__main__":

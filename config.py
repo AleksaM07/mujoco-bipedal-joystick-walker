@@ -3,6 +3,8 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
+WORKSPACE_ROOT = PROJECT_ROOT.parent
+BIOMECH_DIR = WORKSPACE_ROOT / "mujoco-biomechanics"
 RUNS_DIR = PROJECT_ROOT / "runs"
 
 KEY_SPACE = 32
@@ -30,31 +32,28 @@ KEY_NUMPAD_9 = 329
 # 3. daje __dict__ za snimanje konfiguracije u runs/config.json
 @dataclass
 class EnvConfig:
+    # "biomechanics" je pravi projekat: human iz mujoco-biomechanics.
+    # "prototip" je ono sto smo prvo napravili sa Berkeley robotom iz Playground-a.
+    env_source: str = "biomechanics"
+
     # standard -> flat terrain, hardcore -> rough terrain.
-    # Dostupni humanoid/robot joystick env-ovi u instaliranom Playground paketu:
-    # ApolloJoystickFlatTerrain, BerkeleyHumanoidJoystickFlatTerrain,
-    # BerkeleyHumanoidJoystickRoughTerrain, G1JoystickFlatTerrain,
-    # G1JoystickRoughTerrain, H1JoystickGaitTracking,
-    # T1JoystickFlatTerrain, T1JoystickRoughTerrain, Op3Joystick.
-    # Berkeley biramo jer jedini u imenu eksplicitno nosi "HumanoidJoystick",
-    # pa je najdirektniji match za temu projekta.
     env_version: str = "standard"
 
     # "jax" je default jer lokalni "warp" backend trenutno puca na verzijskom
     # konfliktu warp/mujoco-mjx. Kad se verzije srede, warp moze biti brzi.
     playground_impl: str = "jax" #aleksa moras da promenis ovo obavezno !!! i da istestiras
-    playground_flat_env: str = "BerkeleyHumanoidJoystickFlatTerrain"
-    playground_hardcore_env: str = "BerkeleyHumanoidJoystickRoughTerrain"
+    prototype_flat_env: str = "BerkeleyHumanoidJoystickFlatTerrain"
+    prototype_hardcore_env: str = "BerkeleyHumanoidJoystickRoughTerrain"
 
     # Korak promene joystick komande u viewer-u po pritisku strelice/WASD.
     command_change_rate: float = 0.1
 
-    def playground_env_name(self) -> str:
-        """Mapira nas standard/hardcore naziv na konkretan Playground env."""
+    def prototype_env_name(self) -> str:
+        """Mapira standard/hardcore na Berkeley prototip env."""
         if self.env_version == "standard":
-            return self.playground_flat_env
+            return self.prototype_flat_env
         if self.env_version == "hardcore":
-            return self.playground_hardcore_env
+            return self.prototype_hardcore_env
         raise ValueError("env_version mora biti 'standard' ili 'hardcore'.")
 
 
@@ -71,8 +70,14 @@ class TrainConfig:
     num_timesteps: int | None = None
     num_evals: int | None = None
     num_envs: int | None = None
+    episode_length: int | None = None
+    unroll_length: int | None = None
     batch_size: int | None = None
+    num_minibatches: int | None = None
+    num_updates_per_batch: int | None = None
     learning_rate: float | None = None
+    no_domain_randomization: bool = False
+    debug_run: bool = False
 
     # PPO je izabran jer Playground vec ima podesen Brax/MJX PPO config za
     # Berkeley humanoid joystick env. SAC/TD3 nisu odbaceni teorijski, nego nisu

@@ -226,6 +226,11 @@ def main():
     parser.add_argument("--checkpoint", required=True, type=Path)
     parser.add_argument("--device", choices=["gpu", "cpu"], default="gpu")
     parser.add_argument(
+        "--env-source",
+        choices=["prototip"],
+        default="prototip",
+    )
+    parser.add_argument(
         "--env-version",
         choices=["standard", "hardcore"],
         default="standard",
@@ -248,10 +253,11 @@ def main():
     jax.config.update("jax_default_device", device)
 
     env_config = EnvConfig(
+        env_source=args.env_source,
         env_version=args.env_version,
         playground_impl=args.playground_impl,
     )
-    env_name = env_config.playground_env_name()
+    env_name = env_config.prototype_env_name()
     env = locomotion.load(
         env_name,
         config_overrides={"impl": env_config.playground_impl},
