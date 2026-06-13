@@ -37,6 +37,11 @@ def logged_stage(name: str):
 class TrainingProgressLogger:
     """Prima PPO metrike i upisuje samo korisne linije."""
 
+    def __init__(self):
+        self.final_reward = None
+        self.best_reward = None
+        self.best_step = None
+
     def __call__(self, step: int, metrics: dict) -> None:
         reward = metrics.get("eval/episode_reward")
         episode_length = metrics.get("eval/episode_length")
@@ -50,6 +55,11 @@ class TrainingProgressLogger:
             None if reward is None else float(reward),
             None if episode_length is None else float(episode_length),
         )
+        if reward is not None:
+            self.final_reward = float(reward)
+            if self.best_reward is None or self.final_reward > self.best_reward:
+                self.best_reward = self.final_reward
+                self.best_step = step
 
 
 class PpoPercentLogger:
@@ -177,24 +187,40 @@ def make_run_dir(
     )
 
 
-def mark_run_status(run_dir: Path, status: str) -> Path:
+def mark_run_status(
+    run_dir: Path,
+    status: str,
+    final_reward: float | None = None,
+    best_reward: float | None = None,
+) -> Path:
     """Preimenuje run folder na `_s` ili `_f` suffix."""
     if status not in {"s", "f"}:
         raise ValueError("status mora biti 's' ili 'f'.")
 
     name = run_dir.name
+    reward_suffix = ""
+    if status == "s" and final_reward is not None:
+        reward_suffix = f"_rew_{format_reward_for_path(final_reward)}"
+    if status == "s" and best_reward is not None:
+        reward_suffix += f"_best_{format_reward_for_path(best_reward)}"
+
     if name.endswith("_running"):
-        new_name = name.removesuffix("_running") + f"_{status}"
+        new_name = name.removesuffix("_running") + f"{reward_suffix}_{status}"
     elif name.endswith("_s") or name.endswith("_f"):
-        new_name = name[:-2] + f"_{status}"
+        new_name = name[:-2] + f"{reward_suffix}_{status}"
     else:
-        new_name = f"{name}_{status}"
+        new_name = f"{name}{reward_suffix}_{status}"
 
     target = run_dir.with_name(new_name)
     if target.exists():
         target = run_dir.with_name(f"{new_name}_{datetime.now().strftime('%H%M%S')}")
     run_dir.rename(target)
     return target
+
+
+def format_reward_for_path(reward: float) -> str:
+    """Formatira reward za ime foldera bez tacke i suvisne duzine."""
+    return f"{reward:.4f}".replace("-", "m").replace(".", "p")
 
 
 def close_file_logger() -> None:
@@ -391,13 +417,14 @@ def run_training(
             debug_preflight(env, train_config.seed)
 
     logger.info("calling ppo.train")
+    progress_logger = TrainingProgressLogger()
     try:
         with logged_stage("ppo.train"):
             ppo.train(
                 environment=env,
                 eval_env=eval_env,
                 seed=train_config.seed,
-                progress_fn=TrainingProgressLogger(),
+                progress_fn=progress_logger,
                 policy_params_fn=PpoPercentLogger(rl_config.num_timesteps),
                 save_checkpoint_path=str(checkpoint_dir),
                 wrap_env_fn=wrapper.wrap_for_brax_training,
@@ -412,11 +439,18 @@ def run_training(
         raise
 
     close_file_logger()
-    success_dir = mark_run_status(run_dir, "s")
+    success_dir = mark_run_status(
+        run_dir,
+        "s",
+        progress_logger.final_reward,
+        progress_logger.best_reward,
+    )
     logger.info(
-        "trening gotov | run_dir={} | checkpoints={}",
+        "trening gotov | run_dir={} | checkpoints={} | best_reward={} | best_step={}",
         success_dir,
         success_dir / "checkpoints",
+        progress_logger.best_reward,
+        progress_logger.best_step,
     )
     return success_dir
 

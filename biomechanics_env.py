@@ -44,6 +44,8 @@ def default_config() -> config_dict.ConfigDict:
 class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
     """Joystick locomotion env za humanoida iz `mujoco-biomechanics`."""
 
+    WORLD_GRAVITY = jp.array([0.0, 0.0, -1.0])
+
     def __init__(
         self,
         env_version: str = "standard",
@@ -70,6 +72,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         ])
         self._default_ctrl = self._init_q[self._actuator_qpos_indices]
         self._n_substeps = int(round(self._ctrl_dt / self._sim_dt))
+        self._torso_body_id = self._mj_model.body("thorax").id
 
     def reset(self, rng: jax.Array) -> mjx_env.State:
         """Resetuje human u pocetnu pozu i uzorkuje joystick komandu."""
@@ -86,6 +89,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         qvel = jp.zeros(self._mjx_model.nv)
         ctrl = self._default_ctrl
         data = mjx_env.make_data(self._mjx_model, qpos=qpos, qvel=qvel, ctrl=ctrl)
+        data = mjx.forward(self._mjx_model, data)
         command = self.sample_command(command_key)
         info = {
             "rng": rng,
@@ -140,7 +144,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         done = self._get_done(data)
         metrics = dict(state.metrics)
         metrics["reward"] = reward
-        metrics["tracking_lin_vel"] = reward
+        metrics["tracking_lin_vel"] = self._get_tracking_reward(data, info)
         return state.replace(
             data=data,
             obs=obs,
@@ -199,11 +203,15 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
 
     def _get_obs(self, data: mjx.Data, info: dict) -> jax.Array:
         """Sastavi observation koji policy dobija."""
+        local_linvel = self._local_root_linvel(data)
+        local_angvel = self._local_root_angvel(data)
+        projected_gravity = self._projected_gravity(data)
         joint_pos = data.qpos[7:] - self._default_qpos
         joint_vel = data.qvel[6:]
         obs = jp.concatenate([
-            data.qvel[:3],
-            data.qvel[3:6],
+            local_linvel,
+            local_angvel,
+            projected_gravity,
             info["command"],
             joint_pos,
             joint_vel,
@@ -212,21 +220,55 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         return jp.nan_to_num(obs, nan=0.0, posinf=10.0, neginf=-10.0)
 
     def _get_reward(self, data: mjx.Data, action: jax.Array, info: dict) -> jax.Array:
-        """Nagrada za pracenje joystick brzine uz malu kaznu za energiju."""
-        lin_vel_error = jp.sum(jp.square(info["command"][:2] - data.qvel[:2]))
-        yaw_error = jp.square(info["command"][2] - data.qvel[5])
-        tracking = jp.exp(-(lin_vel_error + 0.5 * yaw_error) / self._config.tracking_sigma)
+        """Nagrada za pracenje joysticka, uspravnost i stabilan hod."""
+        tracking = self._get_tracking_reward(data, info)
+        upright = jp.clip(self._torso_up(data), 0.0, 1.0)
+        low_height = jp.maximum(0.0, 0.35 * self._init_q[2] - data.qpos[2])
         action_cost = 0.001 * jp.sum(jp.square(action))
-        height_cost = 0.5 * jp.square(data.qpos[2] - self._init_q[2])
-        reward = jp.clip(tracking - action_cost - height_cost, -1.0, 2.0)
-        reward = jp.nan_to_num(reward, nan=-1.0, posinf=2.0, neginf=-1.0)
-        return jp.where(self._get_done(data), -1.0, reward)
+        height_cost = 2.0 * jp.square(low_height)
+        reward = 0.2 + tracking + 0.5 * upright - action_cost - height_cost
+        reward = jp.clip(reward, -25.0, 3.0)
+        reward = jp.nan_to_num(reward, nan=-25.0, posinf=3.0, neginf=-25.0)
+        return jp.where(self._get_done(data), -25.0, reward)
 
     def _get_done(self, data: mjx.Data) -> jax.Array:
         """Zavrsi epizodu ako human padne ili numerika ode u NaN."""
-        fallen = data.qpos[2] < 0.35 * self._init_q[2]
+        too_low = data.qpos[2] < 0.25 * self._init_q[2]
+        tipped_over = self._torso_up(data) < 0.25
         invalid = jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any()
-        return fallen | invalid
+        return too_low | tipped_over | invalid
+
+    def _body_xmat(self, data: mjx.Data) -> jax.Array:
+        """Vraca 3x3 rotaciju toraksa iz body-local u world frame."""
+        return data.xmat[self._torso_body_id].reshape((3, 3))
+
+    def _local_root_linvel(self, data: mjx.Data) -> jax.Array:
+        """Root linearna brzina izrazena u lokalnom frame-u toraksa."""
+        return self._body_xmat(data).T @ data.qvel[:3]
+
+    def _local_root_angvel(self, data: mjx.Data) -> jax.Array:
+        """Root angularna brzina izrazena u lokalnom frame-u toraksa."""
+        return self._body_xmat(data).T @ data.qvel[3:6]
+
+    def _projected_gravity(self, data: mjx.Data) -> jax.Array:
+        """Gravitacija u lokalnom frame-u; policy iz toga vidi nagib tela."""
+        return self._body_xmat(data).T @ self.WORLD_GRAVITY
+
+    def _torso_up(self, data: mjx.Data) -> jax.Array:
+        """Koliko je anatomska vertikalna osa toraksa poravnata sa world Z."""
+        return self._body_xmat(data)[2, 1]
+
+    def _get_tracking_reward(self, data: mjx.Data, info: dict) -> jax.Array:
+        """Prati joystick u anatomskim osama: X napred, Z lateralno, Y yaw."""
+        local_linvel = self._local_root_linvel(data)
+        local_angvel = self._local_root_angvel(data)
+        measured_command = jp.array([
+            local_linvel[0],
+            local_linvel[2],
+            local_angvel[1],
+        ])
+        error = jp.sum(jp.square(info["command"] - measured_command))
+        return jp.exp(-error / self._config.tracking_sigma)
 
     @property
     def xml_path(self) -> str:

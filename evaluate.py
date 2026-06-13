@@ -16,6 +16,7 @@ from brax.training.agents.ppo import networks as ppo_networks
 from mujoco import mjx
 from mujoco_playground import locomotion
 
+from biomechanics_env import BiomechanicsJoystickEnv
 from config import (
     EnvConfig,
     KEY_A,
@@ -40,6 +41,8 @@ from config import (
 
 OBS_COMMAND_START = 9
 OBS_COMMAND_END = 12
+BIOMECH_COMMAND_START = 9
+BIOMECH_COMMAND_END = 12
 DEBUG_PRINT_INTERVAL = 120
 
 
@@ -143,10 +146,7 @@ def load_ppo_networks(checkpoint_path: Path):
         if kwargs.get(key) is not None:
             kwargs[key] = brax_networks.KERNEL_INITIALIZER[kwargs[key]]
 
-    observation_size = {
-        name: tuple(value["shape"])
-        for name, value in config["observation_size"].items()
-    }
+    observation_size = parse_observation_size(config["observation_size"])
     preprocess_observations_fn = (
         running_statistics.normalize
         if config["normalize_observations"]
@@ -160,19 +160,38 @@ def load_ppo_networks(checkpoint_path: Path):
     )
 
 
+def parse_observation_size(raw_observation_size):
+    """Procita Brax observation_size za dict i array observation formate."""
+    if isinstance(raw_observation_size, list):
+        shape = tuple(raw_observation_size)
+        return shape[0] if len(shape) == 1 else shape
+    if "shape" in raw_observation_size:
+        shape = tuple(raw_observation_size["shape"])
+        return shape[0] if len(shape) == 1 else shape
+    return {
+        name: tuple(value["shape"])
+        for name, value in raw_observation_size.items()
+    }
+
+
 def set_command(state, command: np.ndarray):
     """Upise joystick komandu u info i observation koje politika cita."""
     command_array = jnp.asarray(command, dtype=jnp.float32)
 
     info = dict(state.info)
     info["command"] = command_array
-    obs = dict(state.obs)
-    obs["state"] = obs["state"].at[OBS_COMMAND_START:OBS_COMMAND_END].set(
-        command_array
-    )
-    obs["privileged_state"] = obs["privileged_state"].at[
-        OBS_COMMAND_START:OBS_COMMAND_END
-    ].set(command_array)
+    if isinstance(state.obs, dict):
+        obs = dict(state.obs)
+        obs["state"] = obs["state"].at[OBS_COMMAND_START:OBS_COMMAND_END].set(
+            command_array
+        )
+        obs["privileged_state"] = obs["privileged_state"].at[
+            OBS_COMMAND_START:OBS_COMMAND_END
+        ].set(command_array)
+    else:
+        obs = state.obs.at[BIOMECH_COMMAND_START:BIOMECH_COMMAND_END].set(
+            command_array
+        )
     return state.replace(info=info, obs=obs)
 
 
@@ -195,9 +214,13 @@ def print_debug(step: int, state, action) -> None:
     if step % DEBUG_PRINT_INTERVAL != 0:
         return
 
-    command = np.asarray(state.obs["state"][OBS_COMMAND_START:OBS_COMMAND_END])
+    if isinstance(state.obs, dict):
+        command = np.asarray(state.obs["state"][OBS_COMMAND_START:OBS_COMMAND_END])
+    else:
+        command = np.asarray(state.obs[BIOMECH_COMMAND_START:BIOMECH_COMMAND_END])
     qpos = np.asarray(state.data.qpos[:3])
     qvel = np.asarray(state.data.qvel[:6])
+    torso_up = get_torso_up(state)
     action_norm = float(jnp.linalg.norm(action))
     print(
         "debug "
@@ -205,7 +228,27 @@ def print_debug(step: int, state, action) -> None:
         f"obs_command={command.round(3)} "
         f"qpos={qpos.round(3)} "
         f"qvel={qvel.round(3)} "
+        f"torso_up={torso_up:.3f} "
+        f"done={float(np.asarray(state.done)):.1f} "
         f"action_norm={action_norm:.3f}",
+        flush=True,
+    )
+
+
+def get_torso_up(state) -> float:
+    """Procita anatomski upright signal za biomechanics env."""
+    torso_xmat = np.asarray(state.data.xmat[1]).reshape(3, 3)
+    return float(torso_xmat[2, 1])
+
+
+def print_done_reason(state) -> None:
+    """Objasni zasto je biomechanics epizoda resetovana."""
+    qpos_z = float(np.asarray(state.data.qpos[2]))
+    torso_up = get_torso_up(state)
+    print(
+        "episode done, resetting | "
+        f"z={qpos_z:.3f} "
+        f"torso_up={torso_up:.3f}",
         flush=True,
     )
 
@@ -227,8 +270,8 @@ def main():
     parser.add_argument("--device", choices=["gpu", "cpu"], default="gpu")
     parser.add_argument(
         "--env-source",
-        choices=["prototip"],
-        default="prototip",
+        choices=["biomechanics", "prototip"],
+        default="biomechanics",
     )
     parser.add_argument(
         "--env-version",
@@ -257,11 +300,7 @@ def main():
         env_version=args.env_version,
         playground_impl=args.playground_impl,
     )
-    env_name = env_config.prototype_env_name()
-    env = locomotion.load(
-        env_name,
-        config_overrides={"impl": env_config.playground_impl},
-    )
+    env = make_environment(env_config)
     policy = load_ppo_policy(args.checkpoint, deterministic=not args.stochastic)
 
     rng = jax.random.PRNGKey(args.seed)
@@ -304,7 +343,7 @@ def main():
                     controller.command,
                 )
                 if bool(np.asarray(state.done)):
-                    print("episode done, resetting", flush=True)
+                    print_done_reason(state)
                     state = reset_state(env, reset_key, controller.command)
                 if args.debug:
                     print_debug(step, state, action)
@@ -314,6 +353,22 @@ def main():
             viewer.cam.lookat[:] = data.qpos[:3]
             viewer.sync()
             time.sleep(env.dt)
+
+
+def make_environment(env_config: EnvConfig):
+    """Napravi env za viewer."""
+    if env_config.env_source == "prototip":
+        return locomotion.load(
+            env_config.prototype_env_name(),
+            config_overrides={"impl": env_config.playground_impl},
+        )
+    return BiomechanicsJoystickEnv(
+        env_version=env_config.env_version,
+        config_overrides={
+            "impl": env_config.playground_impl,
+            "enable_erfi": False,
+        },
+    )
 
 
 if __name__ == "__main__":

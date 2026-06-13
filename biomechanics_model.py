@@ -1,5 +1,6 @@
 import contextlib
 import importlib.util
+import math
 import os
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -11,17 +12,11 @@ from config import BIOMECH_DIR, PROJECT_ROOT
 
 
 GENERATED_MODEL_DIR = PROJECT_ROOT / "generated_models"
-SCENE_XML_VERSION = "trainfast_v3"
+SCENE_XML_VERSION = "trainfast_v4"
 FOOT_BODY_NAMES = {"left_foot", "right_foot"}
 _GENERATOR_CACHE = None
 
 LOCOMOTION_ACTUATED_JOINTS = (
-    "abdomen_x",
-    "abdomen_y",
-    "abdomen_z",
-    "pelvis_x",
-    "pelvis_y",
-    "pelvis_z",
     "left_hip_x",
     "left_hip_y",
     "left_hip_z",
@@ -136,7 +131,12 @@ def remove_generated_floor(root: ET.Element) -> None:
 def ensure_compiler(root: ET.Element) -> None:
     """Doda compiler parametre koji olaksavaju MJX ucitavanje."""
     if root.find("compiler") is None:
-        root.insert(0, ET.Element("compiler", angle="radian", inertiafromgeom="false"))
+        root.insert(0, ET.Element("compiler", angle="degree", inertiafromgeom="false"))
+        return
+
+    compiler = root.find("compiler")
+    compiler.set("angle", "degree")
+    compiler.set("inertiafromgeom", "false")
 
 
 def ensure_option(root: ET.Element) -> None:
@@ -275,10 +275,15 @@ def add_actuators(root: ET.Element) -> None:
     actuator = root.find("actuator")
     if actuator is None:
         actuator = ET.SubElement(root, "actuator")
+    joints = {
+        joint.get("name"): joint
+        for joint in root.find("worldbody").iter("joint")
+    }
     existing = {item.get("joint") for item in actuator}
     for joint_name in LOCOMOTION_ACTUATED_JOINTS:
         if joint_name in existing:
             continue
+        ctrlrange = actuator_ctrlrange(joints[joint_name])
         ET.SubElement(
             actuator,
             "position",
@@ -286,10 +291,16 @@ def add_actuators(root: ET.Element) -> None:
             joint=joint_name,
             kp="35",
             ctrllimited="true",
-            ctrlrange="-3.14 3.14",
+            ctrlrange=ctrlrange,
             forcelimited="true",
             forcerange="-80 80",
         )
+
+
+def actuator_ctrlrange(joint: ET.Element) -> str:
+    """Pretvori degree joint range iz generatora u radian actuator ctrlrange."""
+    lower_deg, upper_deg = (float(value) for value in joint.get("range").split())
+    return f"{math.radians(lower_deg):.6f} {math.radians(upper_deg):.6f}"
 
 
 def add_keyframe_ctrl(root: ET.Element) -> None:
