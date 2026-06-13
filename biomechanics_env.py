@@ -1,8 +1,10 @@
 from dataclasses import dataclass
+from itertools import product
 
 import jax
 import jax.numpy as jp
 import mujoco
+import numpy as np
 from ml_collections import config_dict
 from mujoco import mjx
 
@@ -18,6 +20,7 @@ class BiomechanicsEnvConfig:
     sim_dt: float = 0.01
     episode_length: int = 1000
     action_scale: float = 0.5
+    command_profile: str = "forward"
     command_resample_steps: int = 500
     tracking_sigma: float = 0.5
     rfi_torque_limit: float = 2.0
@@ -32,6 +35,7 @@ def default_config() -> config_dict.ConfigDict:
         sim_dt=0.01,
         episode_length=1000,
         action_scale=0.5,
+        command_profile="forward",
         command_resample_steps=500,
         tracking_sigma=0.5,
         rfi_torque_limit=2.0,
@@ -45,6 +49,22 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
     """Joystick locomotion env za humanoida iz `mujoco-biomechanics`."""
 
     WORLD_GRAVITY = jp.array([0.0, 0.0, -1.0])
+    FOOT_SOLE_GEOMS = ("left_foot_sole", "right_foot_sole")
+    FOOT_CONTACT_PRELOAD = 0.005
+    FORWARD_COMMAND_RANGE = (0.15, 0.55)
+    ZERO_COMMAND_PROBABILITY = 0.3
+    NEUTRAL_JOINT_POSE = {
+        "left_hip_z": -0.20,
+        "left_knee_z": -0.30,
+        "left_ankle_z": 0.30,
+        "right_hip_z": -0.20,
+        "right_knee_z": -0.30,
+        "right_ankle_z": 0.30,
+    }
+    HEIGHT_PENALTY_START_RATIO = 0.8
+    MIN_STANDING_HEIGHT_RATIO = 0.35
+    ACTION_COST_SCALE = 0.01
+    FALL_REWARD = -100.0
 
     def __init__(
         self,
@@ -60,7 +80,9 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self._mj_model = mujoco.MjModel.from_xml_path(str(self._xml_path))
         self._mj_model.opt.timestep = self._sim_dt
         self._mjx_model = mjx.put_model(self._mj_model, impl=self._config.impl)
-        self._init_q = jp.array(self._mj_model.keyframe("a-pose").qpos)
+        init_q = np.array(self._mj_model.keyframe("a-pose").qpos, copy=True)
+        init_q = self._apply_locomotion_neutral_pose(init_q)
+        self._init_q = jp.array(init_q)
         self._default_qpos = self._init_q[7:]
         self._actuator_qpos_indices = jp.array([
             self._mj_model.jnt_qposadr[joint_id]
@@ -73,6 +95,39 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self._default_ctrl = self._init_q[self._actuator_qpos_indices]
         self._n_substeps = int(round(self._ctrl_dt / self._sim_dt))
         self._torso_body_id = self._mj_model.body("thorax").id
+
+    def _apply_locomotion_neutral_pose(self, qpos: np.ndarray) -> np.ndarray:
+        """Centira akcije oko blago savijenih nogu, ne oko krute A-poze."""
+        for joint_name, joint_value in self.NEUTRAL_JOINT_POSE.items():
+            joint_id = mujoco.mj_name2id(
+                self._mj_model,
+                mujoco.mjtObj.mjOBJ_JOINT,
+                joint_name,
+            )
+            qpos[self._mj_model.jnt_qposadr[joint_id]] = joint_value
+
+        data = mujoco.MjData(self._mj_model)
+        data.qpos[:] = qpos
+        mujoco.mj_forward(self._mj_model, data)
+        qpos[2] -= self._minimum_geom_z(data) + self.FOOT_CONTACT_PRELOAD
+        return qpos
+
+    def _minimum_geom_z(self, data: mujoco.MjData) -> float:
+        """Vraca najnizu world-Z tacku djonova u trenutnoj pozi."""
+        min_z = np.inf
+        for geom_name in self.FOOT_SOLE_GEOMS:
+            geom_id = mujoco.mj_name2id(
+                self._mj_model,
+                mujoco.mjtObj.mjOBJ_GEOM,
+                geom_name,
+            )
+            geom_pos = data.geom_xpos[geom_id]
+            geom_xmat = data.geom_xmat[geom_id].reshape(3, 3)
+            geom_size = self._mj_model.geom_size[geom_id]
+            for signs in product((-1.0, 1.0), repeat=3):
+                corner = geom_pos + geom_xmat @ (geom_size * np.array(signs))
+                min_z = min(min_z, corner[2])
+        return float(min_z)
 
     def reset(self, rng: jax.Array) -> mjx_env.State:
         """Resetuje human u pocetnu pozu i uzorkuje joystick komandu."""
@@ -156,6 +211,26 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
 
     def sample_command(self, rng: jax.Array) -> jax.Array:
         """Uzorkuje ciljnu brzinu: napred/nazad, levo/desno, yaw."""
+        if self._config.command_profile == "forward":
+            x_key, zero_key = jax.random.split(rng, 2)
+            command = jp.array([
+                jax.random.uniform(
+                    x_key,
+                    minval=self.FORWARD_COMMAND_RANGE[0],
+                    maxval=self.FORWARD_COMMAND_RANGE[1],
+                ),
+                0.0,
+                0.0,
+            ])
+            return jp.where(
+                jax.random.bernoulli(zero_key, p=self.ZERO_COMMAND_PROBABILITY),
+                jp.zeros(3),
+                command,
+            )
+
+        if self._config.command_profile != "standard":
+            raise ValueError("command_profile mora biti 'forward' ili 'standard'.")
+
         x_key, y_key, yaw_key, zero_key = jax.random.split(rng, 4)
         command = jp.array([
             jax.random.uniform(x_key, minval=-1.0, maxval=1.0),
@@ -223,17 +298,25 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         """Nagrada za pracenje joysticka, uspravnost i stabilan hod."""
         tracking = self._get_tracking_reward(data, info)
         upright = jp.clip(self._torso_up(data), 0.0, 1.0)
-        low_height = jp.maximum(0.0, 0.35 * self._init_q[2] - data.qpos[2])
-        action_cost = 0.001 * jp.sum(jp.square(action))
-        height_cost = 2.0 * jp.square(low_height)
+        low_height = jp.maximum(
+            0.0,
+            self.HEIGHT_PENALTY_START_RATIO * self._init_q[2] - data.qpos[2],
+        )
+        action_cost = self.ACTION_COST_SCALE * jp.sum(jp.square(action))
+        height_cost = 8.0 * jp.square(low_height)
         reward = 0.2 + tracking + 0.5 * upright - action_cost - height_cost
-        reward = jp.clip(reward, -25.0, 3.0)
-        reward = jp.nan_to_num(reward, nan=-25.0, posinf=3.0, neginf=-25.0)
-        return jp.where(self._get_done(data), -25.0, reward)
+        reward = jp.clip(reward, self.FALL_REWARD, 3.0)
+        reward = jp.nan_to_num(
+            reward,
+            nan=self.FALL_REWARD,
+            posinf=3.0,
+            neginf=self.FALL_REWARD,
+        )
+        return jp.where(self._get_done(data), self.FALL_REWARD, reward)
 
     def _get_done(self, data: mjx.Data) -> jax.Array:
         """Zavrsi epizodu ako human padne ili numerika ode u NaN."""
-        too_low = data.qpos[2] < 0.25 * self._init_q[2]
+        too_low = data.qpos[2] < self.MIN_STANDING_HEIGHT_RATIO * self._init_q[2]
         tipped_over = self._torso_up(data) < 0.25
         invalid = jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any()
         return too_low | tipped_over | invalid

@@ -341,7 +341,7 @@ def run_training(
     rl_config = make_ppo_config(env_name, env_config, train_config)
     run_dir = make_run_dir(
         out_dir,
-        env_config.env_source,
+        run_source_name(env_config, train_config),
         env_name,
         rl_config.num_timesteps,
         train_config.seed,
@@ -355,10 +355,11 @@ def run_training(
     logger.add(run_dir / "train.log", level="INFO", encoding="utf-8", mode="w")
     save_run_config(run_dir, env_config, train_config, rl_config)
 
+    enable_erfi = not train_config.bare
     with logged_stage("make_environment"):
-        env = make_environment(env_config, enable_erfi=True)
+        env = make_environment(env_config, enable_erfi=enable_erfi)
         eval_env = make_environment(env_config, enable_erfi=False)
-    log_environment_summary(env)
+    log_environment_summary(env, label="train env")
     log_eval_environment_summary(eval_env)
     logger.info(
         "trening start | env={} | impl={} | run_dir={}",
@@ -406,9 +407,12 @@ def run_training(
     train_kwargs_extra = {}
     if (
         env_config.env_source == "biomechanics"
+        and not train_config.bare
         and not train_config.no_domain_randomization
     ):
         train_kwargs_extra["randomization_fn"] = domain_randomize
+    if train_config.bare:
+        logger.info("bare mode | ERFI disabled | domain randomization disabled")
     if train_config.no_domain_randomization:
         logger.info("domain randomization disabled for this run")
 
@@ -455,13 +459,14 @@ def run_training(
     return success_dir
 
 
-def log_environment_summary(env) -> None:
+def log_environment_summary(env, label: str = "env") -> None:
     """Ispise dimenzije modela pre treninga."""
     model = env.mj_model
     logger.info(
-        "env summary | nq={} | nv={} | nu={} | nbody={} | ngeom={} | "
-        "nsite={} | action_size={} | substeps={} | rfi_limit={} | "
-        "rao_limit={} | xml={}",
+        "{} summary | nq={} | nv={} | nu={} | nbody={} | ngeom={} | "
+        "nsite={} | action_size={} | substeps={} | erfi_enabled={} | "
+        "command_profile={} | rfi_limit={} | rao_limit={} | xml={}",
+        label,
         model.nq,
         model.nv,
         model.nu,
@@ -470,6 +475,8 @@ def log_environment_summary(env) -> None:
         model.nsite,
         env.action_size,
         getattr(env, "n_substeps", None),
+        getattr(env._config, "enable_erfi", None),
+        getattr(env._config, "command_profile", None),
         getattr(env._config, "rfi_torque_limit", None),
         getattr(env._config, "rao_torque_limit", None),
         getattr(env, "xml_path", None),
@@ -538,6 +545,18 @@ def env_display_name(env_config: EnvConfig) -> str:
     return f"BiomechanicsHumanJoystick{env_config.env_version.title()}"
 
 
+def run_source_name(env_config: EnvConfig, train_config: TrainConfig) -> str:
+    """Dodaje mode u ime run foldera kada nije standardni trening."""
+    env_source = env_config.env_source
+    if train_config.bare:
+        env_source = f"{env_source}_bare"
+    if env_config.command_profile != "standard":
+        env_source = f"{env_source}_{env_config.command_profile}"
+    if env_config.accurate_physics:
+        env_source = f"{env_source}_accurate"
+    return env_source
+
+
 def make_environment(env_config: EnvConfig, enable_erfi: bool = True):
     """Napravi prototip ili pravi biomehanicki joystick env."""
     if env_config.env_source == "prototip":
@@ -546,12 +565,16 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = True):
             config_overrides={"impl": env_config.playground_impl},
         )
     if env_config.env_source == "biomechanics":
+        config_overrides = {
+            "impl": env_config.playground_impl,
+            "enable_erfi": enable_erfi,
+            "command_profile": env_config.command_profile,
+        }
+        if env_config.accurate_physics:
+            config_overrides["sim_dt"] = 0.005
         return BiomechanicsJoystickEnv(
             env_version=env_config.env_version,
-            config_overrides={
-                "impl": env_config.playground_impl,
-                "enable_erfi": enable_erfi,
-            },
+            config_overrides=config_overrides,
         )
     raise ValueError("env_source mora biti 'biomechanics' ili 'prototip'.")
 
@@ -578,6 +601,12 @@ def main() -> None:
         choices=["jax", "warp"],
         default="jax",
     )
+    parser.add_argument(
+        "--command-profile",
+        choices=["forward", "standard"],
+        default="forward",
+        help="Curriculum komande: forward za prvi hod, standard za pun joystick.",
+    )
     parser.add_argument("--timesteps", type=int, default=None)
     parser.add_argument("--num-envs", type=int, default=None)
     parser.add_argument("--num-evals", type=int, default=None)
@@ -589,6 +618,21 @@ def main() -> None:
         action="store_true",
         help="Mali izolacioni run bez domain randomization.",
     )
+    parser.add_argument(
+        "--bare",
+        action="store_true",
+        help="Baseline: bez ERFI i bez domain randomization.",
+    )
+    parser.add_argument(
+        "--accurate-physics",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--fast-physics",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
     parser.add_argument("--out", type=Path, default=RUNS_DIR)
     args = parser.parse_args()
 
@@ -599,6 +643,8 @@ def main() -> None:
         env_source=args.env_source,
         env_version=args.env_version,
         playground_impl=args.playground_impl,
+        command_profile=args.command_profile,
+        accurate_physics=not args.fast_physics,
     )
     debug_defaults = debug_run_defaults(args.debug_run)
     train_config = TrainConfig(
@@ -619,6 +665,7 @@ def main() -> None:
             False,
         ),
         debug_run=args.debug_run,
+        bare=args.bare,
     )
     run_training(env_config, train_config, args.out)
 

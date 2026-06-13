@@ -262,6 +262,74 @@ def simulation_step(env, policy, state, rng, command):
     return next_state, action
 
 
+def inspect_policy(env, policy, rng, command: np.ndarray, steps: int) -> None:
+    """Pokreni headless rollout i ispisi objektivne survival metrike."""
+    state = reset_state(env, rng, command)
+    total_reward = 0.0
+    reset_count = 0
+    episode_lengths = []
+    current_episode_length = 0
+    z_values = []
+    torso_up_values = []
+    action_norm_values = []
+
+    print("compiling first JAX inspect step...", flush=True)
+    rng, action_key = jax.random.split(rng)
+    state, action = simulation_step(env, policy, state, action_key, command)
+    jax.block_until_ready(action)
+    print("compile done, running inspect rollout", flush=True)
+
+    for step in range(steps):
+        rng, action_key, reset_key = jax.random.split(rng, 3)
+        state, action = simulation_step(env, policy, state, action_key, command)
+        reward = float(np.asarray(state.reward))
+        done = bool(np.asarray(state.done))
+        qpos_z = float(np.asarray(state.data.qpos[2]))
+        torso_up = get_torso_up(state)
+        action_norm = float(np.asarray(jnp.linalg.norm(action)))
+
+        total_reward += reward
+        current_episode_length += 1
+        z_values.append(qpos_z)
+        torso_up_values.append(torso_up)
+        action_norm_values.append(action_norm)
+
+        if step % DEBUG_PRINT_INTERVAL == 0 or done:
+            print(
+                "inspect "
+                f"step={step} "
+                f"reward={reward:.3f} "
+                f"z={qpos_z:.3f} "
+                f"torso_up={torso_up:.3f} "
+                f"done={int(done)} "
+                f"action_norm={action_norm:.3f}",
+                flush=True,
+            )
+
+        if done:
+            reset_count += 1
+            episode_lengths.append(current_episode_length)
+            state = reset_state(env, reset_key, command)
+            current_episode_length = 0
+
+    if current_episode_length:
+        episode_lengths.append(current_episode_length)
+
+    print(
+        "inspect summary | "
+        f"steps={steps} "
+        f"resets={reset_count} "
+        f"mean_episode_length={np.mean(episode_lengths):.1f} "
+        f"total_reward={total_reward:.3f} "
+        f"mean_z={np.mean(z_values):.3f} "
+        f"min_z={np.min(z_values):.3f} "
+        f"mean_torso_up={np.mean(torso_up_values):.3f} "
+        f"min_torso_up={np.min(torso_up_values):.3f} "
+        f"mean_action_norm={np.mean(action_norm_values):.3f}",
+        flush=True,
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Gledanje Brax PPO politike u MuJoCo viewer-u."
@@ -283,6 +351,11 @@ def main():
         choices=["jax", "warp"],
         default="jax",
     )
+    parser.add_argument(
+        "--command-profile",
+        choices=["forward", "standard"],
+        default="forward",
+    )
     parser.add_argument("--command-x", type=float, default=0.8)
     parser.add_argument("--command-y", type=float, default=0.0)
     parser.add_argument("--command-yaw", type=float, default=0.0)
@@ -290,6 +363,18 @@ def main():
     parser.add_argument("--stochastic", action="store_true")
     parser.add_argument("--seed", type=int, default=11)
     parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--inspect", action="store_true")
+    parser.add_argument("--inspect-steps", type=int, default=2000)
+    parser.add_argument(
+        "--accurate-physics",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--fast-physics",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
     args = parser.parse_args()
 
     device = choose_device(args.device)
@@ -299,6 +384,8 @@ def main():
         env_source=args.env_source,
         env_version=args.env_version,
         playground_impl=args.playground_impl,
+        command_profile=args.command_profile,
+        accurate_physics=not args.fast_physics,
     )
     env = make_environment(env_config)
     policy = load_ppo_policy(args.checkpoint, deterministic=not args.stochastic)
@@ -311,6 +398,10 @@ def main():
     )
     clip_command(command)
     state = set_command(state, command)
+
+    if args.inspect:
+        inspect_policy(env, policy, rng, command, args.inspect_steps)
+        return
 
     print("compiling first JAX simulation step...", flush=True)
     rng, action_key = jax.random.split(rng)
@@ -362,12 +453,16 @@ def make_environment(env_config: EnvConfig):
             env_config.prototype_env_name(),
             config_overrides={"impl": env_config.playground_impl},
         )
+    config_overrides = {
+        "impl": env_config.playground_impl,
+        "enable_erfi": False,
+        "command_profile": env_config.command_profile,
+    }
+    if env_config.accurate_physics:
+        config_overrides["sim_dt"] = 0.005
     return BiomechanicsJoystickEnv(
         env_version=env_config.env_version,
-        config_overrides={
-            "impl": env_config.playground_impl,
-            "enable_erfi": False,
-        },
+        config_overrides=config_overrides,
     )
 
 

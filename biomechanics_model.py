@@ -12,8 +12,16 @@ from config import BIOMECH_DIR, PROJECT_ROOT
 
 
 GENERATED_MODEL_DIR = PROJECT_ROOT / "generated_models"
-SCENE_XML_VERSION = "trainfast_v4"
+SCENE_XML_VERSION = "trainfast_v8"
 FOOT_BODY_NAMES = {"left_foot", "right_foot"}
+LOCKED_TORSO_JOINTS = (
+    "abdomen_x",
+    "abdomen_y",
+    "abdomen_z",
+    "pelvis_x",
+    "pelvis_y",
+    "pelvis_z",
+)
 _GENERATOR_CACHE = None
 
 LOCOMOTION_ACTUATED_JOINTS = (
@@ -30,6 +38,19 @@ LOCOMOTION_ACTUATED_JOINTS = (
     "right_ankle_y",
     "right_ankle_z",
 )
+LEG_FRICTION_LOSS = {
+    "hip": 0.3,
+    "knee": 0.8,
+    "ankle": 0.6,
+}
+PASSIVE_JOINT_STIFFNESS = {
+    "head": 12.0,
+    "abdomen": 350.0,
+    "pelvis": 350.0,
+    "shoulder": 25.0,
+    "elbow": 12.0,
+    "wrist": 6.0,
+}
 
 
 @dataclass(frozen=True)
@@ -109,9 +130,11 @@ def build_trainable_scene_xml(env_version: str, spec: HumanSpec) -> Path:
     ensure_compiler(root)
     ensure_option(root)
     ensure_visual(root)
-    add_passive_joint_damping(root)
+    configure_joint_passive_properties(root)
     add_terrain(root, env_version)
     set_training_collision_filters(root)
+    add_stable_foot_contacts(root)
+    add_torso_joint_locks(root)
     add_actuators(root)
     add_keyframe_ctrl(root)
 
@@ -162,12 +185,71 @@ def ensure_visual(root: ET.Element) -> None:
     ET.SubElement(visual, "headlight", diffuse=".8 .8 .8", ambient=".2 .2 .2")
 
 
-def add_passive_joint_damping(root: ET.Element) -> None:
-    """Doda osnovno prigusenje da pasivni delovi tela ne budu potpuno mlitavi."""
+def configure_joint_passive_properties(root: ET.Element) -> None:
+    """Doda joint damping, armature, friction i pasivne opruge."""
     worldbody = root.find("worldbody")
     for joint in worldbody.iter("joint"):
-        if joint.get("type") != "free":
-            joint.set("damping", "1.0")
+        if joint.get("type") == "free":
+            continue
+
+        joint_name = joint.get("name", "")
+        if joint_name in LOCOMOTION_ACTUATED_JOINTS:
+            joint.set("damping", "1.5")
+            joint.set("armature", "0.006")
+            joint.set("frictionloss", str(actuated_joint_friction(joint_name)))
+            continue
+
+        joint.set("damping", str(passive_joint_damping(joint_name)))
+        joint.set("armature", str(passive_joint_armature(joint_name)))
+        joint.set("frictionloss", str(passive_joint_friction(joint_name)))
+        joint.set("stiffness", str(passive_joint_stiffness(joint_name)))
+        joint.set("springref", "0")
+
+
+def actuated_joint_friction(joint_name: str) -> float:
+    """Vraca Berkeley-like frictionloss za kontrolisane zglobove nogu."""
+    if "knee" in joint_name:
+        return LEG_FRICTION_LOSS["knee"]
+    if "ankle" in joint_name:
+        return LEG_FRICTION_LOSS["ankle"]
+    return LEG_FRICTION_LOSS["hip"]
+
+
+def passive_joint_stiffness(joint_name: str) -> float:
+    """Vraca pasivnu oprugu za zglobove koje policy ne kontrolise."""
+    for name_part, stiffness in PASSIVE_JOINT_STIFFNESS.items():
+        if name_part in joint_name:
+            return stiffness
+    return 5.0
+
+
+def passive_joint_damping(joint_name: str) -> float:
+    """Vraca pasivno prigusenje za nekontrolisane zglobove."""
+    if "abdomen" in joint_name or "pelvis" in joint_name:
+        return 8.0
+    if "shoulder" in joint_name:
+        return 3.0
+    return 2.0
+
+
+def passive_joint_armature(joint_name: str) -> float:
+    """Dodaje numericku inerciju da pasivni zglobovi ne budu previse mlitavi."""
+    if "abdomen" in joint_name or "pelvis" in joint_name:
+        return 0.02
+    if "shoulder" in joint_name or "elbow" in joint_name:
+        return 0.006
+    return 0.003
+
+
+def passive_joint_friction(joint_name: str) -> float:
+    """Dodaje Coulomb friction za pasivne zglobove."""
+    if "abdomen" in joint_name or "pelvis" in joint_name:
+        return 2.0
+    if "shoulder" in joint_name:
+        return 0.8
+    if "elbow" in joint_name:
+        return 0.5
+    return 0.3
 
 
 def add_terrain(root: ET.Element, env_version: str) -> None:
@@ -268,6 +350,54 @@ def mark_visual_only_geom(geom: ET.Element) -> None:
     """Geometrija ostaje vidljiva, ali ne ulazi u contact solver."""
     geom.set("contype", "0")
     geom.set("conaffinity", "0")
+
+
+def add_stable_foot_contacts(root: ET.Element) -> None:
+    """Zameni zaobljenu foot kapsulu stabilnijim box djonom za kontakt."""
+    worldbody = root.find("worldbody")
+    for body in worldbody.iter("body"):
+        if body.get("name") not in FOOT_BODY_NAMES:
+            continue
+
+        for geom in body.findall("geom"):
+            mark_visual_only_geom(geom)
+
+        ET.SubElement(
+            body,
+            "geom",
+            name=f"{body.get('name')}_sole",
+            type="box",
+            pos="0.09 -0.045 0",
+            size="0.145 0.012 0.075",
+            rgba="0.1 0.1 0.1 0.35",
+            friction="1.0 0.01 0.001",
+            solref="0.02 1",
+            solimp="0.85 0.95 0.005",
+            contype="1",
+            conaffinity="1",
+            condim="3",
+        )
+
+
+def add_torso_joint_locks(root: ET.Element) -> None:
+    """Zakljuca spine/pelvis lanac da gornji deo bude Berkeley-like rigid."""
+    equality = root.find("equality")
+    if equality is None:
+        equality = ET.SubElement(root, "equality")
+
+    existing = {item.get("joint1") for item in equality.findall("joint")}
+    for joint_name in LOCKED_TORSO_JOINTS:
+        if joint_name in existing:
+            continue
+        ET.SubElement(
+            equality,
+            "joint",
+            name=f"lock_{joint_name}",
+            joint1=joint_name,
+            polycoef="0 1 0 0 0",
+            solref="0.005 1",
+            solimp="0.95 0.99 0.001",
+        )
 
 
 def add_actuators(root: ET.Element) -> None:

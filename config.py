@@ -48,6 +48,14 @@ class EnvConfig:
     # Korak promene joystick komande u viewer-u po pritisku strelice/WASD.
     command_change_rate: float = 0.1
 
+    # "forward" je curriculum za prvi stabilan hod. "standard" vraca pun joystick
+    # zadatak: napred/nazad, lateralno i yaw.
+    command_profile: str = "forward"
+
+    # Stabilniji physics step za biomehanicki model.
+    # Default: sim_dt=0.005 -> 4 substep-a po policy koraku.
+    accurate_physics: bool = True
+
     def prototype_env_name(self) -> str:
         """Mapira standard/hardcore na Berkeley prototip env."""
         if self.env_version == "standard":
@@ -78,6 +86,7 @@ class TrainConfig:
     learning_rate: float | None = None
     no_domain_randomization: bool = False
     debug_run: bool = False
+    bare: bool = False
 
     # PPO je izabran jer Playground vec ima podesen Brax/MJX PPO config za
     # Berkeley humanoid joystick env. SAC/TD3 nisu odbaceni teorijski, nego nisu
