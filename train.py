@@ -1,6 +1,7 @@
 import argparse
 import functools
 import json
+import sys
 import time
 from contextlib import contextmanager
 from datetime import datetime
@@ -140,6 +141,12 @@ def patch_jax_for_brax_compatibility() -> None:
     jax.device_put_replicated = device_put_replicated
 
 
+def configure_stdout_encoding() -> None:
+    """Omoguci da Loguru traceback ne pukne na Windows legacy encoding-u."""
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+
 def choose_device(name: str, allow_cpu: bool):
     """Bira JAX uredjaj i eksplicitno odbija tihi fallback sa GPU-a na CPU."""
     if name == "cpu":
@@ -264,19 +271,19 @@ def make_ppo_config(
 def biomechanics_ppo_config():
     """PPO polazne vrednosti za nas custom human joystick env."""
     return config_dict.create(
-        num_timesteps=20_000_000,
-        num_evals=5,
-        num_envs=512,
-        num_eval_envs=16,
-        episode_length=300,
+        num_timesteps=50_000_000,
+        num_evals=10,
+        num_envs=1024,
+        num_eval_envs=32,
+        episode_length=500,
         action_repeat=1,
-        learning_rate=1e-4,
-        entropy_cost=1e-4,
+        learning_rate=3e-4,
+        entropy_cost=3e-3,
         discounting=0.97,
-        unroll_length=10,
-        batch_size=256,
-        num_minibatches=4,
-        num_updates_per_batch=2,
+        unroll_length=20,
+        batch_size=512,
+        num_minibatches=8,
+        num_updates_per_batch=4,
         normalize_observations=True,
         normalize_observations_std_eps=1e-3,
         reward_scaling=1.0,
@@ -284,9 +291,11 @@ def biomechanics_ppo_config():
         gae_lambda=0.95,
         max_grad_norm=1.0,
         network_factory=config_dict.create(
-            policy_hidden_layer_sizes=(256, 128),
-            value_hidden_layer_sizes=(256, 128),
+            policy_hidden_layer_sizes=(512, 256, 128),
+            value_hidden_layer_sizes=(512, 256, 128),
             activation=jax.nn.silu,
+            policy_obs_key="state",
+            value_obs_key="privileged_state",
         ),
     )
 
@@ -346,9 +355,19 @@ def run_training(
         rl_config.num_timesteps,
         train_config.seed,
     )
-    checkpoint_dir = run_dir / "checkpoints"
+    checkpoint_dir = (
+        Path(train_config.checkpoint_out).expanduser()
+        if train_config.checkpoint_out
+        else run_dir / "checkpoints"
+    )
+    restore_checkpoint_path = (
+        str(Path(train_config.resume_from).expanduser())
+        if train_config.resume_from
+        else None
+    )
     run_dir.mkdir(parents=True, exist_ok=True)
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    if train_config.save_checkpoints:
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
     logger.remove()
     logger.add(lambda msg: print(msg, end=""), level="INFO")
@@ -374,6 +393,16 @@ def run_training(
         rl_config.batch_size,
         rl_config.learning_rate,
     )
+    if train_config.save_checkpoints:
+        logger.info("checkpoints enabled | path={}", checkpoint_dir)
+    else:
+        logger.info("checkpoints disabled for this run")
+    if restore_checkpoint_path is not None:
+        logger.info(
+            "resume enabled | restore_checkpoint_path={} | "
+            "requires compatible env/action/obs/network config",
+            restore_checkpoint_path,
+        )
     logger.info(
         "ppo detail | episode_length={} | unroll_length={} | "
         "num_minibatches={} | updates_per_batch={} | num_evals={} | "
@@ -422,6 +451,9 @@ def run_training(
 
     logger.info("calling ppo.train")
     progress_logger = TrainingProgressLogger()
+    save_checkpoint_path = (
+        str(checkpoint_dir) if train_config.save_checkpoints else None
+    )
     try:
         with logged_stage("ppo.train"):
             ppo.train(
@@ -430,7 +462,8 @@ def run_training(
                 seed=train_config.seed,
                 progress_fn=progress_logger,
                 policy_params_fn=PpoPercentLogger(rl_config.num_timesteps),
-                save_checkpoint_path=str(checkpoint_dir),
+                save_checkpoint_path=save_checkpoint_path,
+                restore_checkpoint_path=restore_checkpoint_path,
                 wrap_env_fn=wrapper.wrap_for_brax_training,
                 **train_kwargs_extra,
                 **train_kwargs,
@@ -452,7 +485,7 @@ def run_training(
     logger.info(
         "trening gotov | run_dir={} | checkpoints={} | best_reward={} | best_step={}",
         success_dir,
-        success_dir / "checkpoints",
+        checkpoint_dir if train_config.save_checkpoints else None,
         progress_logger.best_reward,
         progress_logger.best_step,
     )
@@ -465,7 +498,8 @@ def log_environment_summary(env, label: str = "env") -> None:
     logger.info(
         "{} summary | nq={} | nv={} | nu={} | nbody={} | ngeom={} | "
         "nsite={} | action_size={} | substeps={} | erfi_enabled={} | "
-        "command_profile={} | rfi_limit={} | rao_limit={} | xml={}",
+        "command_profile={} | action_smoothing={} | rfi_limit={} | "
+        "rao_limit={} | xml={}",
         label,
         model.nq,
         model.nv,
@@ -477,6 +511,7 @@ def log_environment_summary(env, label: str = "env") -> None:
         getattr(env, "n_substeps", None),
         getattr(env._config, "enable_erfi", None),
         getattr(env._config, "command_profile", None),
+        getattr(env._config, "action_smoothing", None),
         getattr(env._config, "rfi_torque_limit", None),
         getattr(env._config, "rao_torque_limit", None),
         getattr(env, "xml_path", None),
@@ -510,7 +545,10 @@ def debug_preflight(env, seed: int) -> None:
 
     with logged_stage("preflight reset"):
         state = env.reset(rng)
-        obs_shape = getattr(state.obs, "shape", None)
+        obs_shape = jax.tree_util.tree_map(
+            lambda value: getattr(value, "shape", None),
+            state.obs,
+        )
         logger.info(
             "preflight reset ok | obs_shape={} | reward_dtype={} | done_dtype={}",
             obs_shape,
@@ -569,6 +607,7 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = True):
             "impl": env_config.playground_impl,
             "enable_erfi": enable_erfi,
             "command_profile": env_config.command_profile,
+            "action_smoothing": env_config.action_smoothing,
         }
         if env_config.accurate_physics:
             config_overrides["sim_dt"] = 0.005
@@ -580,6 +619,7 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = True):
 
 
 def main() -> None:
+    configure_stdout_encoding()
     parser = argparse.ArgumentParser(
         description="MuJoCo Playground/Brax PPO trening."
     )
@@ -603,9 +643,18 @@ def main() -> None:
     )
     parser.add_argument(
         "--command-profile",
-        choices=["forward", "standard"],
+        choices=["forward", "walk", "standard"],
         default="forward",
-        help="Curriculum komande: forward za prvi hod, standard za pun joystick.",
+        help=(
+            "Curriculum komande: forward za kompatibilan prvi hod, "
+            "walk za gait-clock trening, standard za pun joystick."
+        ),
+    )
+    parser.add_argument(
+        "--action-smoothing",
+        type=float,
+        default=0.5,
+        help="Filtriranje policy akcije pre servo targeta; 0.5 prati walking repo.",
     )
     parser.add_argument("--timesteps", type=int, default=None)
     parser.add_argument("--num-envs", type=int, default=None)
@@ -622,6 +671,29 @@ def main() -> None:
         "--bare",
         action="store_true",
         help="Baseline: bez ERFI i bez domain randomization.",
+    )
+    parser.add_argument(
+        "--no-checkpoints",
+        action="store_true",
+        help="Ne snimaj Orbax checkpointove tokom ovog treninga.",
+    )
+    parser.add_argument(
+        "--checkpoint-out",
+        type=Path,
+        default=None,
+        help=(
+            "Alternativni folder za checkpointove; korisno u WSL-u da se pise "
+            "na Linux filesystem umesto na /mnt/c."
+        ),
+    )
+    parser.add_argument(
+        "--resume-from",
+        type=Path,
+        default=None,
+        help=(
+            "Putanja do kompatibilnog Brax/Orbax checkpointa za nastavak "
+            "treninga. Mora biti isti env/action/obs/network setup."
+        ),
     )
     parser.add_argument(
         "--accurate-physics",
@@ -644,6 +716,7 @@ def main() -> None:
         env_version=args.env_version,
         playground_impl=args.playground_impl,
         command_profile=args.command_profile,
+        action_smoothing=args.action_smoothing,
         accurate_physics=not args.fast_physics,
     )
     debug_defaults = debug_run_defaults(args.debug_run)
@@ -664,6 +737,11 @@ def main() -> None:
             "no_domain_randomization",
             False,
         ),
+        save_checkpoints=not args.no_checkpoints,
+        checkpoint_out=(
+            str(args.checkpoint_out) if args.checkpoint_out is not None else None
+        ),
+        resume_from=str(args.resume_from) if args.resume_from is not None else None,
         debug_run=args.debug_run,
         bare=args.bare,
     )

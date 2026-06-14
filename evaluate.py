@@ -44,6 +44,7 @@ OBS_COMMAND_END = 12
 BIOMECH_COMMAND_START = 9
 BIOMECH_COMMAND_END = 12
 DEBUG_PRINT_INTERVAL = 120
+DEFAULT_WALK_COMMAND_X = 0.25
 
 
 class JoystickController:
@@ -107,6 +108,49 @@ def clip_command(command: np.ndarray) -> None:
     command[0] = np.clip(command[0], -1.2, 1.4)
     command[1] = np.clip(command[1], -1.0, 1.0)
     command[2] = np.clip(command[2], -1.5, 1.5)
+
+
+def infer_command_profile(checkpoint_path: Path) -> str:
+    """Procitaj command_profile iz run configa, uz fallback na obs size."""
+    run_config = find_run_config(checkpoint_path)
+    if run_config is not None:
+        profile = run_config.get("env", {}).get("command_profile")
+        if profile in {"forward", "walk", "standard"}:
+            return profile
+
+    obs_size = read_checkpoint_observation_size(checkpoint_path)
+    if obs_size == 92:
+        return "walk"
+    return "forward"
+
+
+def find_run_config(checkpoint_path: Path) -> dict | None:
+    """Nadji config.json u roditeljskom run direktorijumu checkpointa."""
+    for path in (checkpoint_path, *checkpoint_path.parents):
+        config_path = path / "config.json"
+        if not config_path.exists():
+            continue
+        with config_path.open("r", encoding="utf-8") as config_file:
+            return json.load(config_file)
+    return None
+
+
+def read_checkpoint_observation_size(checkpoint_path: Path) -> int | None:
+    """Procitaj observation_size iz Brax checkpoint metadata fajla."""
+    network_config_path = checkpoint_path / "ppo_network_config.json"
+    if not network_config_path.exists():
+        return None
+    with network_config_path.open("r", encoding="utf-8") as config_file:
+        network_config = json.load(config_file)
+
+    observation_size = network_config.get("observation_size", {})
+    if "state" in observation_size:
+        shape = observation_size["state"].get("shape")
+    else:
+        shape = observation_size.get("shape")
+    if not shape:
+        return None
+    return int(shape[0])
 
 
 def load_ppo_policy(checkpoint_path: Path, deterministic: bool):
@@ -353,13 +397,14 @@ def main():
     )
     parser.add_argument(
         "--command-profile",
-        choices=["forward", "standard"],
-        default="forward",
+        choices=["auto", "forward", "walk", "standard"],
+        default="auto",
     )
-    parser.add_argument("--command-x", type=float, default=0.8)
+    parser.add_argument("--action-smoothing", type=float, default=0.5)
+    parser.add_argument("--command-x", type=float, default=None)
     parser.add_argument("--command-y", type=float, default=0.0)
     parser.add_argument("--command-yaw", type=float, default=0.0)
-    parser.add_argument("--command-step", type=float, default=0.1)
+    parser.add_argument("--command-step", type=float, default=0.05)
     parser.add_argument("--stochastic", action="store_true")
     parser.add_argument("--seed", type=int, default=11)
     parser.add_argument("--debug", action="store_true")
@@ -380,11 +425,25 @@ def main():
     device = choose_device(args.device)
     jax.config.update("jax_default_device", device)
 
+    command_profile = (
+        infer_command_profile(args.checkpoint)
+        if args.command_profile == "auto"
+        else args.command_profile
+    )
+    command_x = args.command_x
+    if command_x is None:
+        command_x = DEFAULT_WALK_COMMAND_X if command_profile == "walk" else 0.0
+    print(
+        f"eval config | command_profile={command_profile} | command_x={command_x}",
+        flush=True,
+    )
+
     env_config = EnvConfig(
         env_source=args.env_source,
         env_version=args.env_version,
         playground_impl=args.playground_impl,
-        command_profile=args.command_profile,
+        command_profile=command_profile,
+        action_smoothing=args.action_smoothing,
         accurate_physics=not args.fast_physics,
     )
     env = make_environment(env_config)
@@ -393,7 +452,7 @@ def main():
     rng = jax.random.PRNGKey(args.seed)
     state = env.reset(rng)
     command = np.array(
-        [args.command_x, args.command_y, args.command_yaw],
+        [command_x, args.command_y, args.command_yaw],
         dtype=np.float32,
     )
     clip_command(command)
@@ -457,6 +516,7 @@ def make_environment(env_config: EnvConfig):
         "impl": env_config.playground_impl,
         "enable_erfi": False,
         "command_profile": env_config.command_profile,
+        "action_smoothing": env_config.action_smoothing,
     }
     if env_config.accurate_physics:
         config_overrides["sim_dt"] = 0.005

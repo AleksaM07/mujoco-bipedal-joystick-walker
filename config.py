@@ -52,6 +52,10 @@ class EnvConfig:
     # zadatak: napred/nazad, lateralno i yaw.
     command_profile: str = "forward"
 
+    # Referentni humanoid walking setup filtrira targete pre PD kontrole.
+    # 0.5 znaci: pola nova akcija politike, pola prethodni target.
+    action_smoothing: float = 0.5
+
     # Stabilniji physics step za biomehanicki model.
     # Default: sim_dt=0.005 -> 4 substep-a po policy koraku.
     accurate_physics: bool = True
@@ -85,6 +89,9 @@ class TrainConfig:
     num_updates_per_batch: int | None = None
     learning_rate: float | None = None
     no_domain_randomization: bool = False
+    save_checkpoints: bool = True
+    checkpoint_out: str | None = None
+    resume_from: str | None = None
     debug_run: bool = False
     bare: bool = False
 
