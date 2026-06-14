@@ -1,5 +1,6 @@
 import argparse
 import time
+from pathlib import Path
 
 import mujoco
 import mujoco.viewer
@@ -29,6 +30,12 @@ def main() -> None:
         help="Pomnozi standing-home zglobove radi vizuelnog debug-a.",
     )
     parser.add_argument(
+        "--init-qpos-file",
+        type=Path,
+        default=None,
+        help="Opcioni MJDATA/QPOS fajl za pocetnu pozu.",
+    )
+    parser.add_argument(
         "--fast-physics",
         action="store_true",
         help="Koristi sim_dt=0.01 kao training --fast-physics.",
@@ -39,6 +46,8 @@ def main() -> None:
         "enable_erfi": False,
         "impl": "jax",
     }
+    if args.init_qpos_file is not None:
+        config_overrides["init_qpos_file"] = str(args.init_qpos_file)
     if not args.fast_physics:
         config_overrides["sim_dt"] = 0.005
 
@@ -57,10 +66,6 @@ def main() -> None:
             init_q[qpos_id] *= args.pose_scale
         default_ctrl = init_q[np.asarray(env._actuator_qpos_indices)]
 
-    model.qpos0[:] = init_q
-    if model.nkey:
-        model.key_qpos[:] = init_q
-        model.key_ctrl[:] = default_ctrl
     data.qpos[:] = init_q
     data.qvel[:] = 0.0
     data.ctrl[:] = default_ctrl
@@ -70,6 +75,7 @@ def main() -> None:
     print(
         "standing-home | "
         f"z={data.qpos[2]:.3f} | "
+        f"init_qpos_file={args.init_qpos_file} | "
         f"pose_scale={args.pose_scale:.2f} | "
         f"hip_x={data.qpos[model.jnt_qposadr[model.joint('left_hip_x').id]]:.3f} | "
         f"hip_z={data.qpos[model.jnt_qposadr[model.joint('left_hip_z').id]]:.3f} | "

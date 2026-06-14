@@ -56,6 +56,10 @@ class EnvConfig:
     # 0.5 znaci: pola nova akcija politike, pola prethodni target.
     action_smoothing: float = 0.5
 
+    # Opcioni MJDATA/QPOS fajl za pocetnu pozu, npr. neutralni polucucanj.
+    # None koristi built-in standing-home pozu.
+    init_qpos_file: str | None = None
+
     # Stabilniji physics step za biomehanicki model.
     # Default: sim_dt=0.005 -> 4 substep-a po policy koraku.
     accurate_physics: bool = True

@@ -499,7 +499,7 @@ def log_environment_summary(env, label: str = "env") -> None:
         "{} summary | nq={} | nv={} | nu={} | nbody={} | ngeom={} | "
         "nsite={} | action_size={} | substeps={} | erfi_enabled={} | "
         "command_profile={} | action_smoothing={} | rfi_limit={} | "
-        "rao_limit={} | xml={}",
+        "rao_limit={} | init_qpos_file={} | xml={}",
         label,
         model.nq,
         model.nv,
@@ -514,6 +514,7 @@ def log_environment_summary(env, label: str = "env") -> None:
         getattr(env._config, "action_smoothing", None),
         getattr(env._config, "rfi_torque_limit", None),
         getattr(env._config, "rao_torque_limit", None),
+        getattr(env._config, "init_qpos_file", None),
         getattr(env, "xml_path", None),
     )
 
@@ -590,6 +591,8 @@ def run_source_name(env_config: EnvConfig, train_config: TrainConfig) -> str:
         env_source = f"{env_source}_bare"
     if env_config.command_profile != "standard":
         env_source = f"{env_source}_{env_config.command_profile}"
+    if env_config.init_qpos_file:
+        env_source = f"{env_source}_initqpos"
     if env_config.accurate_physics:
         env_source = f"{env_source}_accurate"
     return env_source
@@ -609,6 +612,8 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = True):
             "command_profile": env_config.command_profile,
             "action_smoothing": env_config.action_smoothing,
         }
+        if env_config.init_qpos_file is not None:
+            config_overrides["init_qpos_file"] = env_config.init_qpos_file
         if env_config.accurate_physics:
             config_overrides["sim_dt"] = 0.005
         return BiomechanicsJoystickEnv(
@@ -655,6 +660,15 @@ def main() -> None:
         type=float,
         default=0.5,
         help="Filtriranje policy akcije pre servo targeta; 0.5 prati walking repo.",
+    )
+    parser.add_argument(
+        "--init-qpos-file",
+        type=Path,
+        default=None,
+        help=(
+            "Opcioni MJDATA/QPOS fajl za pocetnu pozu, npr. "
+            "MJDATA_neutral_poze.TXT."
+        ),
     )
     parser.add_argument("--timesteps", type=int, default=None)
     parser.add_argument("--num-envs", type=int, default=None)
@@ -717,6 +731,9 @@ def main() -> None:
         playground_impl=args.playground_impl,
         command_profile=args.command_profile,
         action_smoothing=args.action_smoothing,
+        init_qpos_file=(
+            str(args.init_qpos_file) if args.init_qpos_file is not None else None
+        ),
         accurate_physics=not args.fast_physics,
     )
     debug_defaults = debug_run_defaults(args.debug_run)

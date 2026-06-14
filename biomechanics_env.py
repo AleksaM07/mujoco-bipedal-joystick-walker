@@ -1,5 +1,7 @@
+import re
 from dataclasses import dataclass
 from itertools import product
+from pathlib import Path
 
 import jax
 import jax.numpy as jp
@@ -14,7 +16,13 @@ from biomechanics_model import (
     TRUNK_ACTUATED_JOINTS,
     build_trainable_scene_xml,
 )
+from config import PROJECT_ROOT
 from mujoco_playground._src import mjx_env
+
+
+QPOS_NUMBER_PATTERN = re.compile(
+    r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
+)
 
 
 @dataclass(frozen=True)
@@ -34,6 +42,7 @@ class BiomechanicsEnvConfig:
     rfi_torque_limit: float = 2.0
     rao_torque_limit: float = 2.0
     enable_erfi: bool = True
+    init_qpos_file: str | None = None
 
 
 def default_config() -> config_dict.ConfigDict:
@@ -52,8 +61,48 @@ def default_config() -> config_dict.ConfigDict:
         rfi_torque_limit=2.0,
         rao_torque_limit=2.0,
         enable_erfi=True,
+        init_qpos_file=None,
         impl="jax",
     )
+
+
+def load_qpos_from_mjdata_file(path: str | Path, expected_size: int) -> np.ndarray:
+    """Ucita QPOS blok iz MJDATA-style tekst fajla."""
+    qpos_path = resolve_project_path(path)
+    text = qpos_path.read_text(encoding="utf-8")
+    lines = text.splitlines()
+
+    start_index = 0
+    for index, line in enumerate(lines):
+        if line.strip().upper() == "QPOS":
+            start_index = index + 1
+            break
+
+    qpos_lines = []
+    for line in lines[start_index:]:
+        stripped = line.strip()
+        if qpos_lines and stripped.isalpha():
+            break
+        qpos_lines.append(line)
+
+    values = [
+        float(value)
+        for value in QPOS_NUMBER_PATTERN.findall("\n".join(qpos_lines))
+    ]
+    if len(values) != expected_size:
+        raise ValueError(
+            f"{qpos_path} ima {len(values)} QPOS vrednosti, "
+            f"a model ocekuje nq={expected_size}."
+        )
+    return np.asarray(values, dtype=np.float64)
+
+
+def resolve_project_path(path: str | Path) -> Path:
+    """Vrati apsolutnu putanju, uz podrsku za repo-relative fajlove."""
+    resolved = Path(path).expanduser()
+    if resolved.is_absolute() or resolved.exists():
+        return resolved
+    return PROJECT_ROOT / resolved
 
 
 class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
@@ -126,9 +175,9 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self._xml_path = build_trainable_scene_xml(env_version, human_spec)
         self._mj_model = mujoco.MjModel.from_xml_path(str(self._xml_path))
         self._mj_model.opt.timestep = self._sim_dt
-        self._mjx_model = mjx.put_model(self._mj_model, impl=self._config.impl)
         init_q = np.array(self._mj_model.keyframe("a-pose").qpos, copy=True)
-        init_q = self._apply_locomotion_neutral_pose(init_q)
+        init_q = self._build_initial_qpos(init_q)
+        self._mjx_model = mjx.put_model(self._mj_model, impl=self._config.impl)
         self._init_q = jp.array(init_q)
         self._default_qpos = self._init_q[7:]
         self._actuator_qpos_indices = jp.array([
@@ -182,6 +231,47 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             self._right_foot_sole_geom_id,
         ])
 
+    def _build_initial_qpos(self, fallback_qpos: np.ndarray) -> np.ndarray:
+        """Napravi pocetni qpos iz fajla ili iz stabilnije standing-home poze."""
+        init_qpos_file = self._config.get("init_qpos_file", None)
+        if init_qpos_file:
+            qpos = load_qpos_from_mjdata_file(init_qpos_file, self._mj_model.nq)
+            return self._prepare_loaded_qpos(qpos)
+        return self._apply_locomotion_neutral_pose(fallback_qpos)
+
+    def _prepare_loaded_qpos(self, qpos: np.ndarray) -> np.ndarray:
+        """Sanitizuje ucitani qpos i postavi stopala blizu poda."""
+        qpos = np.asarray(qpos, dtype=np.float64).copy()
+        self._normalize_root_quaternion(qpos)
+        self._clip_limited_joints(qpos)
+        return self._place_feet_on_floor(qpos)
+
+    def _normalize_root_quaternion(self, qpos: np.ndarray) -> None:
+        """Normalizuj free-joint quaternion iz eksternog MJDATA fajla."""
+        quat_norm = np.linalg.norm(qpos[3:7])
+        if not np.isfinite(quat_norm) or quat_norm < 1e-8:
+            raise ValueError("QPOS root quaternion nije validan.")
+        qpos[3:7] /= quat_norm
+
+    def _clip_limited_joints(self, qpos: np.ndarray) -> None:
+        """Drzi ucitani qpos unutar MuJoCo joint limita."""
+        for joint_id in range(self._mj_model.njnt):
+            if self._mj_model.jnt_type[joint_id] == mujoco.mjtJoint.mjJNT_FREE:
+                continue
+            if not self._mj_model.jnt_limited[joint_id]:
+                continue
+            qpos_id = self._mj_model.jnt_qposadr[joint_id]
+            lower, upper = self._mj_model.jnt_range[joint_id]
+            qpos[qpos_id] = np.clip(qpos[qpos_id], lower, upper)
+
+    def _place_feet_on_floor(self, qpos: np.ndarray) -> np.ndarray:
+        """Pomeraj root Z tako da najnizi djon pocne sa malim preload kontaktom."""
+        data = mujoco.MjData(self._mj_model)
+        data.qpos[:] = qpos
+        mujoco.mj_forward(self._mj_model, data)
+        qpos[2] -= self._minimum_geom_z(data) + self.FOOT_CONTACT_PRELOAD
+        return qpos
+
     def _apply_locomotion_neutral_pose(self, qpos: np.ndarray) -> np.ndarray:
         """Centira akcije oko stabilnije stojece poze, ne oko krute A-poze."""
         for joint_name, joint_value in self.NEUTRAL_JOINT_POSE.items():
@@ -192,11 +282,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             )
             qpos[self._mj_model.jnt_qposadr[joint_id]] = joint_value
 
-        data = mujoco.MjData(self._mj_model)
-        data.qpos[:] = qpos
-        mujoco.mj_forward(self._mj_model, data)
-        qpos[2] -= self._minimum_geom_z(data) + self.FOOT_CONTACT_PRELOAD
-        return qpos
+        return self._place_feet_on_floor(qpos)
 
     def _minimum_geom_z(self, data: mujoco.MjData) -> float:
         """Vraca najnizu world-Z tacku djonova u trenutnoj pozi."""

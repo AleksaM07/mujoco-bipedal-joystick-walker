@@ -587,6 +587,32 @@ Default biomechanics PPO config:
 
 **Source:** Local fix.
 
+### 31. Optional MJDATA/QPOS initial pose
+
+**Files:** `biomechanics_env.py`, `config.py`, `train.py`, `evaluate.py`,
+`view_model_pose.py`
+
+**Change:**
+
+- Added `--init-qpos-file`.
+- The env can now start from a MJDATA-style `QPOS` block, for example:
+  `MJDATA_neutral_poze.TXT`.
+- The loaded QPOS is sanitized before training:
+  - checks that the file has exactly `nq` values,
+  - normalizes the root quaternion,
+  - clips limited joints to legal MuJoCo ranges,
+  - adjusts root height so the lowest foot sole point starts with preload contact.
+- Evaluator can auto-read `init_qpos_file` from a run config, unless overridden.
+- Viewer script can show the same initial pose before training.
+
+**Source:** Local fix / experiment option.
+
+**Why:**
+
+- Lets us test the neutral half-squat pose without hard-coding it as the default.
+- The current default standing-home pose remains unchanged when the flag is not
+  provided.
+
 ## Verification Done
 
 ### Python compile

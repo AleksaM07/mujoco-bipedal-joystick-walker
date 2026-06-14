@@ -124,6 +124,14 @@ def infer_command_profile(checkpoint_path: Path) -> str:
     return "forward"
 
 
+def infer_init_qpos_file(checkpoint_path: Path) -> str | None:
+    """Procitaj init_qpos_file iz run configa ako je trening koristio tu opciju."""
+    run_config = find_run_config(checkpoint_path)
+    if run_config is None:
+        return None
+    return run_config.get("env", {}).get("init_qpos_file")
+
+
 def find_run_config(checkpoint_path: Path) -> dict | None:
     """Nadji config.json u roditeljskom run direktorijumu checkpointa."""
     for path in (checkpoint_path, *checkpoint_path.parents):
@@ -401,6 +409,7 @@ def main():
         default="auto",
     )
     parser.add_argument("--action-smoothing", type=float, default=0.5)
+    parser.add_argument("--init-qpos-file", type=Path, default=None)
     parser.add_argument("--command-x", type=float, default=None)
     parser.add_argument("--command-y", type=float, default=0.0)
     parser.add_argument("--command-yaw", type=float, default=0.0)
@@ -433,8 +442,16 @@ def main():
     command_x = args.command_x
     if command_x is None:
         command_x = DEFAULT_WALK_COMMAND_X if command_profile == "walk" else 0.0
+    init_qpos_file = (
+        str(args.init_qpos_file)
+        if args.init_qpos_file is not None
+        else infer_init_qpos_file(args.checkpoint)
+    )
     print(
-        f"eval config | command_profile={command_profile} | command_x={command_x}",
+        "eval config | "
+        f"command_profile={command_profile} | "
+        f"command_x={command_x} | "
+        f"init_qpos_file={init_qpos_file}",
         flush=True,
     )
 
@@ -444,6 +461,7 @@ def main():
         playground_impl=args.playground_impl,
         command_profile=command_profile,
         action_smoothing=args.action_smoothing,
+        init_qpos_file=init_qpos_file,
         accurate_physics=not args.fast_physics,
     )
     env = make_environment(env_config)
@@ -518,6 +536,8 @@ def make_environment(env_config: EnvConfig):
         "command_profile": env_config.command_profile,
         "action_smoothing": env_config.action_smoothing,
     }
+    if env_config.init_qpos_file is not None:
+        config_overrides["init_qpos_file"] = env_config.init_qpos_file
     if env_config.accurate_physics:
         config_overrides["sim_dt"] = 0.005
     return BiomechanicsJoystickEnv(
