@@ -22,15 +22,15 @@ ENV/
 .env.*
 !.env.example
 
-# Training outputs and checkpoints
-runs/*
-!runs/.gitkeep
-generated_models/
-*.pkl
-*.ckpt
-*.pt
-*.pth
-*.npz
+# # Training outputs and checkpoints
+# runs/*
+# !runs/.gitkeep
+# generated_models/
+# *.pkl
+# *.ckpt
+# *.pt
+# *.pth
+# *.npz
 
 # Logs
 *.log
