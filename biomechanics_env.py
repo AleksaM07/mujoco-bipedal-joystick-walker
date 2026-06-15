@@ -34,7 +34,7 @@ class BiomechanicsEnvConfig:
     episode_length: int = 1000
     action_scale: float = 0.5
     action_smoothing: float = 0.5
-    command_profile: str = "forward"
+    command_profile: str = "standard"
     command_resample_steps: int = 500
     tracking_sigma: float = 0.25
     action_noise_std: float = 0.03
@@ -53,7 +53,7 @@ def default_config() -> config_dict.ConfigDict:
         episode_length=1000,
         action_scale=0.5,
         action_smoothing=0.5,
-        command_profile="forward",
+        command_profile="standard",
         command_resample_steps=500,
         tracking_sigma=0.25,
         action_noise_std=0.03,
@@ -113,7 +113,19 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
     FOOT_CONTACT_PRELOAD = 0.005
     FOOT_CONTACT_HEIGHT = 0.095
     FORWARD_COMMAND_RANGE = (0.15, 0.35)
+    STEER_X_COMMAND_RANGE = (0.05, 0.60)
+    STEER_Y_COMMAND_RANGE = (-0.20, 0.20)
+    STEER_YAW_COMMAND_RANGE = (-0.35, 0.35)
+    STEER_ZERO_COMMAND_PROBABILITY = 0.05
+    STANDARD_EASY_X_COMMAND_RANGE = (-0.25, 0.65)
+    STANDARD_EASY_Y_COMMAND_RANGE = (-0.25, 0.25)
+    STANDARD_EASY_YAW_COMMAND_RANGE = (-0.45, 0.45)
+    STANDARD_EASY_ZERO_COMMAND_PROBABILITY = 0.10
+    STANDARD_X_COMMAND_RANGE = (-0.6, 0.8)
+    STANDARD_Y_COMMAND_RANGE = (-0.45, 0.45)
+    STANDARD_YAW_COMMAND_RANGE = (-0.8, 0.8)
     ZERO_COMMAND_PROBABILITY = 0.0
+    STANDARD_ZERO_COMMAND_PROBABILITY = 0.1
     NEUTRAL_JOINT_POSE = {
         "left_hip_x": 0.18,
         "left_hip_y": 0.0,
@@ -340,6 +352,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "reward": jp.array(0.0),
             "tracking_lin_vel": jp.array(0.0),
             "forward_vel": jp.array(0.0),
+            "command_norm": jp.array(0.0),
+            "command_progress": jp.array(0.0),
             "torso_up": jp.array(1.0),
             "height": qpos[2],
             "foot_slip": jp.array(0.0),
@@ -401,6 +415,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         metrics["reward"] = reward
         metrics["tracking_lin_vel"] = self._get_tracking_reward(data, info)
         metrics["forward_vel"] = self._local_root_linvel(data)[0]
+        metrics["command_norm"] = jp.linalg.norm(info["command"])
+        metrics["command_progress"] = self._get_command_progress(data, info)
         metrics["torso_up"] = self._torso_up(data)
         metrics["height"] = data.qpos[2]
         metrics["foot_slip"] = foot_slip
@@ -436,18 +452,58 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 command,
             )
 
-        if self._config.command_profile != "standard":
+        command_ranges = {
+            "steer": (
+                self.STEER_X_COMMAND_RANGE,
+                self.STEER_Y_COMMAND_RANGE,
+                self.STEER_YAW_COMMAND_RANGE,
+                self.STEER_ZERO_COMMAND_PROBABILITY,
+            ),
+            "standard_easy": (
+                self.STANDARD_EASY_X_COMMAND_RANGE,
+                self.STANDARD_EASY_Y_COMMAND_RANGE,
+                self.STANDARD_EASY_YAW_COMMAND_RANGE,
+                self.STANDARD_EASY_ZERO_COMMAND_PROBABILITY,
+            ),
+            "standard": (
+                self.STANDARD_X_COMMAND_RANGE,
+                self.STANDARD_Y_COMMAND_RANGE,
+                self.STANDARD_YAW_COMMAND_RANGE,
+                self.STANDARD_ZERO_COMMAND_PROBABILITY,
+            ),
+        }
+        if self._config.command_profile not in command_ranges:
             raise ValueError(
-                "command_profile mora biti 'forward', 'walk' ili 'standard'."
+                "command_profile mora biti 'forward', 'walk', 'steer', "
+                "'standard_easy' ili 'standard'."
             )
 
+        x_range, y_range, yaw_range, zero_probability = command_ranges[
+            self._config.command_profile
+        ]
         x_key, y_key, yaw_key, zero_key = jax.random.split(rng, 4)
         command = jp.array([
-            jax.random.uniform(x_key, minval=-1.0, maxval=1.0),
-            jax.random.uniform(y_key, minval=-0.8, maxval=0.8),
-            jax.random.uniform(yaw_key, minval=-1.0, maxval=1.0),
+            jax.random.uniform(
+                x_key,
+                minval=x_range[0],
+                maxval=x_range[1],
+            ),
+            jax.random.uniform(
+                y_key,
+                minval=y_range[0],
+                maxval=y_range[1],
+            ),
+            jax.random.uniform(
+                yaw_key,
+                minval=yaw_range[0],
+                maxval=yaw_range[1],
+            ),
         ])
-        return jp.where(jax.random.bernoulli(zero_key, p=0.1), jp.zeros(3), command)
+        return jp.where(
+            jax.random.bernoulli(zero_key, p=zero_probability),
+            jp.zeros(3),
+            command,
+        )
 
     def sample_episode_torque_offset(self, rng: jax.Array) -> jax.Array:
         """Uzorkuje RAO: konstantan torque offset za celu epizodu."""
@@ -538,30 +594,29 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         previous_action: jax.Array,
         info: dict,
     ) -> jax.Array:
-        """Nagrada za hod: brzina napred je cilj, stabilnost je uslov."""
+        """Nagrada za joystick hod: prati command vektor, stabilnost je uslov."""
         local_linvel = self._local_root_linvel(data)
         local_angvel = self._local_root_angvel(data)
-        target_forward_vel = jp.maximum(info["command"][0], 0.0)
-        forward_vel = local_linvel[0]
+        measured_command = self._measured_command(data)
+        command_norm = jp.linalg.norm(info["command"])
+        measured_norm = jp.linalg.norm(measured_command)
+        command_active = command_norm > self.STUCK_COMMAND_THRESHOLD
         tracking = self._get_tracking_reward(data, info)
-        target_denominator = jp.maximum(target_forward_vel, 0.05)
-        raw_forward_progress = jp.clip(
-            forward_vel / target_denominator,
-            0.0,
-            1.0,
-        )
-        forward_progress = jp.where(
-            target_forward_vel > 0.05,
-            raw_forward_progress * tracking,
-            0.0,
-        )
-        overspeed = jp.maximum(forward_vel - target_forward_vel, 0.0)
+        command_progress = self._get_command_progress(data, info)
+        overspeed_denominator = jp.maximum(command_norm, 0.05)
+        overspeed = jp.maximum(measured_norm - 1.25 * command_norm, 0.0)
         overspeed_cost = self.OVERSPEED_COST_SCALE * jp.square(
-            overspeed / target_denominator
+            overspeed / overspeed_denominator
         )
+        idle_motion_cost = jp.where(
+            command_active,
+            0.0,
+            0.25 * jp.square(measured_norm),
+        )
+        commanded_axis = info["command"] / jp.maximum(command_norm, 1e-6)
+        velocity_along_command = jp.dot(measured_command, commanded_axis)
         stuck_penalty = jp.where(
-            (target_forward_vel > self.STUCK_COMMAND_THRESHOLD)
-            & (forward_vel < self.STUCK_VELOCITY_THRESHOLD),
+            command_active & (velocity_along_command < self.STUCK_VELOCITY_THRESHOLD),
             self.STUCK_PENALTY,
             0.0,
         )
@@ -601,7 +656,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         reward = (
             self.ALIVE_REWARD_SCALE
             + self.VELOCITY_TRACKING_REWARD_SCALE * tracking
-            + self.FORWARD_PROGRESS_REWARD_SCALE * forward_progress
+            + self.FORWARD_PROGRESS_REWARD_SCALE * command_progress
             + self.UPRIGHT_REWARD_SCALE * upright
             + base_height_reward
             + posture_reward
@@ -613,6 +668,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             - foot_slip_cost
             - height_cost
             - overspeed_cost
+            - idle_motion_cost
             - vertical_velocity_cost
             - angular_velocity_cost
         )
@@ -716,15 +772,33 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
 
     def _get_tracking_reward(self, data: mjx.Data, info: dict) -> jax.Array:
         """Prati joystick u anatomskim osama: X napred, Z lateralno, Y yaw."""
+        error = jp.sum(jp.square(info["command"] - self._measured_command(data)))
+        return jp.exp(-error / self._config.tracking_sigma)
+
+    def _measured_command(self, data: mjx.Data) -> jax.Array:
+        """Izmeri trenutnu brzinu u istim osama kao joystick command."""
         local_linvel = self._local_root_linvel(data)
         local_angvel = self._local_root_angvel(data)
-        measured_command = jp.array([
+        return jp.array([
             local_linvel[0],
             local_linvel[2],
             local_angvel[1],
         ])
-        error = jp.sum(jp.square(info["command"] - measured_command))
-        return jp.exp(-error / self._config.tracking_sigma)
+
+    def _get_command_progress(self, data: mjx.Data, info: dict) -> jax.Array:
+        """Nagradi napredak duz trazenog joystick vektora, za sve smerove."""
+        command = info["command"]
+        command_norm_sq = jp.sum(jp.square(command))
+        command_active = command_norm_sq > self.STUCK_COMMAND_THRESHOLD**2
+        alignment = jp.dot(self._measured_command(data), command) / jp.maximum(
+            command_norm_sq,
+            1e-6,
+        )
+        return jp.where(
+            command_active,
+            jp.clip(alignment, 0.0, 1.0) * self._get_tracking_reward(data, info),
+            0.0,
+        )
 
     @property
     def xml_path(self) -> str:

@@ -38,6 +38,16 @@ def logged_stage(name: str):
 class TrainingProgressLogger:
     """Prima PPO metrike i upisuje samo korisne linije."""
 
+    DIAGNOSTIC_METRICS = (
+        ("eval/episode_tracking_lin_vel", "tracking"),
+        ("eval/episode_command_progress", "progress"),
+        ("eval/episode_command_norm", "cmd_norm"),
+        ("eval/episode_torso_up", "torso_up"),
+        ("eval/episode_height", "height"),
+        ("eval/episode_foot_slip", "foot_slip"),
+        ("eval/episode_done", "done"),
+    )
+
     def __init__(self):
         self.final_reward = None
         self.best_reward = None
@@ -45,16 +55,26 @@ class TrainingProgressLogger:
 
     def __call__(self, step: int, metrics: dict) -> None:
         reward = metrics.get("eval/episode_reward")
-        episode_length = metrics.get("eval/episode_length")
+        episode_length = metrics.get(
+            "eval/avg_episode_length",
+            metrics.get("eval/episode_length"),
+        )
         if reward is None and episode_length is None:
             logger.info("train progress callback | step={}", step)
             return
 
+        diagnostics = []
+        for key, label in self.DIAGNOSTIC_METRICS:
+            value = metrics.get(key)
+            if value is not None:
+                diagnostics.append(f"{label}={float(value):.3f}")
+
         logger.info(
-            "eval | step={} | reward={} | episode_length={}",
+            "eval | step={} | reward={} | episode_length={}{}",
             step,
             None if reward is None else float(reward),
             None if episode_length is None else float(episode_length),
+            "" if not diagnostics else " | " + " | ".join(diagnostics),
         )
         if reward is not None:
             self.final_reward = float(reward)
@@ -361,7 +381,7 @@ def run_training(
         else run_dir / "checkpoints"
     )
     restore_checkpoint_path = (
-        str(Path(train_config.resume_from).expanduser())
+        str(Path(train_config.resume_from).expanduser().resolve(strict=False))
         if train_config.resume_from
         else None
     )
@@ -374,7 +394,7 @@ def run_training(
     logger.add(run_dir / "train.log", level="INFO", encoding="utf-8", mode="w")
     save_run_config(run_dir, env_config, train_config, rl_config)
 
-    enable_erfi = not train_config.bare
+    enable_erfi = not train_config.bare and not train_config.no_erfi
     with logged_stage("make_environment"):
         env = make_environment(env_config, enable_erfi=enable_erfi)
         eval_env = make_environment(env_config, enable_erfi=False)
@@ -442,6 +462,8 @@ def run_training(
         train_kwargs_extra["randomization_fn"] = domain_randomize
     if train_config.bare:
         logger.info("bare mode | ERFI disabled | domain randomization disabled")
+    if train_config.no_erfi:
+        logger.info("ERFI disabled for this run")
     if train_config.no_domain_randomization:
         logger.info("domain randomization disabled for this run")
 
@@ -589,6 +611,10 @@ def run_source_name(env_config: EnvConfig, train_config: TrainConfig) -> str:
     env_source = env_config.env_source
     if train_config.bare:
         env_source = f"{env_source}_bare"
+    elif train_config.no_erfi:
+        env_source = f"{env_source}_noerfi"
+    if train_config.no_domain_randomization and not train_config.bare:
+        env_source = f"{env_source}_nodr"
     if env_config.command_profile != "standard":
         env_source = f"{env_source}_{env_config.command_profile}"
     if env_config.init_qpos_file:
@@ -648,11 +674,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--command-profile",
-        choices=["forward", "walk", "standard"],
-        default="forward",
+        choices=["forward", "walk", "steer", "standard_easy", "standard"],
+        default="standard",
         help=(
-            "Curriculum komande: forward za kompatibilan prvi hod, "
-            "walk za gait-clock trening, standard za pun joystick."
+            "standard je pun joystick; standard_easy je meksi svi-pravci "
+            "curriculum; steer je forward + skretanje; forward je samo "
+            "bootstrap curriculum; walk je forward sa gait-clock setupom."
         ),
     )
     parser.add_argument(
@@ -685,6 +712,16 @@ def main() -> None:
         "--bare",
         action="store_true",
         help="Baseline: bez ERFI i bez domain randomization.",
+    )
+    parser.add_argument(
+        "--no-erfi",
+        action="store_true",
+        help="Iskljuci random force injection, ali ostavi domain randomization.",
+    )
+    parser.add_argument(
+        "--no-domain-randomization",
+        action="store_true",
+        help="Iskljuci model size/mass/friction randomization, ali ostavi ERFI.",
     )
     parser.add_argument(
         "--no-checkpoints",
@@ -750,9 +787,10 @@ def main() -> None:
         num_minibatches=debug_defaults.get("num_minibatches"),
         num_updates_per_batch=debug_defaults.get("num_updates_per_batch"),
         learning_rate=args.learning_rate,
-        no_domain_randomization=debug_defaults.get(
-            "no_domain_randomization",
-            False,
+        no_erfi=args.no_erfi,
+        no_domain_randomization=(
+            args.no_domain_randomization
+            or debug_defaults.get("no_domain_randomization", False)
         ),
         save_checkpoints=not args.no_checkpoints,
         checkpoint_out=(

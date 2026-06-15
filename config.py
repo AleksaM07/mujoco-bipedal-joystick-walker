@@ -48,9 +48,9 @@ class EnvConfig:
     # Korak promene joystick komande u viewer-u po pritisku strelice/WASD.
     command_change_rate: float = 0.1
 
-    # "forward" je curriculum za prvi stabilan hod. "standard" vraca pun joystick
-    # zadatak: napred/nazad, lateralno i yaw.
-    command_profile: str = "forward"
+    # "standard" je pun joystick zadatak: napred/nazad, lateralno i yaw.
+    # "forward" ostaje dostupan samo kao bootstrap curriculum.
+    command_profile: str = "standard"
 
     # Referentni humanoid walking setup filtrira targete pre PD kontrole.
     # 0.5 znaci: pola nova akcija politike, pola prethodni target.
@@ -92,6 +92,7 @@ class TrainConfig:
     num_minibatches: int | None = None
     num_updates_per_batch: int | None = None
     learning_rate: float | None = None
+    no_erfi: bool = False
     no_domain_randomization: bool = False
     save_checkpoints: bool = True
     checkpoint_out: str | None = None

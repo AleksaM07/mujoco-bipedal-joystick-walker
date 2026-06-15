@@ -12,7 +12,7 @@ from config import BIOMECH_DIR, PROJECT_ROOT
 
 
 GENERATED_MODEL_DIR = PROJECT_ROOT / "generated_models"
-SCENE_XML_VERSION = "trainfast_v14"
+SCENE_XML_VERSION = "trainfast_v15"
 
 # Cache for the generator module to avoid reimporting
 _GENERATOR_CACHE = None
@@ -159,6 +159,75 @@ ACTUATOR_SPECS = {
     },
 }
 
+PASSIVE_UPPER_BODY_JOINT_SPECS = {
+    "head_x": {
+        "stiffness": "35",
+        "damping": "5",
+        "frictionloss": "0.5",
+        "armature": "0.003",
+    },
+    "head_y": {
+        "stiffness": "35",
+        "damping": "5",
+        "frictionloss": "0.5",
+        "armature": "0.003",
+    },
+    "head_z": {
+        "stiffness": "30",
+        "damping": "4",
+        "frictionloss": "0.5",
+        "armature": "0.003",
+    },
+    "left_shoulder_x": {
+        "stiffness": "25",
+        "damping": "3",
+        "frictionloss": "0.8",
+        "armature": "0.006",
+    },
+    "left_shoulder_y": {
+        "stiffness": "25",
+        "damping": "3",
+        "frictionloss": "0.8",
+        "armature": "0.006",
+    },
+    "left_shoulder_z": {
+        "stiffness": "25",
+        "damping": "3",
+        "frictionloss": "0.8",
+        "armature": "0.006",
+    },
+    "right_shoulder_x": {
+        "stiffness": "25",
+        "damping": "3",
+        "frictionloss": "0.8",
+        "armature": "0.006",
+    },
+    "right_shoulder_y": {
+        "stiffness": "25",
+        "damping": "3",
+        "frictionloss": "0.8",
+        "armature": "0.006",
+    },
+    "right_shoulder_z": {
+        "stiffness": "25",
+        "damping": "3",
+        "frictionloss": "0.8",
+        "armature": "0.006",
+    },
+    "left_elbow_z": {
+        "stiffness": "12",
+        "damping": "2",
+        "frictionloss": "0.5",
+        "armature": "0.006",
+    },
+    "right_elbow_z": {
+        "stiffness": "12",
+        "damping": "2",
+        "frictionloss": "0.5",
+        "armature": "0.006",
+    },
+}
+
 
 @dataclass(frozen=True)
 class HumanSpec:
@@ -249,6 +318,7 @@ def build_trainable_scene_xml(env_version: str, spec: HumanSpec) -> Path:
     ensure_option(root)
     ensure_visual(root)
     add_passive_joint_damping(root)
+    tune_passive_upper_body_joints(root)
     unlock_trunk_joints(root)
     remove_trunk_equality_locks(root)
     set_training_collision_filters(root)
@@ -310,6 +380,18 @@ def add_passive_joint_damping(root: ET.Element) -> None:
         if joint.get("type") == "free":
             continue
         joint.set("damping", "1.0")
+
+
+def tune_passive_upper_body_joints(root: ET.Element) -> None:
+    """Ukruti vrat i ruke da pasivni upper body ne visi kao slobodna masa."""
+    worldbody = root.find("worldbody")
+    for joint in worldbody.iter("joint"):
+        spec = PASSIVE_UPPER_BODY_JOINT_SPECS.get(joint.get("name"))
+        if spec is None:
+            continue
+        for key, value in spec.items():
+            joint.set(key, value)
+        joint.set("springref", "0")
 
 
 def unlock_trunk_joints(root: ET.Element) -> None:
