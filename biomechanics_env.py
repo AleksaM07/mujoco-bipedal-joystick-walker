@@ -35,6 +35,7 @@ class BiomechanicsEnvConfig:
     action_scale: float = 0.5
     action_smoothing: float = 0.5
     command_profile: str = "standard"
+    reference_gait: str = "none"
     command_resample_steps: int = 500
     tracking_sigma: float = 0.25
     action_noise_std: float = 0.03
@@ -54,6 +55,7 @@ def default_config() -> config_dict.ConfigDict:
         action_scale=0.5,
         action_smoothing=0.5,
         command_profile="standard",
+        reference_gait="none",
         command_resample_steps=500,
         tracking_sigma=0.25,
         action_noise_std=0.03,
@@ -157,18 +159,22 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
     ACTION_RATE_COST_SCALE = 0.005
     BASE_HEIGHT_REWARD_SCALE = 0.25
     POSTURE_REWARD_SCALE = 0.02
-    TRUNK_POSTURE_COST_SCALE = 0.15
+    TRUNK_POSTURE_COST_SCALE = 0.25
     VELOCITY_TRACKING_REWARD_SCALE = 1.5
     FORWARD_PROGRESS_REWARD_SCALE = 1.0
-    UPRIGHT_REWARD_SCALE = 0.2
+    UPRIGHT_REWARD_SCALE = 0.3
+    HEAD_UP_REWARD_SCALE = 0.1
     OVERSPEED_COST_SCALE = 0.75
     VERTICAL_VELOCITY_COST_SCALE = 0.05
     ANGULAR_VELOCITY_COST_SCALE = 0.02
     GAIT_PERIOD_STEPS = 50
     FOOT_CLEARANCE_TARGET = 0.08
-    FOOT_CLEARANCE_REWARD_SCALE = 0.4
-    STANCE_CONTACT_REWARD_SCALE = 0.2
-    FOOT_SLIP_COST_SCALE = 0.06
+    FOOT_CLEARANCE_REWARD_SCALE = 0.8
+    STANCE_CONTACT_REWARD_SCALE = 0.15
+    FOOT_SLIP_COST_SCALE = 0.18
+    SWING_FOOT_DRAG_COST_SCALE = 0.35
+    REFERENCE_GAIT_REWARD_SCALE = 0.35
+    REFERENCE_GAIT_ERROR_SCALE = 8.0
     STUCK_COMMAND_THRESHOLD = 0.10
     STUCK_VELOCITY_THRESHOLD = 0.05
     STUCK_PENALTY = 1.0
@@ -233,9 +239,51 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             0.2 if joint_name in TRUNK_ACTUATED_JOINTS else 1.0
             for joint_name in actuator_joint_names
         ])
+        self._reference_gait_mask = jp.array([
+            joint_name
+            in {
+                "left_hip_x",
+                "right_hip_x",
+                "left_knee_z",
+                "right_knee_z",
+                "left_ankle_y",
+                "right_ankle_y",
+            }
+            for joint_name in actuator_joint_names
+        ])
+        self._reference_gait_sin_offsets = jp.array([
+            {
+                "left_hip_x": 0.22,
+                "right_hip_x": -0.22,
+                "left_ankle_y": -0.12,
+                "right_ankle_y": 0.12,
+            }.get(joint_name, 0.0)
+            for joint_name in actuator_joint_names
+        ])
+        self._reference_gait_pos_sin_offsets = jp.array([
+            {"left_knee_z": -0.45}.get(joint_name, 0.0)
+            for joint_name in actuator_joint_names
+        ])
+        self._reference_gait_neg_sin_offsets = jp.array([
+            {"right_knee_z": -0.45}.get(joint_name, 0.0)
+            for joint_name in actuator_joint_names
+        ])
+        self._actuator_qpos_lower_limits = jp.array([
+            self._mj_model.jnt_range[joint_id, 0]
+            if self._mj_model.jnt_limited[joint_id]
+            else -np.inf
+            for joint_id in self._mj_model.actuator_trnid[:, 0]
+        ])
+        self._actuator_qpos_upper_limits = jp.array([
+            self._mj_model.jnt_range[joint_id, 1]
+            if self._mj_model.jnt_limited[joint_id]
+            else np.inf
+            for joint_id in self._mj_model.actuator_trnid[:, 0]
+        ])
         self._default_ctrl = self._init_q[self._actuator_qpos_indices]
         self._n_substeps = int(round(self._ctrl_dt / self._sim_dt))
         self._torso_body_id = self._mj_model.body("thorax").id
+        self._head_body_id = self._mj_model.body("head").id
         self._left_foot_sole_geom_id = self._mj_model.geom("left_foot_sole").id
         self._right_foot_sole_geom_id = self._mj_model.geom("right_foot_sole").id
         self._foot_geom_ids = jp.array([
@@ -355,10 +403,13 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "command_norm": jp.array(0.0),
             "command_progress": jp.array(0.0),
             "torso_up": jp.array(1.0),
+            "head_up": jp.array(1.0),
             "height": qpos[2],
             "foot_slip": jp.array(0.0),
+            "swing_drag": jp.array(0.0),
             "base_height": jp.array(1.0),
             "gait_reward": jp.array(0.0),
+            "reference_gait": jp.array(0.0),
             "done": jp.array(0.0),
         }
         return mjx_env.State(data, obs, jp.array(0.0), jp.array(0.0), metrics, info)
@@ -409,8 +460,10 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         reward = self._get_reward(data, smoothed_action, previous_action, info)
         done = self._get_done(data)
         foot_slip = self._get_foot_slip_cost(data, info)
+        swing_drag = self._get_swing_foot_drag_cost(data, info)
         base_height = self._get_base_height_reward(data)
         gait_reward = self._get_gait_reward(data, info)
+        reference_gait = self._get_reference_gait_reward(data, info)
         metrics = dict(state.metrics)
         metrics["reward"] = reward
         metrics["tracking_lin_vel"] = self._get_tracking_reward(data, info)
@@ -418,10 +471,13 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         metrics["command_norm"] = jp.linalg.norm(info["command"])
         metrics["command_progress"] = self._get_command_progress(data, info)
         metrics["torso_up"] = self._torso_up(data)
+        metrics["head_up"] = self._head_up(data)
         metrics["height"] = data.qpos[2]
         metrics["foot_slip"] = foot_slip
+        metrics["swing_drag"] = swing_drag
         metrics["base_height"] = base_height
         metrics["gait_reward"] = gait_reward
+        metrics["reference_gait"] = reference_gait
         metrics["done"] = done.astype(reward.dtype)
         info["last_foot_xy"] = self._foot_xy(data)
         return state.replace(
@@ -621,6 +677,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             0.0,
         )
         upright = jp.clip(self._torso_up(data), 0.0, 1.0)
+        head_up = jp.clip(self._head_up(data), 0.0, 1.0)
         low_height = jp.maximum(
             0.0,
             self.HEIGHT_PENALTY_START_RATIO * self._init_q[2] - data.qpos[2],
@@ -648,9 +705,17 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             self._get_base_height_reward(data)
         )
         gait_reward = self._get_gait_reward(data, info)
+        reference_gait_reward = (
+            self.REFERENCE_GAIT_REWARD_SCALE
+            * self._get_reference_gait_reward(data, info)
+        )
         foot_slip_cost = self.FOOT_SLIP_COST_SCALE * self._get_foot_slip_cost(
             data,
             info,
+        )
+        swing_drag_cost = (
+            self.SWING_FOOT_DRAG_COST_SCALE
+            * self._get_swing_foot_drag_cost(data, info)
         )
         height_cost = 8.0 * jp.square(low_height)
         reward = (
@@ -658,14 +723,17 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             + self.VELOCITY_TRACKING_REWARD_SCALE * tracking
             + self.FORWARD_PROGRESS_REWARD_SCALE * command_progress
             + self.UPRIGHT_REWARD_SCALE * upright
+            + self.HEAD_UP_REWARD_SCALE * head_up
             + base_height_reward
             + posture_reward
             + gait_reward
+            + reference_gait_reward
             - stuck_penalty
             - action_cost
             - action_rate_cost
             - trunk_posture_cost
             - foot_slip_cost
+            - swing_drag_cost
             - height_cost
             - overspeed_cost
             - idle_motion_cost
@@ -723,6 +791,56 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             0.0,
         )
 
+    def _get_swing_foot_drag_cost(self, data: mjx.Data, info: dict) -> jax.Array:
+        """Kazni kada swing noga ostane zalepljena za pod umesto da se podigne."""
+        phase_angle = self._get_gait_phase_angle(info)
+        left_swing = jp.sin(phase_angle) > 0.0
+        foot_contact = self._foot_contact(data)
+        swing_contact = jp.where(left_swing, foot_contact[0], foot_contact[1])
+        command_active = jp.linalg.norm(info["command"]) > self.STUCK_COMMAND_THRESHOLD
+        return jp.where(command_active, swing_contact, 0.0)
+
+    def _get_reference_gait_reward(
+        self,
+        data: mjx.Data,
+        info: dict,
+    ) -> jax.Array:
+        """Nagradi blizinu rucno dizajniranoj sinusoidalnoj gait putanji."""
+        reference_gait = self._config.get("reference_gait", "none")
+        if reference_gait == "none":
+            return jp.array(0.0)
+        if reference_gait != "sine":
+            raise ValueError("reference_gait mora biti 'none' ili 'sine'.")
+
+        target_qpos = self._get_sine_reference_gait_target(info)
+        current_qpos = data.qpos[self._actuator_qpos_indices]
+        qpos_error = jp.where(
+            self._reference_gait_mask,
+            current_qpos - target_qpos,
+            0.0,
+        )
+        active_joint_count = jp.maximum(jp.sum(self._reference_gait_mask), 1.0)
+        pose_error = jp.sum(jp.square(qpos_error)) / active_joint_count
+        pose_reward = jp.exp(-self.REFERENCE_GAIT_ERROR_SCALE * pose_error)
+        command_active = jp.linalg.norm(info["command"]) > self.STUCK_COMMAND_THRESHOLD
+        return jp.where(command_active, pose_reward, 0.0)
+
+    def _get_sine_reference_gait_target(self, info: dict) -> jax.Array:
+        """Vrati ciljnu cyclic pozu nogu za trenutnu gait fazu."""
+        phase_angle = self._get_gait_phase_angle(info)
+        sin_phase = jp.sin(phase_angle)
+        offset = (
+            self._reference_gait_sin_offsets * sin_phase
+            + self._reference_gait_pos_sin_offsets * jp.maximum(sin_phase, 0.0)
+            + self._reference_gait_neg_sin_offsets * jp.maximum(-sin_phase, 0.0)
+        )
+        target_qpos = self._default_ctrl + offset
+        return jp.clip(
+            target_qpos,
+            self._actuator_qpos_lower_limits,
+            self._actuator_qpos_upper_limits,
+        )
+
     def _get_base_height_reward(self, data: mjx.Data) -> jax.Array:
         """Mala gusta nagrada za drzanje root visine blizu pocetne stojece poze."""
         height_error = (data.qpos[2] - self._init_q[2]) / 0.15
@@ -754,6 +872,10 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         """Vraca 3x3 rotaciju toraksa iz body-local u world frame."""
         return data.xmat[self._torso_body_id].reshape((3, 3))
 
+    def _head_xmat(self, data: mjx.Data) -> jax.Array:
+        """Vraca 3x3 rotaciju glave iz body-local u world frame."""
+        return data.xmat[self._head_body_id].reshape((3, 3))
+
     def _local_root_linvel(self, data: mjx.Data) -> jax.Array:
         """Root linearna brzina izrazena u lokalnom frame-u toraksa."""
         return self._body_xmat(data).T @ data.qvel[:3]
@@ -769,6 +891,10 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
     def _torso_up(self, data: mjx.Data) -> jax.Array:
         """Koliko je anatomska vertikalna osa toraksa poravnata sa world Z."""
         return self._body_xmat(data)[2, 1]
+
+    def _head_up(self, data: mjx.Data) -> jax.Array:
+        """Koliko je glava uspravna u odnosu na world Z."""
+        return self._head_xmat(data)[2, 1]
 
     def _get_tracking_reward(self, data: mjx.Data, info: dict) -> jax.Array:
         """Prati joystick u anatomskim osama: X napred, Z lateralno, Y yaw."""

@@ -52,6 +52,10 @@ class EnvConfig:
     # "forward" ostaje dostupan samo kao bootstrap curriculum.
     command_profile: str = "standard"
 
+    # "sine" dodaje rucno dizajniranu ciklicnu referentnu putanju za noge.
+    # "none" koristi samo task/style reward bez explicit pose imitation.
+    reference_gait: str = "none"
+
     # Referentni humanoid walking setup filtrira targete pre PD kontrole.
     # 0.5 znaci: pola nova akcija politike, pola prethodni target.
     action_smoothing: float = 0.5
@@ -97,6 +101,7 @@ class TrainConfig:
     save_checkpoints: bool = True
     checkpoint_out: str | None = None
     resume_from: str | None = None
+    run_tag: str | None = None
     debug_run: bool = False
     bare: bool = False
 

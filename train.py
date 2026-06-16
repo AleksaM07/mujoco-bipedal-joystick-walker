@@ -43,8 +43,12 @@ class TrainingProgressLogger:
         ("eval/episode_command_progress", "progress"),
         ("eval/episode_command_norm", "cmd_norm"),
         ("eval/episode_torso_up", "torso_up"),
+        ("eval/episode_head_up", "head_up"),
         ("eval/episode_height", "height"),
         ("eval/episode_foot_slip", "foot_slip"),
+        ("eval/episode_swing_drag", "swing_drag"),
+        ("eval/episode_gait_reward", "gait"),
+        ("eval/episode_reference_gait", "ref_gait"),
         ("eval/episode_done", "done"),
     )
 
@@ -617,11 +621,33 @@ def run_source_name(env_config: EnvConfig, train_config: TrainConfig) -> str:
         env_source = f"{env_source}_nodr"
     if env_config.command_profile != "standard":
         env_source = f"{env_source}_{env_config.command_profile}"
+    if env_config.reference_gait != "none":
+        env_source = f"{env_source}_ref_{sanitize_run_tag(env_config.reference_gait)}"
     if env_config.init_qpos_file:
         env_source = f"{env_source}_initqpos"
+    if train_config.run_tag:
+        env_source = f"{env_source}_{sanitize_run_tag(train_config.run_tag)}"
     if env_config.accurate_physics:
         env_source = f"{env_source}_accurate"
     return env_source
+
+
+def sanitize_run_tag(run_tag: str) -> str:
+    """Pretvori opisni tag u kratak filesystem-safe suffix."""
+    normalized = []
+    previous_was_separator = False
+    for character in run_tag.strip().lower():
+        if character.isalnum():
+            normalized.append(character)
+            previous_was_separator = False
+        elif character in {" ", "-", "_", "."} and not previous_was_separator:
+            normalized.append("_")
+            previous_was_separator = True
+
+    cleaned = "".join(normalized).strip("_")
+    if not cleaned:
+        raise ValueError("--run-tag mora imati bar jedan alfanumericki znak.")
+    return cleaned[:40]
 
 
 def make_environment(env_config: EnvConfig, enable_erfi: bool = True):
@@ -636,6 +662,7 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = True):
             "impl": env_config.playground_impl,
             "enable_erfi": enable_erfi,
             "command_profile": env_config.command_profile,
+            "reference_gait": env_config.reference_gait,
             "action_smoothing": env_config.action_smoothing,
         }
         if env_config.init_qpos_file is not None:
@@ -687,6 +714,15 @@ def main() -> None:
         type=float,
         default=0.5,
         help="Filtriranje policy akcije pre servo targeta; 0.5 prati walking repo.",
+    )
+    parser.add_argument(
+        "--reference-gait",
+        choices=["none", "sine"],
+        default="none",
+        help=(
+            "Opcioni pose-imitation prior: sine dodaje rucno dizajniranu "
+            "ciklicnu putanju nogu."
+        ),
     )
     parser.add_argument(
         "--init-qpos-file",
@@ -747,6 +783,15 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--run-tag",
+        type=str,
+        default=None,
+        help=(
+            "Kratak suffix za runs folder, npr. stylev1, trajectory, "
+            "animation_bvh ili mocap_cmu."
+        ),
+    )
+    parser.add_argument(
         "--accurate-physics",
         action="store_true",
         help=argparse.SUPPRESS,
@@ -767,6 +812,7 @@ def main() -> None:
         env_version=args.env_version,
         playground_impl=args.playground_impl,
         command_profile=args.command_profile,
+        reference_gait=args.reference_gait,
         action_smoothing=args.action_smoothing,
         init_qpos_file=(
             str(args.init_qpos_file) if args.init_qpos_file is not None else None
@@ -797,6 +843,7 @@ def main() -> None:
             str(args.checkpoint_out) if args.checkpoint_out is not None else None
         ),
         resume_from=str(args.resume_from) if args.resume_from is not None else None,
+        run_tag=args.run_tag,
         debug_run=args.debug_run,
         bare=args.bare,
     )
