@@ -26,6 +26,65 @@ KEY_NUMPAD_8 = 328
 KEY_NUMPAD_9 = 329
 
 
+def expand_reference_gait_files(
+    reference_gait_files: list[Path] | list[str] | None = None,
+    reference_gait_lists: list[Path] | list[str] | None = None,
+) -> list[str] | None:
+    """Expand direct BVH files plus one-path-per-line list files."""
+    expanded: list[str] = []
+    for file_path in reference_gait_files or []:
+        expanded.append(normalize_reference_path(str(file_path)))
+    for list_path in reference_gait_lists or []:
+        expanded.extend(read_reference_gait_list(Path(list_path)))
+    return expanded or None
+
+
+def read_reference_gait_list(list_path: Path) -> list[str]:
+    """Read BVH paths from a text list, ignoring blank and comment lines."""
+    resolved_list_path = resolve_project_path(list_path)
+    paths: list[str] = []
+    raw_text = resolved_list_path.read_text(encoding="utf-8")
+    for raw_line in raw_text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        paths.append(normalize_reference_path(line, resolved_list_path))
+    return paths
+
+
+def normalize_reference_path(raw_path: str, list_path: Path | None = None) -> str:
+    """Keep repo-relative BVH paths stable, with list-relative fallback."""
+    candidate = Path(raw_path).expanduser()
+    if candidate.is_absolute():
+        return str(candidate)
+    if (PROJECT_ROOT / candidate).exists():
+        return candidate.as_posix()
+    if list_path is not None:
+        list_relative = list_path.parent / candidate
+        if list_relative.exists():
+            return relative_to_project_or_absolute(list_relative)
+    return candidate.as_posix()
+
+
+def resolve_project_path(path: Path) -> Path:
+    """Resolve a user path, trying project-root-relative paths if needed."""
+    expanded = path.expanduser()
+    if expanded.is_absolute() or expanded.exists():
+        return expanded
+    project_relative = PROJECT_ROOT / expanded
+    if project_relative.exists():
+        return project_relative
+    return expanded
+
+
+def relative_to_project_or_absolute(path: Path) -> str:
+    """Prefer repo-relative paths in config.json when possible."""
+    try:
+        return path.relative_to(PROJECT_ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
 # Dataclass ovde nije safety/filler sloj. Treba nam zato sto:
 # 1. daje kratak konstruktor: EnvConfig(env_version="hardcore")
 # 2. dozvoljava load iz checkpoint-a: EnvConfig(**saved_config)
@@ -53,8 +112,10 @@ class EnvConfig:
     command_profile: str = "standard"
 
     # "sine" dodaje rucno dizajniranu ciklicnu referentnu putanju za noge.
+    # "bvh" koristi jednu BVH animaciju kao motion-imitation prior.
     # "none" koristi samo task/style reward bez explicit pose imitation.
     reference_gait: str = "none"
+    reference_gait_file: str | list[str] | None = None
 
     # Referentni humanoid walking setup filtrira targete pre PD kontrole.
     # 0.5 znaci: pola nova akcija politike, pola prethodni target.

@@ -10,6 +10,7 @@ import numpy as np
 from ml_collections import config_dict
 from mujoco import mjx
 
+from bvh_reference import load_bvh_references
 from biomechanics_model import (
     HumanSpec,
     LEG_ACTUATED_JOINTS,
@@ -36,6 +37,7 @@ class BiomechanicsEnvConfig:
     action_smoothing: float = 0.5
     command_profile: str = "standard"
     reference_gait: str = "none"
+    reference_gait_file: str | list[str] | None = None
     command_resample_steps: int = 500
     tracking_sigma: float = 0.25
     action_noise_std: float = 0.03
@@ -56,6 +58,7 @@ def default_config() -> config_dict.ConfigDict:
         action_smoothing=0.5,
         command_profile="standard",
         reference_gait="none",
+        reference_gait_file=None,
         command_resample_steps=500,
         tracking_sigma=0.25,
         action_noise_std=0.03,
@@ -268,19 +271,33 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             {"right_knee_z": -0.45}.get(joint_name, 0.0)
             for joint_name in actuator_joint_names
         ])
-        self._actuator_qpos_lower_limits = jp.array([
+        self._actuator_qpos_lower_limits_np = np.array([
             self._mj_model.jnt_range[joint_id, 0]
             if self._mj_model.jnt_limited[joint_id]
             else -np.inf
             for joint_id in self._mj_model.actuator_trnid[:, 0]
         ])
-        self._actuator_qpos_upper_limits = jp.array([
+        self._actuator_qpos_upper_limits_np = np.array([
             self._mj_model.jnt_range[joint_id, 1]
             if self._mj_model.jnt_limited[joint_id]
             else np.inf
             for joint_id in self._mj_model.actuator_trnid[:, 0]
         ])
+        self._actuator_qpos_lower_limits = jp.array(
+            self._actuator_qpos_lower_limits_np
+        )
+        self._actuator_qpos_upper_limits = jp.array(
+            self._actuator_qpos_upper_limits_np
+        )
         self._default_ctrl = self._init_q[self._actuator_qpos_indices]
+        self._bvh_reference_qpos_targets = jp.expand_dims(
+            jp.expand_dims(self._default_ctrl, axis=0),
+            axis=0,
+        )
+        self._bvh_reference_frame_times = jp.array([self.dt], dtype=jp.float32)
+        self._bvh_reference_frame_counts = jp.array([1], dtype=jp.int32)
+        self._bvh_reference_clip_count = 1
+        self._configure_bvh_reference()
         self._n_substeps = int(round(self._ctrl_dt / self._sim_dt))
         self._torso_body_id = self._mj_model.body("thorax").id
         self._head_body_id = self._mj_model.body("head").id
@@ -290,6 +307,41 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             self._left_foot_sole_geom_id,
             self._right_foot_sole_geom_id,
         ])
+
+    def _configure_bvh_reference(self) -> None:
+        """Ucita BVH referencu ako je trazena u config-u."""
+        if self._config.get("reference_gait", "none") != "bvh":
+            return
+        reference_gait_files = self._reference_gait_files()
+        if not reference_gait_files:
+            raise ValueError(
+                "reference_gait='bvh' trazi bar jedan --reference-gait-file."
+            )
+
+        references = load_bvh_references(
+            tuple(resolve_project_path(path) for path in reference_gait_files),
+            self._actuator_joint_names,
+            np.asarray(self._default_ctrl, dtype=np.float32),
+            self._actuator_qpos_lower_limits_np,
+            self._actuator_qpos_upper_limits_np,
+        )
+        self._bvh_reference_qpos_targets = jp.array(references.qpos_targets)
+        self._bvh_reference_frame_times = jp.array(references.frame_times)
+        self._bvh_reference_frame_counts = jp.array(references.frame_counts)
+        self._bvh_reference_clip_count = len(references.source_paths)
+
+    def _reference_gait_files(self) -> tuple[str, ...]:
+        """Vrati BVH fajlove iz config-a kao tuple stringova."""
+        reference_gait_file = self._config.get("reference_gait_file", None)
+        if reference_gait_file is None:
+            return ()
+        if isinstance(reference_gait_file, str):
+            return tuple(
+                path.strip()
+                for path in reference_gait_file.split(";")
+                if path.strip()
+            )
+        return tuple(str(path) for path in reference_gait_file)
 
     def _build_initial_qpos(self, fallback_qpos: np.ndarray) -> np.ndarray:
         """Napravi pocetni qpos iz fajla ili iz stabilnije standing-home poze."""
@@ -363,8 +415,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
 
     def reset(self, rng: jax.Array) -> mjx_env.State:
         """Resetuje human u pocetnu pozu i uzorkuje joystick komandu."""
-        rng, command_key, pose_key, erfi_key, bias_key, gait_key = (
-            jax.random.split(rng, 6)
+        rng, command_key, pose_key, erfi_key, bias_key, gait_key, bvh_key = (
+            jax.random.split(rng, 7)
         )
         qpos = self._init_q
         qpos = qpos.at[self._actuator_qpos_indices].add(
@@ -392,6 +444,12 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 shape=(),
                 minval=0,
                 maxval=int(self.GAIT_PERIOD_STEPS),
+            ),
+            "bvh_reference_clip_id": jax.random.randint(
+                bvh_key,
+                shape=(),
+                minval=0,
+                maxval=int(self._bvh_reference_clip_count),
             ),
             "last_foot_xy": self._foot_xy(data),
         }
@@ -809,10 +867,10 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         reference_gait = self._config.get("reference_gait", "none")
         if reference_gait == "none":
             return jp.array(0.0)
-        if reference_gait != "sine":
-            raise ValueError("reference_gait mora biti 'none' ili 'sine'.")
+        if reference_gait not in ("sine", "bvh"):
+            raise ValueError("reference_gait mora biti 'none', 'sine' ili 'bvh'.")
 
-        target_qpos = self._get_sine_reference_gait_target(info)
+        target_qpos = self._get_reference_gait_target(info)
         current_qpos = data.qpos[self._actuator_qpos_indices]
         qpos_error = jp.where(
             self._reference_gait_mask,
@@ -824,6 +882,12 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         pose_reward = jp.exp(-self.REFERENCE_GAIT_ERROR_SCALE * pose_error)
         command_active = jp.linalg.norm(info["command"]) > self.STUCK_COMMAND_THRESHOLD
         return jp.where(command_active, pose_reward, 0.0)
+
+    def _get_reference_gait_target(self, info: dict) -> jax.Array:
+        """Vrati target pozu za aktivni reference gait izvor."""
+        if self._config.get("reference_gait", "none") == "bvh":
+            return self._get_bvh_reference_gait_target(info)
+        return self._get_sine_reference_gait_target(info)
 
     def _get_sine_reference_gait_target(self, info: dict) -> jax.Array:
         """Vrati ciljnu cyclic pozu nogu za trenutnu gait fazu."""
@@ -840,6 +904,19 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             self._actuator_qpos_lower_limits,
             self._actuator_qpos_upper_limits,
         )
+
+    def _get_bvh_reference_gait_target(self, info: dict) -> jax.Array:
+        """Vrati retargetovanu BVH pozu najblizu trenutnom env vremenu."""
+        clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
+        frame_count = self._bvh_reference_frame_counts[clip_id]
+        frame_time = self._bvh_reference_frame_times[clip_id]
+        frame_float = (
+            info["step"].astype(jp.float32)
+            * jp.array(self.dt, dtype=jp.float32)
+            / frame_time
+        )
+        frame_index = jp.mod(jp.floor(frame_float).astype(jp.int32), frame_count)
+        return self._bvh_reference_qpos_targets[clip_id, frame_index]
 
     def _get_base_height_reward(self, data: mjx.Data) -> jax.Array:
         """Mala gusta nagrada za drzanje root visine blizu pocetne stojece poze."""

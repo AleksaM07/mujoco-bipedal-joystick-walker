@@ -36,6 +36,7 @@ from config import (
     KEY_SPACE,
     KEY_UP,
     KEY_W,
+    expand_reference_gait_files,
 )
 
 
@@ -115,7 +116,7 @@ def infer_command_profile(checkpoint_path: Path) -> str:
     run_config = find_run_config(checkpoint_path)
     if run_config is not None:
         profile = run_config.get("env", {}).get("command_profile")
-        if profile in {"forward", "walk", "standard"}:
+        if profile in {"forward", "walk", "steer", "standard_easy", "standard"}:
             return profile
 
     obs_size = read_checkpoint_observation_size(checkpoint_path)
@@ -130,6 +131,25 @@ def infer_init_qpos_file(checkpoint_path: Path) -> str | None:
     if run_config is None:
         return None
     return run_config.get("env", {}).get("init_qpos_file")
+
+
+def infer_reference_gait(checkpoint_path: Path) -> str:
+    """Procitaj reference_gait iz run configa."""
+    run_config = find_run_config(checkpoint_path)
+    if run_config is None:
+        return "none"
+    reference_gait = run_config.get("env", {}).get("reference_gait", "none")
+    if reference_gait in {"none", "sine", "bvh"}:
+        return reference_gait
+    return "none"
+
+
+def infer_reference_gait_file(checkpoint_path: Path) -> str | list[str] | None:
+    """Procitaj reference_gait_file iz run configa."""
+    run_config = find_run_config(checkpoint_path)
+    if run_config is None:
+        return None
+    return run_config.get("env", {}).get("reference_gait_file")
 
 
 def find_run_config(checkpoint_path: Path) -> dict | None:
@@ -405,8 +425,25 @@ def main():
     )
     parser.add_argument(
         "--command-profile",
-        choices=["auto", "forward", "walk", "standard"],
+        choices=["auto", "forward", "walk", "steer", "standard_easy", "standard"],
         default="auto",
+    )
+    parser.add_argument(
+        "--reference-gait",
+        choices=["auto", "none", "sine", "bvh"],
+        default="auto",
+    )
+    parser.add_argument(
+        "--reference-gait-file",
+        type=Path,
+        action="append",
+        default=None,
+    )
+    parser.add_argument(
+        "--reference-gait-list",
+        type=Path,
+        action="append",
+        default=None,
     )
     parser.add_argument("--action-smoothing", type=float, default=0.5)
     parser.add_argument("--init-qpos-file", type=Path, default=None)
@@ -447,11 +484,25 @@ def main():
         if args.init_qpos_file is not None
         else infer_init_qpos_file(args.checkpoint)
     )
+    reference_gait = (
+        infer_reference_gait(args.checkpoint)
+        if args.reference_gait == "auto"
+        else args.reference_gait
+    )
+    if args.reference_gait_file is not None or args.reference_gait_list is not None:
+        reference_gait_file = expand_reference_gait_files(
+            args.reference_gait_file,
+            args.reference_gait_list,
+        )
+    else:
+        reference_gait_file = infer_reference_gait_file(args.checkpoint)
     print(
         "eval config | "
         f"command_profile={command_profile} | "
         f"command_x={command_x} | "
-        f"init_qpos_file={init_qpos_file}",
+        f"init_qpos_file={init_qpos_file} | "
+        f"reference_gait={reference_gait} | "
+        f"reference_gait_file={reference_gait_file}",
         flush=True,
     )
 
@@ -460,6 +511,8 @@ def main():
         env_version=args.env_version,
         playground_impl=args.playground_impl,
         command_profile=command_profile,
+        reference_gait=reference_gait,
+        reference_gait_file=reference_gait_file,
         action_smoothing=args.action_smoothing,
         init_qpos_file=init_qpos_file,
         accurate_physics=not args.fast_physics,
@@ -534,8 +587,11 @@ def make_environment(env_config: EnvConfig):
         "impl": env_config.playground_impl,
         "enable_erfi": False,
         "command_profile": env_config.command_profile,
+        "reference_gait": env_config.reference_gait,
         "action_smoothing": env_config.action_smoothing,
     }
+    if env_config.reference_gait_file is not None:
+        config_overrides["reference_gait_file"] = env_config.reference_gait_file
     if env_config.init_qpos_file is not None:
         config_overrides["init_qpos_file"] = env_config.init_qpos_file
     if env_config.accurate_physics:

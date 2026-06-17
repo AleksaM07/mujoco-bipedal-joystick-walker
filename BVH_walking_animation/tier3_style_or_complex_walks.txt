@@ -1,0 +1,596 @@
+# One BVH path per non-comment line.
+# Description is kept above each path for review.
+# WalkEvasiveLeft
+BVH_walking_animation/cmuconvert-max-102-111/102/102_16.bvh
+# WalkEvasiveRight
+BVH_walking_animation/cmuconvert-max-102-111/102/102_17.bvh
+# Casual Walk
+BVH_walking_animation/cmuconvert-max-102-111/103/103_07.bvh
+# neutral Male walk, exact footfalls
+BVH_walking_animation/cmuconvert-max-102-111/104/104_02.bvh
+# Frankenstein male walk, exact footfalls
+BVH_walking_animation/cmuconvert-max-102-111/104/104_03.bvh
+# HappyGoLuckWalk
+BVH_walking_animation/cmuconvert-max-102-111/104/104_11.bvh
+# ExcitedWalk
+BVH_walking_animation/cmuconvert-max-102-111/104/104_12.bvh
+# StumbleWalk
+BVH_walking_animation/cmuconvert-max-102-111/104/104_13.bvh
+# HappyStartWalk
+BVH_walking_animation/cmuconvert-max-102-111/104/104_14.bvh
+# SpasticWalk
+BVH_walking_animation/cmuconvert-max-102-111/104/104_16.bvh
+# CasualWalk
+BVH_walking_animation/cmuconvert-max-102-111/104/104_19.bvh
+# RegularWalk8
+BVH_walking_animation/cmuconvert-max-102-111/104/104_22.bvh
+# RegularWalkRightAngleTurns
+BVH_walking_animation/cmuconvert-max-102-111/104/104_27.bvh
+# SternWalk
+BVH_walking_animation/cmuconvert-max-102-111/104/104_28.bvh
+# SternWalk
+BVH_walking_animation/cmuconvert-max-102-111/104/104_29.bvh
+# SternWalk8
+BVH_walking_animation/cmuconvert-max-102-111/104/104_30.bvh
+# SternWalkRightAngleTurns
+BVH_walking_animation/cmuconvert-max-102-111/104/104_32.bvh
+# SlowWalk
+BVH_walking_animation/cmuconvert-max-102-111/104/104_35.bvh
+# SlowWalk8
+BVH_walking_animation/cmuconvert-max-102-111/104/104_36.bvh
+# SlowWalkRightAngleTurns
+BVH_walking_animation/cmuconvert-max-102-111/104/104_39.bvh
+# ZombieWalk
+BVH_walking_animation/cmuconvert-max-102-111/104/104_41.bvh
+# ZombieWalk8
+BVH_walking_animation/cmuconvert-max-102-111/104/104_42.bvh
+# ZombieWalkRightAngleTurns
+BVH_walking_animation/cmuconvert-max-102-111/104/104_43.bvh
+# AttitudeWalk
+BVH_walking_animation/cmuconvert-max-102-111/104/104_44.bvh
+# AttitudeWalk8
+BVH_walking_animation/cmuconvert-max-102-111/104/104_45.bvh
+# AttitudeWalkRightAngleTurns
+BVH_walking_animation/cmuconvert-max-102-111/104/104_46.bvh
+# WalkDigital8
+BVH_walking_animation/cmuconvert-max-102-111/105/105_01.bvh
+# WalkStraight
+BVH_walking_animation/cmuconvert-max-102-111/105/105_02.bvh
+# Walk8
+BVH_walking_animation/cmuconvert-max-102-111/105/105_03.bvh
+# mummyWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_05.bvh
+# DrunkWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_09.bvh
+# SlowWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_10.bvh
+# LavishWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_11.bvh
+# TooCoolWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_12.bvh
+# SadWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_13.bvh
+# DepressedWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_14.bvh
+# ClumsyWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_15.bvh
+# QuickWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_17.bvh
+# CarefulWalk LookingAround
+BVH_walking_animation/cmuconvert-max-102-111/105/105_18.bvh
+# ShyWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_20.bvh
+# acheyWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_21.bvh
+# CasualQuickWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_22.bvh
+# CoolWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_23.bvh
+# HurtLegWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_24.bvh
+# DragBadLegWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_25.bvh
+# HurtStomachWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_26.bvh
+# SlowWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_27.bvh
+# GhettoWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_28.bvh
+# NormalWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_29.bvh
+# SexyWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_30.bvh
+# NormalWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_31.bvh
+# ScaredWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_32.bvh
+# MachoWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_33.bvh
+# NormalWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_34.bvh
+# TrafficWalk
+BVH_walking_animation/cmuconvert-max-102-111/105/105_35.bvh
+# WalkStraight
+BVH_walking_animation/cmuconvert-max-102-111/105/105_36.bvh
+# WalkForward
+BVH_walking_animation/cmuconvert-max-102-111/105/105_57.bvh
+# walkFigure8
+BVH_walking_animation/cmuconvert-max-102-111/105/105_62.bvh
+# Walk backwards
+BVH_walking_animation/cmuconvert-max-102-111/111/111_01.bvh
+# Walk sideways
+BVH_walking_animation/cmuconvert-max-102-111/111/111_26.bvh
+# Walk and carry
+BVH_walking_animation/cmuconvert-max-102-111/111/111_36.bvh
+# Walk backwards
+BVH_walking_animation/cmuconvert-max-113-128/113/113_01.bvh
+# Walk digital 8
+BVH_walking_animation/cmuconvert-max-113-128/113/113_05.bvh
+# Walk figure 8
+BVH_walking_animation/cmuconvert-max-113-128/113/113_06.bvh
+# Walk, mope around
+BVH_walking_animation/cmuconvert-max-113-128/113/113_10.bvh
+# Walk sideway
+BVH_walking_animation/cmuconvert-max-113-128/113/113_17.bvh
+# Walk sideways
+BVH_walking_animation/cmuconvert-max-113-128/113/113_18.bvh
+# Walk and carry
+BVH_walking_animation/cmuconvert-max-113-128/113/113_26.bvh
+# Mickey sneaky walk
+BVH_walking_animation/cmuconvert-max-113-128/120/120_08.bvh
+# Mickey sneaking walk
+BVH_walking_animation/cmuconvert-max-113-128/120/120_09.bvh
+# Mickey sneaking walk
+BVH_walking_animation/cmuconvert-max-113-128/120/120_10.bvh
+# Mickey sneaking walk
+BVH_walking_animation/cmuconvert-max-113-128/120/120_11.bvh
+# Mickey sneaking walk
+BVH_walking_animation/cmuconvert-max-113-128/120/120_12.bvh
+# Mickey sneaking walk
+BVH_walking_animation/cmuconvert-max-113-128/120/120_13.bvh
+# Mickey sneaking walk
+BVH_walking_animation/cmuconvert-max-113-128/120/120_14.bvh
+# Mickey Walk
+BVH_walking_animation/cmuconvert-max-113-128/120/120_17.bvh
+# Mickey Walk
+BVH_walking_animation/cmuconvert-max-113-128/120/120_18.bvh
+# Walk With Arms Out,  balancing
+BVH_walking_animation/cmuconvert-max-131-135/132/132_01.bvh
+# Walk With Arms Out,  balancing
+BVH_walking_animation/cmuconvert-max-131-135/132/132_02.bvh
+# Walk With Arms Out,  balancing
+BVH_walking_animation/cmuconvert-max-131-135/132/132_03.bvh
+# Walk With Arms Out,  balancing
+BVH_walking_animation/cmuconvert-max-131-135/132/132_04.bvh
+# Walk With Arms Out,  balancing
+BVH_walking_animation/cmuconvert-max-131-135/132/132_05.bvh
+# Walk With Arms Out,  balancing
+BVH_walking_animation/cmuconvert-max-131-135/132/132_06.bvh
+# Walk With Arms Out,  balancing
+BVH_walking_animation/cmuconvert-max-131-135/132/132_07.bvh
+# Walk With Arms Out,  balancing
+BVH_walking_animation/cmuconvert-max-131-135/132/132_08.bvh
+# Walk With Arms Out,  balancing
+BVH_walking_animation/cmuconvert-max-131-135/132/132_09.bvh
+# Walk With Arms Out,  balancing
+BVH_walking_animation/cmuconvert-max-131-135/132/132_10.bvh
+# Walk With Arms Out,  balancing
+BVH_walking_animation/cmuconvert-max-131-135/132/132_11.bvh
+# Walk With Arms Out,  balancing
+BVH_walking_animation/cmuconvert-max-131-135/132/132_12.bvh
+# Walk Backwards
+BVH_walking_animation/cmuconvert-max-131-135/132/132_13.bvh
+# Walk Duck Footed
+BVH_walking_animation/cmuconvert-max-131-135/132/132_14.bvh
+# Walk With Knees Bent
+BVH_walking_animation/cmuconvert-max-131-135/132/132_15.bvh
+# Walk Crossover
+BVH_walking_animation/cmuconvert-max-131-135/132/132_16.bvh
+# Bouncy Walk
+BVH_walking_animation/cmuconvert-max-131-135/132/132_29.bvh
+# Bouncy Walk
+BVH_walking_animation/cmuconvert-max-131-135/132/132_30.bvh
+# Bouncy Walk
+BVH_walking_animation/cmuconvert-max-131-135/132/132_31.bvh
+# Bouncy Walk
+BVH_walking_animation/cmuconvert-max-131-135/132/132_32.bvh
+# Bouncy Walk
+BVH_walking_animation/cmuconvert-max-131-135/132/132_33.bvh
+# Bouncy Walk
+BVH_walking_animation/cmuconvert-max-131-135/132/132_34.bvh
+# Pigeon Toed Walking
+BVH_walking_animation/cmuconvert-max-131-135/132/132_39.bvh
+# Walk With Stiff Arms
+BVH_walking_animation/cmuconvert-max-131-135/132/132_40.bvh
+# Walk With Stiff Arms
+BVH_walking_animation/cmuconvert-max-131-135/132/132_41.bvh
+# Walk Swinging Shoulders
+BVH_walking_animation/cmuconvert-max-131-135/132/132_42.bvh
+# Walk Swinging Shoulders
+BVH_walking_animation/cmuconvert-max-131-135/132/132_43.bvh
+# Walk Swinging Shoulders
+BVH_walking_animation/cmuconvert-max-131-135/132/132_44.bvh
+# Walk With Legs Apart
+BVH_walking_animation/cmuconvert-max-131-135/132/132_53.bvh
+# Walk With Wild Arms
+BVH_walking_animation/cmuconvert-max-131-135/132/132_54.bvh
+# Walk With Wild Legs
+BVH_walking_animation/cmuconvert-max-131-135/132/132_55.bvh
+# Walk With Wild Legs
+BVH_walking_animation/cmuconvert-max-131-135/132/132_56.bvh
+# Walk Crawl
+BVH_walking_animation/cmuconvert-max-131-135/133/133_01.bvh
+# Walk Crawl
+BVH_walking_animation/cmuconvert-max-131-135/133/133_02.bvh
+# Walk Jump
+BVH_walking_animation/cmuconvert-max-131-135/133/133_03.bvh
+# Walk Jump
+BVH_walking_animation/cmuconvert-max-131-135/133/133_04.bvh
+# Walk Jump
+BVH_walking_animation/cmuconvert-max-131-135/133/133_05.bvh
+# Walk Jump
+BVH_walking_animation/cmuconvert-max-131-135/133/133_06.bvh
+# Walk Jump
+BVH_walking_animation/cmuconvert-max-131-135/133/133_07.bvh
+# Stretch Walk
+BVH_walking_animation/cmuconvert-max-131-135/133/133_08.bvh
+# Stretch Walk
+BVH_walking_animation/cmuconvert-max-131-135/133/133_09.bvh
+# Stretch Walk
+BVH_walking_animation/cmuconvert-max-131-135/133/133_10.bvh
+# Walk ZigZag
+BVH_walking_animation/cmuconvert-max-131-135/133/133_24.bvh
+# Walk Crouched
+BVH_walking_animation/cmuconvert-max-136-140/136/136_09.bvh
+# Walk Crouched
+BVH_walking_animation/cmuconvert-max-136-140/136/136_10.bvh
+# Walk Backwards Crouched
+BVH_walking_animation/cmuconvert-max-136-140/136/136_11.bvh
+# Walk Backwards Crouched
+BVH_walking_animation/cmuconvert-max-136-140/136/136_12.bvh
+# Walk on Toes Crouched
+BVH_walking_animation/cmuconvert-max-136-140/136/136_13.bvh
+# Walk on Toes Crouched
+BVH_walking_animation/cmuconvert-max-136-140/136/136_14.bvh
+# Walk Backwards on Toes Crouched
+BVH_walking_animation/cmuconvert-max-136-140/136/136_15.bvh
+# Walk Backwards on Toes Crouched
+BVH_walking_animation/cmuconvert-max-136-140/136/136_16.bvh
+# Normal Walk Backwards
+BVH_walking_animation/cmuconvert-max-136-140/136/136_25.bvh
+# Normal Walk Backwards
+BVH_walking_animation/cmuconvert-max-136-140/136/136_26.bvh
+# Walk on Toes
+BVH_walking_animation/cmuconvert-max-136-140/136/136_27.bvh
+# Walk on Toes
+BVH_walking_animation/cmuconvert-max-136-140/136/136_28.bvh
+# Walk Backwards on Toes
+BVH_walking_animation/cmuconvert-max-136-140/136/136_29.bvh
+# Walk Backwards on Toes
+BVH_walking_animation/cmuconvert-max-136-140/136/136_30.bvh
+# Cat Walk
+BVH_walking_animation/cmuconvert-max-136-140/137/137_04.bvh
+# Chicken Walk
+BVH_walking_animation/cmuconvert-max-136-140/137/137_08.bvh
+# Dinosaur Walk
+BVH_walking_animation/cmuconvert-max-136-140/137/137_12.bvh
+# Drunk Walk
+BVH_walking_animation/cmuconvert-max-136-140/137/137_16.bvh
+# Gangly Teen Walk
+BVH_walking_animation/cmuconvert-max-136-140/137/137_20.bvh
+# Graceful Lady Walk
+BVH_walking_animation/cmuconvert-max-136-140/137/137_24.bvh
+# Old Man Walk
+BVH_walking_animation/cmuconvert-max-136-140/137/137_33.bvh
+# Sexy Lady Walk
+BVH_walking_animation/cmuconvert-max-136-140/137/137_38.bvh
+# Strong Man Walk
+BVH_walking_animation/cmuconvert-max-136-140/137/137_42.bvh
+# Walk Wounded Leg
+BVH_walking_animation/cmuconvert-max-136-140/139/139_19.bvh
+# Walk Wounded Leg
+BVH_walking_animation/cmuconvert-max-136-140/139/139_20.bvh
+# Walk Wounded Leg
+BVH_walking_animation/cmuconvert-max-136-140/139/139_22.bvh
+# Walk Wounded Leg
+BVH_walking_animation/cmuconvert-max-136-140/139/139_23.bvh
+# Walk Wounded Leg
+BVH_walking_animation/cmuconvert-max-136-140/139/139_24.bvh
+# Walking
+BVH_walking_animation/cmuconvert-max-136-140/139/139_28.bvh
+# Walking
+BVH_walking_animation/cmuconvert-max-136-140/139/139_30.bvh
+# Walk Up and Over
+BVH_walking_animation/cmuconvert-max-141-144/141/141_07.bvh
+# Steop On Walk Down
+BVH_walking_animation/cmuconvert-max-141-144/141/141_08.bvh
+# Random Walk
+BVH_walking_animation/cmuconvert-max-141-144/141/141_29.bvh
+# Random Walk
+BVH_walking_animation/cmuconvert-max-141-144/141/141_30.bvh
+# Walk Backwards
+BVH_walking_animation/cmuconvert-max-141-144/141/141_31.bvh
+# Walk Sideways, Cross Legs
+BVH_walking_animation/cmuconvert-max-141-144/141/141_32.bvh
+# Walk Sideways, Foot to Foot
+BVH_walking_animation/cmuconvert-max-141-144/141/141_33.bvh
+# Walk And Pick up Tool Box
+BVH_walking_animation/cmuconvert-max-141-144/143/143_10.bvh
+# Walk And Pick up Box
+BVH_walking_animation/cmuconvert-max-141-144/143/143_11.bvh
+# Walk And Pick up Toolbox
+BVH_walking_animation/cmuconvert-max-141-144/143/143_12.bvh
+# Walk and Pick up Laundry Basket
+BVH_walking_animation/cmuconvert-max-141-144/143/143_13.bvh
+# Walk And Step Over
+BVH_walking_animation/cmuconvert-max-141-144/143/143_14.bvh
+# Walk And Step Over
+BVH_walking_animation/cmuconvert-max-141-144/143/143_15.bvh
+# Walk And Step Over
+BVH_walking_animation/cmuconvert-max-141-144/143/143_16.bvh
+# Walk Digital 8
+BVH_walking_animation/cmuconvert-max-141-144/143/143_38.bvh
+# Walk Backwards
+BVH_walking_animation/cmuconvert-max-141-144/143/143_39.bvh
+# Walk Sideways
+BVH_walking_animation/cmuconvert-max-141-144/143/143_40.bvh
+# Walking
+BVH_walking_animation/cmuconvert-max-141-144/144/144_33.bvh
+# Walking001
+BVH_walking_animation/cmuconvert-max-141-144/144/144_34.bvh
+# walk/wander
+BVH_walking_animation/cmuconvert-max-15-19/15/15_01.bvh
+# walk/wander
+BVH_walking_animation/cmuconvert-max-15-19/15/15_03.bvh
+# wash windows, paint; hand signals; dance - Egyptian walk, the Dive, the Twist, the Cabbage Patch; boxing
+BVH_walking_animation/cmuconvert-max-15-19/15/15_04.bvh
+# wash windows, paint; hand signals; dance - Egyptian walk, the Dive, the Twist, the Cabbage Patch; boxing
+BVH_walking_animation/cmuconvert-max-15-19/15/15_05.bvh
+# walk/wander
+BVH_walking_animation/cmuconvert-max-15-19/15/15_09.bvh
+# wash windows; basketball - dribble, lay-up shot, pass; throw ball; dance - Egyptian walk, the Dive, the Twist; strew
+BVH_walking_animation/cmuconvert-max-15-19/15/15_12.bvh
+# walk/wander
+BVH_walking_animation/cmuconvert-max-15-19/15/15_14.bvh
+# walk with anger, frustration
+BVH_walking_animation/cmuconvert-max-15-19/17/17_01.bvh
+# walk with anger, frustration
+BVH_walking_animation/cmuconvert-max-15-19/17/17_02.bvh
+# walk stealthily
+BVH_walking_animation/cmuconvert-max-15-19/17/17_03.bvh
+# walk stealthily
+BVH_walking_animation/cmuconvert-max-15-19/17/17_04.bvh
+# walk/hobble
+BVH_walking_animation/cmuconvert-max-15-19/17/17_05.bvh
+# whistle, walk jauntily
+BVH_walking_animation/cmuconvert-max-15-19/17/17_06.bvh
+# whistle, walk jauntily
+BVH_walking_animation/cmuconvert-max-15-19/17/17_07.bvh
+# muscular, heavyset person's walk
+BVH_walking_animation/cmuconvert-max-15-19/17/17_08.bvh
+# muscular, heavyset person's walk
+BVH_walking_animation/cmuconvert-max-15-19/17/17_09.bvh
+# walk, shake hands (2 subjects - subject A)
+BVH_walking_animation/cmuconvert-max-15-19/18/18_01.bvh
+# walk, shake hands (2 subjects - subject A)
+BVH_walking_animation/cmuconvert-max-15-19/18/18_02.bvh
+# navigate busy sidewalk; A leads the way, takes B by the arm (2 subjects - subject A)
+BVH_walking_animation/cmuconvert-max-15-19/18/18_07.bvh
+# conversation - explain with hand gestures, walk (2 subjects - subject A)
+BVH_walking_animation/cmuconvert-max-15-19/18/18_09.bvh
+# walk, shake hands (2 subjects - subject B)
+BVH_walking_animation/cmuconvert-max-15-19/19/19_01.bvh
+# walk, shake hands (2 subjects - subject B)
+BVH_walking_animation/cmuconvert-max-15-19/19/19_02.bvh
+# navigate busy sidewalk; A leads the way, takes B by the arm (2 subjects - subject B)
+BVH_walking_animation/cmuconvert-max-15-19/19/19_07.bvh
+# conversation - explain with hand gestures, walk (2 subjects - subject B)
+BVH_walking_animation/cmuconvert-max-15-19/19/19_09.bvh
+# link arms, walk (2 subjects - subject A)
+BVH_walking_animation/cmuconvert-max-20-29/20/20_02.bvh
+# link arms, walk (2 subjects - subject A)
+BVH_walking_animation/cmuconvert-max-20-29/20/20_03.bvh
+# synchronized walk (2 subjects - subject A)
+BVH_walking_animation/cmuconvert-max-20-29/20/20_04.bvh
+# synchronized walk (2 subjects - subject A)
+BVH_walking_animation/cmuconvert-max-20-29/20/20_05.bvh
+# high-five, walk (2 subjects - subject A)
+BVH_walking_animation/cmuconvert-max-20-29/20/20_11.bvh
+# low-five, walk (2 subjects - subject A)
+BVH_walking_animation/cmuconvert-max-20-29/20/20_12.bvh
+# link arms, walk (2 subjects - subject B)
+BVH_walking_animation/cmuconvert-max-20-29/21/21_02.bvh
+# link arms, walk (2 subjects - subject B)
+BVH_walking_animation/cmuconvert-max-20-29/21/21_03.bvh
+# synchronized walk (2 subjects - subject B)
+BVH_walking_animation/cmuconvert-max-20-29/21/21_04.bvh
+# synchronized walk (2 subjects - subject B)
+BVH_walking_animation/cmuconvert-max-20-29/21/21_05.bvh
+# high-five, walk (2 subjects - subject B)
+BVH_walking_animation/cmuconvert-max-20-29/21/21_11.bvh
+# low-five, walk (2 subjects - subject B)
+BVH_walking_animation/cmuconvert-max-20-29/21/21_12.bvh
+# hold hands, swing arms, walk (2 subjects - subject A)
+BVH_walking_animation/cmuconvert-max-20-29/22/22_08.bvh
+# walk; B catches keys thrown by A (2 subjects - subject A)
+BVH_walking_animation/cmuconvert-max-20-29/22/22_22.bvh
+# walk; A catches keys thrown by B (2 subjects - subject A)
+BVH_walking_animation/cmuconvert-max-20-29/22/22_23.bvh
+# walk; B catches wallet thrown by A (2 subjects - subject A)
+BVH_walking_animation/cmuconvert-max-20-29/22/22_24.bvh
+# walk; A catches wallet thrown by B (2 subjects - subject A)
+BVH_walking_animation/cmuconvert-max-20-29/22/22_25.bvh
+# hold hands, swing arms, walk (2 subjects - subject B)
+BVH_walking_animation/cmuconvert-max-20-29/23/23_08.bvh
+# walk; B catches keys thrown by A (2 subjects - subject B)
+BVH_walking_animation/cmuconvert-max-20-29/23/23_22.bvh
+# walk; A catches keys thrown by B (2 subjects - subject B)
+BVH_walking_animation/cmuconvert-max-20-29/23/23_23.bvh
+# walk; B catches wallet thrown by A (2 subjects - subject B)
+BVH_walking_animation/cmuconvert-max-20-29/23/23_24.bvh
+# walk; A catches wallet thrown by B (2 subjects - subject B)
+BVH_walking_animation/cmuconvert-max-20-29/23/23_25.bvh
+# walk around, frequent turns, cyclic walk along a line
+BVH_walking_animation/cmuconvert-max-35-39/38/38_04.bvh
+# follow path, walk around obstacles
+BVH_walking_animation/cmuconvert-max-46-56/54/54_20.bvh
+# follow path, walk around obstacles
+BVH_walking_animation/cmuconvert-max-46-56/54/54_21.bvh
+# follow path, walk around obstacles
+BVH_walking_animation/cmuconvert-max-46-56/54/54_22.bvh
+# walk around
+BVH_walking_animation/cmuconvert-max-46-56/56/56_01.bvh
+# vignettes - fists up, wipe window, grab, lift open window, throw punches, yawn, stretch, walk, jump
+BVH_walking_animation/cmuconvert-max-46-56/56/56_04.bvh
+# vignettes - throw punches, grab, skip, yawn, stretch, leap, lift open window, walk, jump/bound
+BVH_walking_animation/cmuconvert-max-46-56/56/56_06.bvh
+# walk sideways and backwards
+BVH_walking_animation/cmuconvert-max-60-75/69/69_50.bvh
+# walk up to object, squat, pick up object, set down in another place.
+BVH_walking_animation/cmuconvert-max-60-75/69/69_70.bvh
+# walk up to object, squat, pick up object, set down in another place
+BVH_walking_animation/cmuconvert-max-60-75/69/69_71.bvh
+# walk up to object, pick up object, set down in another place
+BVH_walking_animation/cmuconvert-max-60-75/69/69_72.bvh
+# walk up to object, lean over, pick up object, set down in another place
+BVH_walking_animation/cmuconvert-max-60-75/69/69_73.bvh
+# walk up to object, lean over, pick up object, set down in another place
+BVH_walking_animation/cmuconvert-max-60-75/69/69_74.bvh
+# walk up to object, squat, pick up object, set down in another place
+BVH_walking_animation/cmuconvert-max-60-75/69/69_75.bvh
+# stiff walk
+BVH_walking_animation/cmuconvert-max-60-75/74/74_01.bvh
+# stiff walk
+BVH_walking_animation/cmuconvert-max-60-75/74/74_02.bvh
+# stiff walk
+BVH_walking_animation/cmuconvert-max-60-75/74/74_20.bvh
+# walk backwards then attack with a punch
+BVH_walking_animation/cmuconvert-max-76-80/76/76_01.bvh
+# walk backwards, feign a few attacks, then attack
+BVH_walking_animation/cmuconvert-max-76-80/76/76_02.bvh
+# walking backwards
+BVH_walking_animation/cmuconvert-max-76-80/76/76_09.bvh
+# careful walk and search
+BVH_walking_animation/cmuconvert-max-76-80/77/77_25.bvh
+# careful walk and search
+BVH_walking_animation/cmuconvert-max-76-80/77/77_26.bvh
+# careful walk and search
+BVH_walking_animation/cmuconvert-max-76-80/77/77_27.bvh
+# careful walk
+BVH_walking_animation/cmuconvert-max-76-80/77/77_28.bvh
+# creeping walk
+BVH_walking_animation/cmuconvert-max-76-80/77/77_29.bvh
+# creeping walk
+BVH_walking_animation/cmuconvert-max-76-80/77/77_30.bvh
+# silent walk
+BVH_walking_animation/cmuconvert-max-76-80/77/77_31.bvh
+# creeping walk
+BVH_walking_animation/cmuconvert-max-76-80/77/77_32.bvh
+# WalkEvasiveLeft      CleanedGRS
+BVH_walking_animation/cmuconvert-max-76-80/78/78_18.bvh
+# WalkEvasiveRight              CleanedGRS
+BVH_walking_animation/cmuconvert-max-76-80/78/78_19.bvh
+# walking, running, jumping, kicking, and stretching
+BVH_walking_animation/cmuconvert-max-86-94/86/86_03.bvh
+# walking, stretching, punching, chopping, and drinking
+BVH_walking_animation/cmuconvert-max-86-94/86/86_04.bvh
+# walking, jumping, jumping jacks,  jumping on one foot, punching, chopping,
+BVH_walking_animation/cmuconvert-max-86-94/86/86_05.bvh
+# walking, running, kicking, punching, knee kicking, and stretching
+BVH_walking_animation/cmuconvert-max-86-94/86/86_06.bvh
+# walking, swinging arms, stretching, jumping on one leg, and jumping
+BVH_walking_animation/cmuconvert-max-86-94/86/86_07.bvh
+# walking, squats, stretching, kicking, and punching
+BVH_walking_animation/cmuconvert-max-86-94/86/86_08.bvh
+# walking, sitting, looking, stand up
+BVH_walking_animation/cmuconvert-max-86-94/86/86_09.bvh
+# walk around, sit, stand up, and running
+BVH_walking_animation/cmuconvert-max-86-94/86/86_10.bvh
+# walking, stretching, walking and turning
+BVH_walking_animation/cmuconvert-max-86-94/86/86_11.bvh
+# walking, dragging, sweeping, dustpan, wipe window, and wipe mirror
+BVH_walking_animation/cmuconvert-max-86-94/86/86_12.bvh
+# walking around, walk up ladder, step down ladder
+BVH_walking_animation/cmuconvert-max-86-94/86/86_13.bvh
+# walking, sitting, hand motions
+BVH_walking_animation/cmuconvert-max-86-94/86/86_15.bvh
+# straight walk
+BVH_walking_animation/cmuconvert-max-86-94/90/90_22.bvh
+# straight walk
+BVH_walking_animation/cmuconvert-max-86-94/90/90_23.bvh
+# fwd ball walk
+BVH_walking_animation/cmuconvert-max-86-94/90/90_25.bvh
+# fwd ball walk
+BVH_walking_animation/cmuconvert-max-86-94/90/90_26.bvh
+# bwk ball walk
+BVH_walking_animation/cmuconvert-max-86-94/90/90_27.bvh
+# moonwalk
+BVH_walking_animation/cmuconvert-max-86-94/90/90_32.bvh
+# Walk digital figure eight
+BVH_walking_animation/cmuconvert-max-86-94/91/91_01.bvh
+# WalkStraight
+BVH_walking_animation/cmuconvert-max-86-94/91/91_02.bvh
+# Walk figure eight
+BVH_walking_animation/cmuconvert-max-86-94/91/91_03.bvh
+# Walking
+BVH_walking_animation/cmuconvert-max-86-94/91/91_04.bvh
+# Mummy Walk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_05.bvh
+# DrunkWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_09.bvh
+# SlowWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_10.bvh
+# LavishWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_11.bvh
+# TooCoolWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_12.bvh
+# SadWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_13.bvh
+# DepressedWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_14.bvh
+# ClumsyWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_15.bvh
+# QuickWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_17.bvh
+# CarefulWalk LookingAround
+BVH_walking_animation/cmuconvert-max-86-94/91/91_18.bvh
+# ShyWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_20.bvh
+# acheyWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_21.bvh
+# CasualQuickWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_22.bvh
+# CoolWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_23.bvh
+# HurtLegWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_24.bvh
+# DragBadLegWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_25.bvh
+# HurtStomachWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_26.bvh
+# SlowWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_27.bvh
+# GhettoWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_28.bvh
+# NormalWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_29.bvh
+# SexyWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_30.bvh
+# NormalWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_31.bvh
+# ScaredWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_32.bvh
+# MachoWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_33.bvh
+# NormalWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_34.bvh
+# TrafficWalk
+BVH_walking_animation/cmuconvert-max-86-94/91/91_35.bvh
+# WalkStraight
+BVH_walking_animation/cmuconvert-max-86-94/91/91_36.bvh
+# WalkForward
+BVH_walking_animation/cmuconvert-max-86-94/91/91_57.bvh
+# walkFigure8
+BVH_walking_animation/cmuconvert-max-86-94/91/91_62.bvh
+# Casual Walk
+BVH_walking_animation/cmuconvert-max-86-94/93/93_07.bvh

@@ -20,7 +20,12 @@ from mujoco_playground._src import wrapper
 from mujoco_playground.config import locomotion_params
 
 from biomechanics_env import BiomechanicsJoystickEnv, domain_randomize
-from config import RUNS_DIR, EnvConfig, TrainConfig
+from config import (
+    RUNS_DIR,
+    EnvConfig,
+    TrainConfig,
+    expand_reference_gait_files,
+)
 
 
 @contextmanager
@@ -665,6 +670,8 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = True):
             "reference_gait": env_config.reference_gait,
             "action_smoothing": env_config.action_smoothing,
         }
+        if env_config.reference_gait_file is not None:
+            config_overrides["reference_gait_file"] = env_config.reference_gait_file
         if env_config.init_qpos_file is not None:
             config_overrides["init_qpos_file"] = env_config.init_qpos_file
         if env_config.accurate_physics:
@@ -717,11 +724,31 @@ def main() -> None:
     )
     parser.add_argument(
         "--reference-gait",
-        choices=["none", "sine"],
+        choices=["none", "sine", "bvh"],
         default="none",
         help=(
-            "Opcioni pose-imitation prior: sine dodaje rucno dizajniranu "
-            "ciklicnu putanju nogu."
+            "Opcioni pose-imitation prior: sine je rucna cyclic putanja, "
+            "bvh koristi jednu ili vise BVH animacija."
+        ),
+    )
+    parser.add_argument(
+        "--reference-gait-file",
+        type=Path,
+        action="append",
+        default=None,
+        help=(
+            "BVH fajl za --reference-gait bvh. Moze se navesti vise puta; "
+            "env bira jedan reference clip po epizodi."
+        ),
+    )
+    parser.add_argument(
+        "--reference-gait-list",
+        type=Path,
+        action="append",
+        default=None,
+        help=(
+            "Text fajl sa jednim BVH path-om po liniji. Moze se navesti "
+            "vise puta za tier1+tier2 curriculum run."
         ),
     )
     parser.add_argument(
@@ -813,6 +840,10 @@ def main() -> None:
         playground_impl=args.playground_impl,
         command_profile=args.command_profile,
         reference_gait=args.reference_gait,
+        reference_gait_file=expand_reference_gait_files(
+            args.reference_gait_file,
+            args.reference_gait_list,
+        ),
         action_smoothing=args.action_smoothing,
         init_qpos_file=(
             str(args.init_qpos_file) if args.init_qpos_file is not None else None
