@@ -12,12 +12,25 @@ from config import BIOMECH_DIR, PROJECT_ROOT
 
 
 GENERATED_MODEL_DIR = PROJECT_ROOT / "generated_models"
-SCENE_XML_VERSION = "trainfast_v15"
+SCENE_XML_VERSION = "trainfast_v19"
 
 # Cache for the generator module to avoid reimporting
 _GENERATOR_CACHE = None
 
 FOOT_BODY_NAMES = ("left_foot", "right_foot")
+ILLEGAL_CONTACT_BODY_NAMES = (
+    "pelvis",
+    "left_thigh",
+    "right_thigh",
+    "left_shank",
+    "right_shank",
+)
+
+TERRAIN_CONTACT_TYPE = "1"
+FOOT_CONTACT_TYPE = "2"
+ILLEGAL_CONTACT_TYPE = "4"
+GROUND_CONTACT_AFFINITY = "1"
+NO_CONTACT_AFFINITY = "0"
 
 TRUNK_ACTUATED_JOINTS = (
     "abdomen_x",
@@ -90,6 +103,81 @@ TRUNK_JOINT_SPECS = {
     },
 }
 
+LEG_JOINT_SPECS = {
+    "left_hip_x": {
+        "range": "-30 45",
+        "damping": "2.0",
+        "frictionloss": "0.3",
+        "armature": "0.015",
+    },
+    "right_hip_x": {
+        "range": "-45 30",
+        "damping": "2.0",
+        "frictionloss": "0.3",
+        "armature": "0.015",
+    },
+    "left_hip_y": {
+        "range": "-22 22",
+        "damping": "2.0",
+        "frictionloss": "0.4",
+        "armature": "0.015",
+    },
+    "right_hip_y": {
+        "range": "-22 22",
+        "damping": "2.0",
+        "frictionloss": "0.4",
+        "armature": "0.015",
+    },
+    "left_hip_z": {
+        "range": "-30 60",
+        "damping": "2.0",
+        "frictionloss": "0.4",
+        "armature": "0.015",
+    },
+    "right_hip_z": {
+        "range": "-30 60",
+        "damping": "2.0",
+        "frictionloss": "0.4",
+        "armature": "0.015",
+    },
+    "left_knee_z": {
+        "range": "-135 0",
+        "damping": "2.5",
+        "frictionloss": "0.35",
+        "armature": "0.02",
+    },
+    "right_knee_z": {
+        "range": "-135 0",
+        "damping": "2.5",
+        "frictionloss": "0.35",
+        "armature": "0.02",
+    },
+    "left_ankle_y": {
+        "range": "-25 25",
+        "damping": "1.5",
+        "frictionloss": "0.25",
+        "armature": "0.01",
+    },
+    "right_ankle_y": {
+        "range": "-25 25",
+        "damping": "1.5",
+        "frictionloss": "0.25",
+        "armature": "0.01",
+    },
+    "left_ankle_z": {
+        "range": "-12 12",
+        "damping": "1.5",
+        "frictionloss": "0.3",
+        "armature": "0.01",
+    },
+    "right_ankle_z": {
+        "range": "-12 12",
+        "damping": "1.5",
+        "frictionloss": "0.3",
+        "armature": "0.01",
+    },
+}
+
 ACTUATOR_SPECS = {
     "abdomen_x": {"kp": "180", "ctrlrange": "-0.18 0.18", "forcerange": "-120 120"},
     "abdomen_y": {"kp": "180", "ctrlrange": "-0.14 0.14", "forcerange": "-120 120"},
@@ -104,27 +192,27 @@ ACTUATOR_SPECS = {
     },
     "left_hip_y": {
         "kp": "100",
-        "ctrlrange": "-0.698132 0.872665",
+        "ctrlrange": "-0.383972 0.383972",
         "forcerange": "-180 180",
     },
     "left_hip_z": {
         "kp": "100",
-        "ctrlrange": "-0.523599 1.745329",
+        "ctrlrange": "-0.523599 1.047198",
         "forcerange": "-180 180",
     },
     "left_knee_z": {
         "kp": "120",
-        "ctrlrange": "-2.617994 0.000000",
+        "ctrlrange": "-2.356194 0.000000",
         "forcerange": "-180 180",
     },
     "left_ankle_y": {
         "kp": "120",
-        "ctrlrange": "-0.523599 0.523599",
+        "ctrlrange": "-0.436332 0.436332",
         "forcerange": "-220 220",
     },
     "left_ankle_z": {
         "kp": "120",
-        "ctrlrange": "-0.349066 0.523599",
+        "ctrlrange": "-0.209440 0.209440",
         "forcerange": "-220 220",
     },
     "right_hip_x": {
@@ -134,27 +222,27 @@ ACTUATOR_SPECS = {
     },
     "right_hip_y": {
         "kp": "100",
-        "ctrlrange": "-0.698132 0.872665",
+        "ctrlrange": "-0.383972 0.383972",
         "forcerange": "-180 180",
     },
     "right_hip_z": {
         "kp": "100",
-        "ctrlrange": "-0.523599 1.745329",
+        "ctrlrange": "-0.523599 1.047198",
         "forcerange": "-180 180",
     },
     "right_knee_z": {
         "kp": "120",
-        "ctrlrange": "-2.617994 0.000000",
+        "ctrlrange": "-2.356194 0.000000",
         "forcerange": "-180 180",
     },
     "right_ankle_y": {
         "kp": "120",
-        "ctrlrange": "-0.523599 0.523599",
+        "ctrlrange": "-0.436332 0.436332",
         "forcerange": "-220 220",
     },
     "right_ankle_z": {
         "kp": "120",
-        "ctrlrange": "-0.349066 0.523599",
+        "ctrlrange": "-0.209440 0.209440",
         "forcerange": "-220 220",
     },
 }
@@ -320,6 +408,7 @@ def build_trainable_scene_xml(env_version: str, spec: HumanSpec) -> Path:
     add_passive_joint_damping(root)
     tune_passive_upper_body_joints(root)
     unlock_trunk_joints(root)
+    tune_leg_joints(root)
     remove_trunk_equality_locks(root)
     set_training_collision_filters(root)
     add_stable_foot_contacts(root)
@@ -408,6 +497,18 @@ def unlock_trunk_joints(root: ET.Element) -> None:
         joint.set("springref", "0")
 
 
+def tune_leg_joints(root: ET.Element) -> None:
+    """Ogranici noge na humanoidniji prostor bez zakljucavanja stride osa."""
+    worldbody = root.find("worldbody")
+    for joint in worldbody.iter("joint"):
+        spec = LEG_JOINT_SPECS.get(joint.get("name"))
+        if spec is None:
+            continue
+        joint.set("limited", "true")
+        for key, value in spec.items():
+            joint.set(key, value)
+
+
 def remove_trunk_equality_locks(root: ET.Element) -> None:
     """Ukloni generator lockove koji bi pregazili trunk aktuatore."""
     equality = root.find("equality")
@@ -427,7 +528,7 @@ def remove_trunk_equality_locks(root: ET.Element) -> None:
 
 
 def set_training_collision_filters(root: ET.Element) -> None:
-    """Ostavi kontakt samo za teren i dodate sole geometrije."""
+    """Ostavi foot kontakt i Unitree-style illegal lower-body kontakt."""
     worldbody = root.find("worldbody")
     for geom in worldbody.findall("geom"):
         mark_terrain_geom(geom)
@@ -436,11 +537,15 @@ def set_training_collision_filters(root: ET.Element) -> None:
 
 
 def mark_body_collision(body: ET.Element, in_foot: bool = False) -> None:
-    """Rekurzivno oznaci body geometrije kao visual-only ili foot collision."""
-    current_is_foot = in_foot or body.get("name") in FOOT_BODY_NAMES
-    for geom in body.findall("geom"):
+    """Rekurzivno oznaci geometrije kao foot, illegal-contact ili visual-only."""
+    body_name = body.get("name", "")
+    current_is_foot = in_foot or body_name in FOOT_BODY_NAMES
+    current_is_illegal_contact = body_name in ILLEGAL_CONTACT_BODY_NAMES
+    for geom_index, geom in enumerate(body.findall("geom")):
         if current_is_foot:
             mark_foot_geom(geom)
+        elif current_is_illegal_contact:
+            mark_illegal_contact_geom(geom, body_name, geom_index)
         else:
             mark_visual_only_geom(geom)
     for child in body.findall("body"):
@@ -449,26 +554,43 @@ def mark_body_collision(body: ET.Element, in_foot: bool = False) -> None:
 
 def mark_terrain_geom(geom: ET.Element) -> None:
     """Teren prima kontakt od stopala, ali ne pravi nepotrebne parove."""
-    geom.set("contype", "1")
-    geom.set("conaffinity", "0")
+    geom.set("contype", TERRAIN_CONTACT_TYPE)
+    geom.set("conaffinity", NO_CONTACT_AFFINITY)
     geom.set("condim", "3")
 
 
 def mark_foot_geom(geom: ET.Element) -> None:
     """Postojece foot geometrije ostaju fizicke, ali sole nosi glavni kontakt."""
-    geom.set("contype", "1")
-    geom.set("conaffinity", "1")
+    geom.set("contype", FOOT_CONTACT_TYPE)
+    geom.set("conaffinity", GROUND_CONTACT_AFFINITY)
     geom.set("condim", "3")
+
+
+def mark_illegal_contact_geom(
+    geom: ET.Element,
+    body_name: str,
+    geom_index: int,
+) -> None:
+    """Omoguci samo floor kontakt za pelvis/thigh/shank illegal-contact metrike."""
+    if not geom.get("name"):
+        suffix = "illegal_contact" if geom_index == 0 else f"illegal_contact_{geom_index}"
+        geom.set("name", f"{body_name}_{suffix}")
+    geom.set("contype", ILLEGAL_CONTACT_TYPE)
+    geom.set("conaffinity", GROUND_CONTACT_AFFINITY)
+    geom.set("condim", "1")
+    geom.set("friction", "0.6 0.01 0.001")
+    geom.set("solref", "0.02 1")
+    geom.set("solimp", "0.85 0.95 0.005")
 
 
 def mark_visual_only_geom(geom: ET.Element) -> None:
     """Geometrija ostaje vidljiva, ali ne ulazi u contact solver."""
     geom.set("contype", "0")
-    geom.set("conaffinity", "0")
+    geom.set("conaffinity", NO_CONTACT_AFFINITY)
 
 
 def add_stable_foot_contacts(root: ET.Element) -> None:
-    """Dodaj stabilan box djon za svaki foot body."""
+    """Dodaj v15-style stabilan box djon i ostavi originalni foot kao visual."""
     worldbody = root.find("worldbody")
     for body in worldbody.iter("body"):
         if body.get("name") not in FOOT_BODY_NAMES:
@@ -478,24 +600,25 @@ def add_stable_foot_contacts(root: ET.Element) -> None:
             mark_visual_only_geom(geom)
 
         sole_name = f"{body.get('name')}_sole"
-        if body.find(f"geom[@name='{sole_name}']") is not None:
-            continue
+        existing_sole = body.find(f"geom[@name='{sole_name}']")
+        if existing_sole is None:
+            existing_sole = ET.SubElement(
+                body,
+                "geom",
+                name=sole_name,
+                type="box",
+                pos="0.09 -0.045 0",
+                size="0.145 0.012 0.075",
+                rgba="0.1 0.1 0.1 0.35",
+            )
 
-        ET.SubElement(
-            body,
-            "geom",
-            name=sole_name,
-            type="box",
-            pos="0.09 -0.045 0",
-            size="0.145 0.012 0.075",
-            rgba="0.1 0.1 0.1 0.35",
-            friction="1.0 0.01 0.001",
-            solref="0.02 1",
-            solimp="0.85 0.95 0.005",
-            contype="1",
-            conaffinity="1",
-            condim="3",
-        )
+        mark_foot_geom(existing_sole)
+        existing_sole.set("type", "box")
+        existing_sole.set("pos", "0.09 -0.045 0")
+        existing_sole.set("size", "0.145 0.012 0.075")
+        existing_sole.set("friction", "1.0 0.01 0.001")
+        existing_sole.set("solref", "0.02 1")
+        existing_sole.set("solimp", "0.85 0.95 0.005")
 
 
 def add_terrain(root: ET.Element, env_version: str) -> None:
@@ -524,7 +647,7 @@ def add_terrain(root: ET.Element, env_version: str) -> None:
     )
 
     worldbody = root.find("worldbody")
-    ET.SubElement(
+    floor = ET.SubElement(
         worldbody,
         "geom",
         name="floor",
@@ -532,8 +655,8 @@ def add_terrain(root: ET.Element, env_version: str) -> None:
         size="0 0 0.01",
         material="groundplane",
         friction="0.8",
-        condim="3",
     )
+    mark_terrain_geom(floor)
     if env_version == "hardcore":
         add_rough_blocks(worldbody)
 
@@ -544,7 +667,7 @@ def add_rough_blocks(worldbody: ET.Element) -> None:
         x_pos = 0.7 + 0.45 * index
         y_pos = -0.45 if index % 2 else 0.35
         height = 0.025 + 0.01 * (index % 3)
-        ET.SubElement(
+        block = ET.SubElement(
             worldbody,
             "geom",
             name=f"rough_block_{index}",
@@ -553,8 +676,8 @@ def add_rough_blocks(worldbody: ET.Element) -> None:
             size=f"0.18 0.22 {height}",
             rgba=".55 .55 .55 1",
             friction="0.9",
-            condim="3",
         )
+        mark_terrain_geom(block)
 
 
 def add_actuators(root: ET.Element) -> None:

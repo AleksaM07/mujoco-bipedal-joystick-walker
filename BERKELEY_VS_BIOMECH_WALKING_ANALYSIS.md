@@ -112,6 +112,66 @@ Ne dokazuje jos:
 Ovo je vazna razlika. Rezultat nije neuspeh, ali ga ne treba prodati kao finalni
 realistican hod.
 
+## Najnoviji BVH tier1 rezultat
+
+BVH reference gait je uveden kao sledeci korak posle sine/style reward-a. To je
+tehnicki ispravan pravac jer policy vise ne dobija samo cilj "idi napred", nego i
+target joint-angle obrazac iz ljudskih walking clipova.
+
+Run:
+
+```text
+runs/biomechanics_noerfi_nodr_forward_ref_bvh_bvh_tier1_accurate_ppo_BiomechanicsHumanJoystickStandard_20260617_2118_60m_seed7_rew_1492p6453_best_1493p6858_s
+```
+
+Rezultat je paradoksalno dobar broj, ali los vizuelni hod:
+
+- reward oko `1493`,
+- epizode uglavnom pune duzine,
+- `foot_slip` ostaje visok,
+- `swing_drag` se saturira oko maksimuma,
+- stopala vizuelno klize.
+
+Zakljucak: BVH joint-angle reference nije dovoljan sam. Policy moze da lici na
+neke uglove iz hoda, a da stopala i dalje nemaju fizicki uverljiv kontakt. Zato
+sledeci korak mora biti anti-slip/contact-aware reward ili puniji mocap imitation
+koji prati i foot/root kinematiku, ne samo zglobove.
+
+Naknadni code review je nasao jos jaci problem: BVH target nije bio deo policy
+observation-a. Drugim recima, reward je trazio pracenje random BVH clip/frame-a,
+ali policy nije znala koji clip/frame trenutno treba da imitira. To znaci da
+prethodni BVH run nije bio cist test motion imitation-a; zadatak je bio delom
+skriven. Novi BVH run mora biti target-conditioned: policy vidi trenutni
+retargeted BVH target i no-lift phase je sinhronizovan sa BVH fazom.
+
+## Zakljucak posle DeepMimic/LocoMuJoCo/GMR review-a
+
+Pregled DRLoco, DeepMimic_mujoco, LocoMuJoCo i GMR potvrdjuje da je BVH pravac
+ispravan, ali i da "sirovi BVH u sest joint uglova" nije dovoljno jak imitation
+signal.
+
+Prakticna razlika:
+
+```text
+nas rani BVH setup:
+    hip/knee/ankle pose target
+
+DeepMimic/LocoMuJoCo/GMR smer:
+    root + qpos + qvel + end-effectors/sites + body targets + reference reset
+```
+
+Zato su poslednje promene usmerene na srednji korak:
+
+- dodati root height/velocity target iz BVH-a,
+- dodati foot/end-effector target preko MuJoCo FK,
+- dodati opcioni reference-state init,
+- zadrzati mali `tier1_debug_10.txt` za brze gate testove.
+
+Ovo jos nije pun GMR retargeting. GMR ostaje najbolji sledeci veliki korak ako
+treba "pravi" robot motion dataset sa `root_pos`, `root_rot`, `dof_pos` i body
+targetima. Ali za trenutni projekat ima smisla prvo proveriti da li ovaj srednji
+korak spasava kompatibilni V10 checkpoint.
+
 ## Sta dalje
 
 Postoje tri realna pravca.

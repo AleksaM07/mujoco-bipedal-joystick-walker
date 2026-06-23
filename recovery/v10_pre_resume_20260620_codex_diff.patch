@@ -1,0 +1,917 @@
+diff --git a/biomechanics_env.py b/biomechanics_env.py
+index 3903168..7e618a4 100644
+--- a/biomechanics_env.py
++++ b/biomechanics_env.py
+@@ -38,6 +38,8 @@ class BiomechanicsEnvConfig:
+     command_profile: str = "standard"
+     reference_gait: str = "none"
+     reference_gait_file: str | list[str] | None = None
++    reference_target_observation: bool = False
++    xml_path: str | None = None
+     command_resample_steps: int = 500
+     tracking_sigma: float = 0.25
+     action_noise_std: float = 0.03
+@@ -59,6 +61,8 @@ def default_config() -> config_dict.ConfigDict:
+         command_profile="standard",
+         reference_gait="none",
+         reference_gait_file=None,
++        reference_target_observation=False,
++        xml_path=None,
+         command_resample_steps=500,
+         tracking_sigma=0.25,
+         action_noise_std=0.03,
+@@ -117,6 +121,9 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+     FOOT_SOLE_GEOMS = ("left_foot_sole", "right_foot_sole")
+     FOOT_CONTACT_PRELOAD = 0.005
+     FOOT_CONTACT_HEIGHT = 0.095
++    FOOT_CONTACT_DISTANCE = 0.01
++    FORWARD_SLOW_COMMAND_RANGE = (0.02, 0.12)
++    FORWARD_SLOW_ZERO_COMMAND_PROBABILITY = 0.25
+     FORWARD_COMMAND_RANGE = (0.15, 0.35)
+     STEER_X_COMMAND_RANGE = (0.05, 0.60)
+     STEER_Y_COMMAND_RANGE = (-0.20, 0.20)
+@@ -153,15 +160,47 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+         "pelvis_y": 0.04,
+         "pelvis_z": 0.05,
+     }
++    LEG_ACTION_SCALE = {
++        "left_hip_x": 0.35,
++        "right_hip_x": 0.35,
++        "left_hip_y": 0.12,
++        "right_hip_y": 0.12,
++        "left_hip_z": 0.14,
++        "right_hip_z": 0.14,
++        "left_knee_z": 0.55,
++        "right_knee_z": 0.55,
++        "left_ankle_y": 0.24,
++        "right_ankle_y": 0.24,
++        "left_ankle_z": 0.08,
++        "right_ankle_z": 0.08,
++    }
++    POSTURE_STD_STANDING = {
++        "trunk": 0.06,
++        "hip_stride": 0.08,
++        "knee": 0.10,
++        "ankle_pitch": 0.07,
++        "hip_lateral": 0.06,
++        "ankle_lateral": 0.05,
++    }
++    POSTURE_STD_WALKING = {
++        "trunk": 0.09,
++        "hip_stride": 0.38,
++        "knee": 0.55,
++        "ankle_pitch": 0.24,
++        "hip_lateral": 0.14,
++        "ankle_lateral": 0.08,
++    }
+     INIT_TRUNK_NOISE = 0.005
+     INIT_LEG_NOISE = 0.02
+-    HEIGHT_PENALTY_START_RATIO = 0.8
++    HEIGHT_PENALTY_START_RATIO = 0.9
+     MIN_STANDING_HEIGHT_RATIO = 0.6
+     ALIVE_REWARD_SCALE = 0.05
+     ACTION_COST_SCALE = 0.01
+     ACTION_RATE_COST_SCALE = 0.005
+-    BASE_HEIGHT_REWARD_SCALE = 0.25
++    BASE_HEIGHT_REWARD_SCALE = 0.6
+     POSTURE_REWARD_SCALE = 0.02
++    VARIABLE_POSTURE_REWARD_SCALE = 0.45
++    VARIABLE_POSTURE_COST_SCALE = 0.08
+     TRUNK_POSTURE_COST_SCALE = 0.25
+     VELOCITY_TRACKING_REWARD_SCALE = 1.5
+     FORWARD_PROGRESS_REWARD_SCALE = 1.0
+@@ -172,16 +211,25 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+     ANGULAR_VELOCITY_COST_SCALE = 0.02
+     GAIT_PERIOD_STEPS = 50
+     FOOT_CLEARANCE_TARGET = 0.08
+-    FOOT_CLEARANCE_REWARD_SCALE = 0.8
+-    STANCE_CONTACT_REWARD_SCALE = 0.15
+-    FOOT_SLIP_COST_SCALE = 0.18
+-    SWING_FOOT_DRAG_COST_SCALE = 0.35
++    FOOT_CLEARANCE_REWARD_SCALE = 1.1
++    STANCE_CONTACT_REWARD_SCALE = 0.3
++    FOOT_SLIP_FREE_SPEED = 0.03
++    FOOT_SLIP_COST_SCALE = 1.0
++    SWING_FOOT_DRAG_COST_SCALE = 2.0
++    SWING_CLEARANCE_DEFICIT_COST_SCALE = 1.5
+     REFERENCE_GAIT_REWARD_SCALE = 0.35
+     REFERENCE_GAIT_ERROR_SCALE = 8.0
++    REFERENCE_VELOCITY_REWARD_SCALE = 0.15
++    REFERENCE_VELOCITY_ERROR_SCALE = 0.25
++    CONTACT_FORCE_COST_SCALE = 1e-4
++    CONTACT_FORCE_COST_CLIP = 1000.0
+     STUCK_COMMAND_THRESHOLD = 0.10
+     STUCK_VELOCITY_THRESHOLD = 0.05
+     STUCK_PENALTY = 1.0
+-    FALL_REWARD = -10.0
++    LOW_HEIGHT_COST_SCALE = 20.0
++    REWARD_MIN = -5.0
++    REWARD_MAX = 3.0
++    FALL_REWARD = -25.0
+ 
+     def __init__(
+         self,
+@@ -193,7 +241,11 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+         if config is None:
+             config = default_config()
+         super().__init__(config, config_overrides)
+-        self._xml_path = build_trainable_scene_xml(env_version, human_spec)
++        configured_xml_path = self._config.get("xml_path", None)
++        if configured_xml_path:
++            self._xml_path = resolve_project_path(configured_xml_path)
++        else:
++            self._xml_path = build_trainable_scene_xml(env_version, human_spec)
+         self._mj_model = mujoco.MjModel.from_xml_path(str(self._xml_path))
+         self._mj_model.opt.timestep = self._sim_dt
+         init_q = np.array(self._mj_model.keyframe("a-pose").qpos, copy=True)
+@@ -229,9 +281,19 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+             for joint_name in actuator_joint_names
+         ])
+         self._action_scale = jp.array([
+-            self.TRUNK_ACTION_SCALE.get(joint_name, self._config.action_scale)
++            self._joint_action_scale(joint_name)
+             for joint_name in actuator_joint_names
+         ])
++        posture_std_pairs = [
++            self._variable_posture_std_pair(joint_name)
++            for joint_name in actuator_joint_names
++        ]
++        self._posture_std_standing = jp.array([
++            std_pair[0] for std_pair in posture_std_pairs
++        ])
++        self._posture_std_walking = jp.array([
++            std_pair[1] for std_pair in posture_std_pairs
++        ])
+         self._init_actuator_noise = jp.array([
+             self.INIT_TRUNK_NOISE
+             if joint_name in TRUNK_ACTUATED_JOINTS
+@@ -271,6 +333,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+             {"right_knee_z": -0.45}.get(joint_name, 0.0)
+             for joint_name in actuator_joint_names
+         ])
++        self._left_knee_actuator_index = actuator_joint_names.index("left_knee_z")
++        self._right_knee_actuator_index = actuator_joint_names.index("right_knee_z")
+         self._actuator_qpos_lower_limits_np = np.array([
+             self._mj_model.jnt_range[joint_id, 0]
+             if self._mj_model.jnt_limited[joint_id]
+@@ -294,6 +358,9 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+             jp.expand_dims(self._default_ctrl, axis=0),
+             axis=0,
+         )
++        self._bvh_reference_qvel_targets = jp.zeros_like(
++            self._bvh_reference_qpos_targets
++        )
+         self._bvh_reference_frame_times = jp.array([self.dt], dtype=jp.float32)
+         self._bvh_reference_frame_counts = jp.array([1], dtype=jp.int32)
+         self._bvh_reference_clip_count = 1
+@@ -301,6 +368,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+         self._n_substeps = int(round(self._ctrl_dt / self._sim_dt))
+         self._torso_body_id = self._mj_model.body("thorax").id
+         self._head_body_id = self._mj_model.body("head").id
++        self._floor_geom_id = self._mj_model.geom("floor").id
+         self._left_foot_sole_geom_id = self._mj_model.geom("left_foot_sole").id
+         self._right_foot_sole_geom_id = self._mj_model.geom("right_foot_sole").id
+         self._foot_geom_ids = jp.array([
+@@ -308,6 +376,35 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+             self._right_foot_sole_geom_id,
+         ])
+ 
++    def _joint_action_scale(self, joint_name: str) -> float:
++        """Unitree-style action prior: stride joints move more than twist joints."""
++        global_scale = float(self._config.action_scale) / 0.5
++        if joint_name in self.TRUNK_ACTION_SCALE:
++            return self.TRUNK_ACTION_SCALE[joint_name] * global_scale
++        if joint_name in self.LEG_ACTION_SCALE:
++            return self.LEG_ACTION_SCALE[joint_name] * global_scale
++        return float(self._config.action_scale)
++
++    @classmethod
++    def _variable_posture_std_pair(cls, joint_name: str) -> tuple[float, float]:
++        """Vrati standing/walking toleranciju za promenljivi posture prior."""
++        if joint_name in TRUNK_ACTUATED_JOINTS:
++            category = "trunk"
++        elif joint_name in {"left_hip_x", "right_hip_x"}:
++            category = "hip_stride"
++        elif joint_name in {"left_knee_z", "right_knee_z"}:
++            category = "knee"
++        elif joint_name in {"left_ankle_y", "right_ankle_y"}:
++            category = "ankle_pitch"
++        elif joint_name in {"left_ankle_z", "right_ankle_z"}:
++            category = "ankle_lateral"
++        else:
++            category = "hip_lateral"
++        return (
++            cls.POSTURE_STD_STANDING[category],
++            cls.POSTURE_STD_WALKING[category],
++        )
++
+     def _configure_bvh_reference(self) -> None:
+         """Ucita BVH referencu ako je trazena u config-u."""
+         if self._config.get("reference_gait", "none") != "bvh":
+@@ -326,6 +423,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+             self._actuator_qpos_upper_limits_np,
+         )
+         self._bvh_reference_qpos_targets = jp.array(references.qpos_targets)
++        self._bvh_reference_qvel_targets = jp.array(references.qvel_targets)
+         self._bvh_reference_frame_times = jp.array(references.frame_times)
+         self._bvh_reference_frame_counts = jp.array(references.frame_counts)
+         self._bvh_reference_clip_count = len(references.source_paths)
+@@ -405,13 +503,36 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+                 mujoco.mjtObj.mjOBJ_GEOM,
+                 geom_name,
+             )
+-            geom_pos = data.geom_xpos[geom_id]
+-            geom_xmat = data.geom_xmat[geom_id].reshape(3, 3)
+-            geom_size = self._mj_model.geom_size[geom_id]
++            min_z = min(min_z, self._geom_min_z(data, geom_id))
++        return float(min_z)
++
++    def _geom_min_z(self, data: mujoco.MjData, geom_id: int) -> float:
++        """Proceni donju Z tacku za foot geom, uz ispravan capsule tretman."""
++        geom_pos = data.geom_xpos[geom_id]
++        geom_xmat = data.geom_xmat[geom_id].reshape(3, 3)
++        geom_size = self._mj_model.geom_size[geom_id]
++        geom_type = self._mj_model.geom_type[geom_id]
++
++        if geom_type == mujoco.mjtGeom.mjGEOM_BOX:
++            min_z = np.inf
+             for signs in product((-1.0, 1.0), repeat=3):
+                 corner = geom_pos + geom_xmat @ (geom_size * np.array(signs))
+                 min_z = min(min_z, corner[2])
+-        return float(min_z)
++            return float(min_z)
++
++        if geom_type == mujoco.mjtGeom.mjGEOM_SPHERE:
++            return float(geom_pos[2] - geom_size[0])
++
++        if geom_type == mujoco.mjtGeom.mjGEOM_CAPSULE:
++            radius = geom_size[0]
++            half_length = geom_size[1]
++            axis = geom_xmat[:, 2]
++            endpoint_a = geom_pos + axis * half_length
++            endpoint_b = geom_pos - axis * half_length
++            return float(min(endpoint_a[2], endpoint_b[2]) - radius)
++
++        # Conservative fallback for simple geoms that may appear in generated feet.
++        return float(geom_pos[2] - np.max(geom_size))
+ 
+     def reset(self, rng: jax.Array) -> mjx_env.State:
+         """Resetuje human u pocetnu pozu i uzorkuje joystick komandu."""
+@@ -465,9 +586,17 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+             "height": qpos[2],
+             "foot_slip": jp.array(0.0),
+             "swing_drag": jp.array(0.0),
++            "swing_clearance": jp.array(0.0),
++            "swing_clearance_deficit": jp.array(0.0),
+             "base_height": jp.array(1.0),
++            "variable_posture": jp.array(1.0),
+             "gait_reward": jp.array(0.0),
+             "reference_gait": jp.array(0.0),
++            "reference_velocity": jp.array(0.0),
++            "contact_force": jp.array(0.0),
++            "done_low_height": jp.array(0.0),
++            "done_tipped": jp.array(0.0),
++            "done_invalid": jp.array(0.0),
+             "done": jp.array(0.0),
+         }
+         return mjx_env.State(data, obs, jp.array(0.0), jp.array(0.0), metrics, info)
+@@ -517,11 +646,17 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+         obs = self._get_obs(data, info)
+         reward = self._get_reward(data, smoothed_action, previous_action, info)
+         done = self._get_done(data)
++        done_low_height, done_tipped, done_invalid = self._get_done_reasons(data)
+         foot_slip = self._get_foot_slip_cost(data, info)
+         swing_drag = self._get_swing_foot_drag_cost(data, info)
++        swing_clearance = self._get_swing_clearance(data, info)
++        swing_clearance_deficit = self._get_swing_clearance_deficit_cost(data, info)
+         base_height = self._get_base_height_reward(data)
++        variable_posture = self._get_variable_posture_reward(data, info)
+         gait_reward = self._get_gait_reward(data, info)
+         reference_gait = self._get_reference_gait_reward(data, info)
++        reference_velocity = self._get_reference_velocity_reward(data, info)
++        contact_force = self._get_contact_force_cost(data)
+         metrics = dict(state.metrics)
+         metrics["reward"] = reward
+         metrics["tracking_lin_vel"] = self._get_tracking_reward(data, info)
+@@ -533,9 +668,17 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+         metrics["height"] = data.qpos[2]
+         metrics["foot_slip"] = foot_slip
+         metrics["swing_drag"] = swing_drag
++        metrics["swing_clearance"] = swing_clearance
++        metrics["swing_clearance_deficit"] = swing_clearance_deficit
+         metrics["base_height"] = base_height
++        metrics["variable_posture"] = variable_posture
+         metrics["gait_reward"] = gait_reward
+         metrics["reference_gait"] = reference_gait
++        metrics["reference_velocity"] = reference_velocity
++        metrics["contact_force"] = contact_force
++        metrics["done_low_height"] = done_low_height.astype(reward.dtype)
++        metrics["done_tipped"] = done_tipped.astype(reward.dtype)
++        metrics["done_invalid"] = done_invalid.astype(reward.dtype)
+         metrics["done"] = done.astype(reward.dtype)
+         info["last_foot_xy"] = self._foot_xy(data)
+         return state.replace(
+@@ -549,19 +692,29 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+ 
+     def sample_command(self, rng: jax.Array) -> jax.Array:
+         """Uzorkuje ciljnu brzinu: napred/nazad, levo/desno, yaw."""
+-        if self._config.command_profile in ("forward", "walk"):
++        if self._config.command_profile in ("forward_slow", "forward", "walk"):
+             x_key, zero_key = jax.random.split(rng, 2)
++            command_range = (
++                self.FORWARD_SLOW_COMMAND_RANGE
++                if self._config.command_profile == "forward_slow"
++                else self.FORWARD_COMMAND_RANGE
++            )
++            zero_probability = (
++                self.FORWARD_SLOW_ZERO_COMMAND_PROBABILITY
++                if self._config.command_profile == "forward_slow"
++                else self.ZERO_COMMAND_PROBABILITY
++            )
+             command = jp.array([
+                 jax.random.uniform(
+                     x_key,
+-                    minval=self.FORWARD_COMMAND_RANGE[0],
+-                    maxval=self.FORWARD_COMMAND_RANGE[1],
++                    minval=command_range[0],
++                    maxval=command_range[1],
+                 ),
+                 0.0,
+                 0.0,
+             ])
+             return jp.where(
+-                jax.random.bernoulli(zero_key, p=self.ZERO_COMMAND_PROBABILITY),
++                jax.random.bernoulli(zero_key, p=zero_probability),
+                 jp.zeros(3),
+                 command,
+             )
+@@ -588,8 +741,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+         }
+         if self._config.command_profile not in command_ranges:
+             raise ValueError(
+-                "command_profile mora biti 'forward', 'walk', 'steer', "
+-                "'standard_easy' ili 'standard'."
++                "command_profile mora biti 'forward_slow', 'forward', 'walk', "
++                "'steer', 'standard_easy' ili 'standard'."
+             )
+ 
+         x_range, y_range, yaw_range, zero_probability = command_ranges[
+@@ -665,7 +818,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+         projected_gravity = self._projected_gravity(data)
+         joint_pos = data.qpos[7:] - self._default_qpos
+         joint_vel = data.qvel[6:]
+-        state_obs = jp.concatenate([
++        state_parts = [
+             local_linvel,
+             local_angvel,
+             projected_gravity,
+@@ -674,12 +827,16 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+             joint_pos,
+             joint_vel,
+             info["last_action"],
+-        ])
++        ]
++        if self._config.get("reference_target_observation", False):
++            state_parts.insert(5, self._get_reference_target_delta(info))
++        state_obs = jp.concatenate(state_parts)
+         state_obs = jp.nan_to_num(state_obs, nan=0.0, posinf=10.0, neginf=-10.0)
+         privileged_obs = jp.concatenate([
+             state_obs,
+             data.qpos[:3],
+             data.qvel[:6],
++            self._gymnasium_privileged_obs(data),
+             data.qfrc_actuator[self._actuator_dof_indices],
+             self._foot_positions(data).reshape(-1),
+             self._foot_contact(data),
+@@ -696,11 +853,40 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+             "privileged_state": privileged_obs,
+         }
+ 
++    def _gymnasium_privileged_obs(self, data: mjx.Data) -> jax.Array:
++        """Gymnasium Humanoid-style physical signals for the critic only."""
++        return jp.concatenate([
++            self._bounded_obs(data.cinert.reshape(-1), scale=0.01),
++            self._bounded_obs(data.cvel.reshape(-1), scale=0.1),
++            self._bounded_obs(data.cfrc_ext.reshape(-1), scale=0.01),
++        ])
++
++    def _bounded_obs(
++        self,
++        values: jax.Array,
++        scale: float = 1.0,
++        limit: float = 10.0,
++    ) -> jax.Array:
++        """Skaliraj i ogranici velike physics vrednosti pre critic inputa."""
++        values = jp.nan_to_num(values * scale, nan=0.0, posinf=limit, neginf=-limit)
++        return jp.clip(values, -limit, limit)
++
+     def _get_gait_phase_obs(self, info: dict) -> jax.Array:
+         """Dodaje clock signal politici za lakse uskladjivanje nogu."""
+         phase_angle = self._get_gait_phase_angle(info)
+         return jp.array([jp.sin(phase_angle), jp.cos(phase_angle)])
+ 
++    def _get_reference_target_delta(self, info: dict) -> jax.Array:
++        """Policy vidi trenutni reference target, inace uci skriveni zadatak."""
++        if self._config.get("reference_gait", "none") == "none":
++            return jp.zeros(self.action_size)
++        target_qpos = self._get_reference_gait_target(info)
++        return jp.where(
++            self._reference_gait_mask,
++            target_qpos - self._default_ctrl,
++            0.0,
++        )
++
+     def _get_reward(
+         self,
+         data: mjx.Data,
+@@ -755,6 +941,15 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+         )
+         posture_error = jp.mean(jp.square(actuator_position_error))
+         posture_reward = self.POSTURE_REWARD_SCALE * jp.exp(-posture_error)
++        variable_posture_error = self._get_variable_posture_error(data, info)
++        variable_posture_reward = (
++            self.VARIABLE_POSTURE_REWARD_SCALE
++            * jp.exp(-0.5 * variable_posture_error)
++        )
++        variable_posture_cost = (
++            self.VARIABLE_POSTURE_COST_SCALE
++            * jp.maximum(variable_posture_error - 1.0, 0.0)
++        )
+         trunk_error = jp.sum(
+             jp.square(jp.where(self._trunk_actuator_mask, actuator_position_error, 0.0))
+         )
+@@ -763,10 +958,19 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+             self._get_base_height_reward(data)
+         )
+         gait_reward = self._get_gait_reward(data, info)
++        swing_clearance_deficit_cost = (
++            self.SWING_CLEARANCE_DEFICIT_COST_SCALE
++            * self._get_swing_clearance_deficit_cost(data, info)
++        )
+         reference_gait_reward = (
+             self.REFERENCE_GAIT_REWARD_SCALE
+             * self._get_reference_gait_rew…2092 tokens truncated…ask), 1.0)
++        velocity_error = jp.sum(jp.square(qvel_error)) / active_joint_count
++        velocity_reward = jp.exp(
++            -self.REFERENCE_VELOCITY_ERROR_SCALE * velocity_error
++        )
++        command_active = jp.linalg.norm(info["command"]) > self.STUCK_COMMAND_THRESHOLD
++        return jp.where(command_active, velocity_reward, 0.0)
++
+     def _get_reference_gait_target(self, info: dict) -> jax.Array:
+         """Vrati target pozu za aktivni reference gait izvor."""
+         if self._config.get("reference_gait", "none") == "bvh":
+@@ -907,6 +1193,16 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+ 
+     def _get_bvh_reference_gait_target(self, info: dict) -> jax.Array:
+         """Vrati retargetovanu BVH pozu najblizu trenutnom env vremenu."""
++        clip_id, frame_index = self._get_bvh_reference_frame(info)
++        return self._bvh_reference_qpos_targets[clip_id, frame_index]
++
++    def _get_bvh_reference_velocity_target(self, info: dict) -> jax.Array:
++        """Vrati retargetovanu BVH joint brzinu za trenutni frame."""
++        clip_id, frame_index = self._get_bvh_reference_frame(info)
++        return self._bvh_reference_qvel_targets[clip_id, frame_index]
++
++    def _get_bvh_reference_frame(self, info: dict) -> tuple[jax.Array, jax.Array]:
++        """Vrati aktivni BVH clip i frame indeks."""
+         clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
+         frame_count = self._bvh_reference_frame_counts[clip_id]
+         frame_time = self._bvh_reference_frame_times[clip_id]
+@@ -916,7 +1212,40 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+             / frame_time
+         )
+         frame_index = jp.mod(jp.floor(frame_float).astype(jp.int32), frame_count)
+-        return self._bvh_reference_qpos_targets[clip_id, frame_index]
++        return clip_id, frame_index
++
++    def _get_variable_posture_reward(
++        self,
++        data: mjx.Data,
++        info: dict,
++    ) -> jax.Array:
++        """Reward za Unitree-style pose prior sa tolerancijom koja zavisi od hoda."""
++        return jp.exp(-0.5 * self._get_variable_posture_error(data, info))
++
++    def _get_variable_posture_error(
++        self,
++        data: mjx.Data,
++        info: dict,
++    ) -> jax.Array:
++        """Normalizovana greska poze: kruto dok stoji, labavije dok hoda."""
++        actuator_position_error = (
++            data.qpos[self._actuator_qpos_indices] - self._default_ctrl
++        )
++        posture_std = self._get_variable_posture_std(info)
++        normalized_error = actuator_position_error / jp.maximum(posture_std, 1e-6)
++        return jp.mean(jp.square(normalized_error))
++
++    def _get_variable_posture_std(self, info: dict) -> jax.Array:
++        """Interpolira standing/walking joint tolerancije iz trenutnog command-a."""
++        command_speed = (
++            jp.linalg.norm(info["command"][:2])
++            + 0.25 * jp.abs(info["command"][2])
++        )
++        walking_alpha = jp.clip((command_speed - 0.05) / 0.35, 0.0, 1.0)
++        return (
++            (1.0 - walking_alpha) * self._posture_std_standing
++            + walking_alpha * self._posture_std_walking
++        )
+ 
+     def _get_base_height_reward(self, data: mjx.Data) -> jax.Array:
+         """Mala gusta nagrada za drzanje root visine blizu pocetne stojece poze."""
+@@ -936,14 +1265,36 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
+         return self._foot_positions(data)[:, 2]
+ 
+     def _foot_contact(self, data: mjx.Data) -> jax.Array:
+-        """Pseudo contact iz visine stopala; dovoljno stabilno za reward/critic."""
+-        return (self._foot_heights(data) < self.FOOT_CONTACT_HEIGHT).astype(jp.float32)
++        """Kontakt stopala sa podom iz MuJoCo contact parova, ne samo iz visine."""
++        contact_geom = data.contact.geom
++        geom_a = contact_geom[:, 0]
++        geom_b = contact_geom[:, 1]
++        valid_contact = data.contact.dist <= self.FOOT_CONTACT_DISTANCE
++
++        def touches_floor(foot_geom_id: int) -> jax.Array:
++            foot_floor = (
++                ((geom_a == foot_geom_id) & (geom_b == self._floor_geom_id))
++                | ((geom_b == foot_geom_id) & (geom_a == self._floor_geom_id))
++            )
++            return jp.any(foot_floor & valid_contact).astype(jp.float32)
++
++        return jp.array([
++            touches_floor(self._left_foot_sole_geom_id),
++            touches_floor(self._right_foot_sole_geom_id),
++        ])
+ 
+     def _get_foot_slip_cost(self, data: mjx.Data, info: dict) -> jax.Array:
+         """Kazni horizontalno klizanje stopala dok je stopalo u kontaktu."""
+         foot_velocity_xy = (self._foot_xy(data) - info["last_foot_xy"]) / self.dt
+         slip_speed = jp.linalg.norm(foot_velocity_xy, axis=1)
+-        return jp.sum(slip_speed * self._foot_contact(data))
++        slip_speed = jp.maximum(slip_speed - self.FOOT_SLIP_FREE_SPEED, 0.0)
++        return jp.sum(jp.square(slip_speed) * self._foot_contact(data))
++
++    def _get_contact_force_cost(self, data: mjx.Data) -> jax.Array:
++        """Gymnasium-style mala kazna za prevelike spoljne kontakt sile."""
++        force_cost = jp.sum(jp.square(data.cfrc_ext))
++        force_cost = jp.clip(force_cost, 0.0, self.CONTACT_FORCE_COST_CLIP)
++        return self.CONTACT_FORCE_COST_SCALE * force_cost
+ 
+     def _body_xmat(self, data: mjx.Data) -> jax.Array:
+         """Vraca 3x3 rotaciju toraksa iz body-local u world frame."""
+diff --git a/config.py b/config.py
+index 11273da..64d900c 100644
+--- a/config.py
++++ b/config.py
+@@ -116,6 +116,11 @@ class EnvConfig:
+     # "none" koristi samo task/style reward bez explicit pose imitation.
+     reference_gait: str = "none"
+     reference_gait_file: str | list[str] | None = None
++    reference_target_observation: bool = False
++
++    # Opcioni konkretan XML model. Korisno za nastavak starog checkpoint-a kada
++    # je globalni generated XML version u kodu vec promenjen.
++    xml_path: str | None = None
+ 
+     # Referentni humanoid walking setup filtrira targete pre PD kontrole.
+     # 0.5 znaci: pola nova akcija politike, pola prethodni target.
+@@ -151,6 +156,7 @@ class TrainConfig:
+     num_timesteps: int | None = None
+     num_evals: int | None = None
+     num_envs: int | None = None
++    num_eval_envs: int | None = None
+     episode_length: int | None = None
+     unroll_length: int | None = None
+     batch_size: int | None = None
+diff --git a/evaluate.py b/evaluate.py
+index 2d1966e..85a9675 100644
+--- a/evaluate.py
++++ b/evaluate.py
+@@ -116,7 +116,14 @@ def infer_command_profile(checkpoint_path: Path) -> str:
+     run_config = find_run_config(checkpoint_path)
+     if run_config is not None:
+         profile = run_config.get("env", {}).get("command_profile")
+-        if profile in {"forward", "walk", "steer", "standard_easy", "standard"}:
++        if profile in {
++            "forward_slow",
++            "forward",
++            "walk",
++            "steer",
++            "standard_easy",
++            "standard",
++        }:
+             return profile
+ 
+     obs_size = read_checkpoint_observation_size(checkpoint_path)
+@@ -133,6 +140,14 @@ def infer_init_qpos_file(checkpoint_path: Path) -> str | None:
+     return run_config.get("env", {}).get("init_qpos_file")
+ 
+ 
++def infer_xml_path(checkpoint_path: Path) -> str | None:
++    """Procitaj konkretan XML path iz run configa ako postoji."""
++    run_config = find_run_config(checkpoint_path)
++    if run_config is None:
++        return None
++    return run_config.get("env", {}).get("xml_path")
++
++
+ def infer_reference_gait(checkpoint_path: Path) -> str:
+     """Procitaj reference_gait iz run configa."""
+     run_config = find_run_config(checkpoint_path)
+@@ -152,6 +167,14 @@ def infer_reference_gait_file(checkpoint_path: Path) -> str | list[str] | None:
+     return run_config.get("env", {}).get("reference_gait_file")
+ 
+ 
++def infer_reference_target_observation(checkpoint_path: Path) -> bool:
++    """Procitaj da li checkpoint ocekuje BVH target u policy observation-u."""
++    run_config = find_run_config(checkpoint_path)
++    if run_config is None:
++        return False
++    return bool(run_config.get("env", {}).get("reference_target_observation", False))
++
++
+ def find_run_config(checkpoint_path: Path) -> dict | None:
+     """Nadji config.json u roditeljskom run direktorijumu checkpointa."""
+     for path in (checkpoint_path, *checkpoint_path.parents):
+@@ -425,7 +448,15 @@ def main():
+     )
+     parser.add_argument(
+         "--command-profile",
+-        choices=["auto", "forward", "walk", "steer", "standard_easy", "standard"],
++        choices=[
++            "auto",
++            "forward_slow",
++            "forward",
++            "walk",
++            "steer",
++            "standard_easy",
++            "standard",
++        ],
+         default="auto",
+     )
+     parser.add_argument(
+@@ -447,6 +478,7 @@ def main():
+     )
+     parser.add_argument("--action-smoothing", type=float, default=0.5)
+     parser.add_argument("--init-qpos-file", type=Path, default=None)
++    parser.add_argument("--xml-path", type=Path, default=None)
+     parser.add_argument("--command-x", type=float, default=None)
+     parser.add_argument("--command-y", type=float, default=0.0)
+     parser.add_argument("--command-yaw", type=float, default=0.0)
+@@ -484,6 +516,11 @@ def main():
+         if args.init_qpos_file is not None
+         else infer_init_qpos_file(args.checkpoint)
+     )
++    xml_path = (
++        str(args.xml_path)
++        if args.xml_path is not None
++        else infer_xml_path(args.checkpoint)
++    )
+     reference_gait = (
+         infer_reference_gait(args.checkpoint)
+         if args.reference_gait == "auto"
+@@ -494,15 +531,21 @@ def main():
+             args.reference_gait_file,
+             args.reference_gait_list,
+         )
++        reference_target_observation = reference_gait == "bvh"
+     else:
+         reference_gait_file = infer_reference_gait_file(args.checkpoint)
++        reference_target_observation = infer_reference_target_observation(
++            args.checkpoint
++        )
+     print(
+         "eval config | "
+         f"command_profile={command_profile} | "
+         f"command_x={command_x} | "
+         f"init_qpos_file={init_qpos_file} | "
++        f"xml_path={xml_path} | "
+         f"reference_gait={reference_gait} | "
+-        f"reference_gait_file={reference_gait_file}",
++        f"reference_gait_file={reference_gait_file} | "
++        f"reference_target_observation={reference_target_observation}",
+         flush=True,
+     )
+ 
+@@ -513,6 +556,8 @@ def main():
+         command_profile=command_profile,
+         reference_gait=reference_gait,
+         reference_gait_file=reference_gait_file,
++        reference_target_observation=reference_target_observation,
++        xml_path=xml_path,
+         action_smoothing=args.action_smoothing,
+         init_qpos_file=init_qpos_file,
+         accurate_physics=not args.fast_physics,
+@@ -588,8 +633,11 @@ def make_environment(env_config: EnvConfig):
+         "enable_erfi": False,
+         "command_profile": env_config.command_profile,
+         "reference_gait": env_config.reference_gait,
++        "reference_target_observation": env_config.reference_target_observation,
+         "action_smoothing": env_config.action_smoothing,
+     }
++    if env_config.xml_path is not None:
++        config_overrides["xml_path"] = env_config.xml_path
+     if env_config.reference_gait_file is not None:
+         config_overrides["reference_gait_file"] = env_config.reference_gait_file
+     if env_config.init_qpos_file is not None:
+diff --git a/train.py b/train.py
+index 1e81207..d2e9c8f 100644
+--- a/train.py
++++ b/train.py
+@@ -21,6 +21,7 @@ from mujoco_playground.config import locomotion_params
+ 
+ from biomechanics_env import BiomechanicsJoystickEnv, domain_randomize
+ from config import (
++    PROJECT_ROOT,
+     RUNS_DIR,
+     EnvConfig,
+     TrainConfig,
+@@ -52,8 +53,16 @@ class TrainingProgressLogger:
+         ("eval/episode_height", "height"),
+         ("eval/episode_foot_slip", "foot_slip"),
+         ("eval/episode_swing_drag", "swing_drag"),
++        ("eval/episode_swing_clearance", "swing_clear"),
++        ("eval/episode_swing_clearance_deficit", "clear_deficit"),
++        ("eval/episode_variable_posture", "var_pose"),
+         ("eval/episode_gait_reward", "gait"),
+         ("eval/episode_reference_gait", "ref_gait"),
++        ("eval/episode_reference_velocity", "ref_vel"),
++        ("eval/episode_contact_force", "contact_force"),
++        ("eval/episode_done_low_height", "done_low"),
++        ("eval/episode_done_tipped", "done_tip"),
++        ("eval/episode_done_invalid", "done_nan"),
+         ("eval/episode_done", "done"),
+     )
+ 
+@@ -265,6 +274,46 @@ def close_file_logger() -> None:
+     logger.add(lambda msg: print(msg, end=""), level="INFO")
+ 
+ 
++def resolve_resume_checkpoint_path(path: str | Path | None) -> Path | None:
++    """Resolve checkpoint, checkpoints dir, or run dir to a concrete checkpoint."""
++    if path is None:
++        return None
++
++    candidate = Path(path).expanduser()
++    if not candidate.is_absolute():
++        candidate = PROJECT_ROOT / candidate
++    candidate = candidate.resolve(strict=False)
++
++    if is_checkpoint_dir(candidate):
++        return candidate
++
++    checkpoint_root = candidate / "checkpoints"
++    if checkpoint_root.is_dir():
++        return latest_checkpoint_dir(checkpoint_root)
++
++    if candidate.is_dir():
++        return latest_checkpoint_dir(candidate)
++
++    return candidate
++
++
++def is_checkpoint_dir(path: Path) -> bool:
++    """Brax/Orbax checkpoint dirs contain a network config metadata file."""
++    return path.is_dir() and (path / "ppo_network_config.json").exists()
++
++
++def latest_checkpoint_dir(checkpoint_root: Path) -> Path:
++    """Find the numerically latest checkpoint under a checkpoints directory."""
++    checkpoint_dirs = [
++        path
++        for path in checkpoint_root.iterdir()
++        if path.is_dir() and path.name.isdigit()
++    ]
++    if not checkpoint_dirs:
++        raise FileNotFoundError(f"Nema checkpoint foldera u {checkpoint_root}")
++    return max(checkpoint_dirs, key=lambda path: int(path.name))
++
++
+ def make_ppo_config(
+     env_name: str,
+     env_config: EnvConfig,
+@@ -283,6 +332,7 @@ def make_ppo_config(
+         "num_timesteps": train_config.num_timesteps,
+         "num_evals": train_config.num_evals,
+         "num_envs": train_config.num_envs,
++        "num_eval_envs": train_config.num_eval_envs,
+         "episode_length": train_config.episode_length,
+         "unroll_length": train_config.unroll_length,
+         "batch_size": train_config.batch_size,
+@@ -389,11 +439,8 @@ def run_training(
+         if train_config.checkpoint_out
+         else run_dir / "checkpoints"
+     )
+-    restore_checkpoint_path = (
+-        str(Path(train_config.resume_from).expanduser().resolve(strict=False))
+-        if train_config.resume_from
+-        else None
+-    )
++    restore_checkpoint = resolve_resume_checkpoint_path(train_config.resume_from)
++    restore_checkpoint_path = str(restore_checkpoint) if restore_checkpoint else None
+     run_dir.mkdir(parents=True, exist_ok=True)
+     if train_config.save_checkpoints:
+         checkpoint_dir.mkdir(parents=True, exist_ok=True)
+@@ -530,7 +577,8 @@ def log_environment_summary(env, label: str = "env") -> None:
+         "{} summary | nq={} | nv={} | nu={} | nbody={} | ngeom={} | "
+         "nsite={} | action_size={} | substeps={} | erfi_enabled={} | "
+         "command_profile={} | action_smoothing={} | rfi_limit={} | "
+-        "rao_limit={} | init_qpos_file={} | xml={}",
++        "rao_limit={} | reference_target_observation={} | "
++        "init_qpos_file={} | xml={}",
+         label,
+         model.nq,
+         model.nv,
+@@ -545,6 +593,7 @@ def log_environment_summary(env, label: str = "env") -> None:
+         getattr(env._config, "action_smoothing", None),
+         getattr(env._config, "rfi_torque_limit", None),
+         getattr(env._config, "rao_torque_limit", None),
++        getattr(env._config, "reference_target_observation", None),
+         getattr(env._config, "init_qpos_file", None),
+         getattr(env, "xml_path", None),
+     )
+@@ -668,8 +717,11 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = True):
+             "enable_erfi": enable_erfi,
+             "command_profile": env_config.command_profile,
+             "reference_gait": env_config.reference_gait,
++            "reference_target_observation": env_config.reference_target_observation,
+             "action_smoothing": env_config.action_smoothing,
+         }
++        if env_config.xml_path is not None:
++            config_overrides["xml_path"] = env_config.xml_path
+         if env_config.reference_gait_file is not None:
+             config_overrides["reference_gait_file"] = env_config.reference_gait_file
+         if env_config.init_qpos_file is not None:
+@@ -708,12 +760,19 @@ def main() -> None:
+     )
+     parser.add_argument(
+         "--command-profile",
+-        choices=["forward", "walk", "steer", "standard_easy", "standard"],
++        choices=[
++            "forward_slow",
++            "forward",
++            "walk",
++            "steer",
++            "standard_easy",
++            "standard",
++        ],
+         default="standard",
+         help=(
+             "standard je pun joystick; standard_easy je meksi svi-pravci "
+-            "curriculum; steer je forward + skretanje; forward je samo "
+-            "bootstrap curriculum; walk je forward sa gait-clock setupom."
++            "curriculum; steer je forward + skretanje; forward_slow/forward "
++            "su bootstrap curriculum; walk je forward sa gait-clock setupom."
+         ),
+     )
+     parser.add_argument(
+@@ -760,8 +819,18 @@ def main() -> None:
+             "MJDATA_neutral_poze.TXT."
+         ),
+     )
++    parser.add_argument(
++        "--xml-path",
++        type=Path,
++        default=None,
++        help=(
++            "Opcioni konkretan generated XML za trening/resume. Korisno kada "
++            "nastavljas checkpoint treniran na starijem XML version-u."
++        ),
++    )
+     parser.add_argument("--timesteps", type=int, default=None)
+     parser.add_argument("--num-envs", type=int, default=None)
++    parser.add_argument("--num-eval-envs", type=int, default=None)
+     parser.add_argument("--num-evals", type=int, default=None)
+     parser.add_argument("--episode-length", type=int, default=None)
+     parser.add_argument("--batch-size", type=int, default=None)
+@@ -805,8 +874,9 @@ def main() -> None:
+         type=Path,
+         default=None,
+         help=(
+-            "Putanja do kompatibilnog Brax/Orbax checkpointa za nastavak "
+-            "treninga. Mora biti isti env/action/obs/network setup."
++            "Putanja do kompatibilnog Brax/Orbax checkpointa, checkpoints "
++            "foldera ili run foldera. Ako je folder, koristi najnoviji "
++            "numericki checkpoint. Mora biti isti env/action/obs/network setup."
+         ),
+     )
+     parser.add_argument(
+@@ -844,6 +914,8 @@ def main() -> None:
+             args.reference_gait_file,
+             args.reference_gait_list,
+         ),
++        reference_target_observation=args.reference_gait == "bvh",
++        xml_path=str(args.xml_path) if args.xml_path is not None else None,
+         action_smoothing=args.action_smoothing,
+         init_qpos_file=(
+             str(args.init_qpos_file) if args.init_qpos_file is not None else None
+@@ -858,6 +930,7 @@ def main() -> None:
+         if args.num_evals is not None
+         else debug_defaults.get("num_evals"),
+         num_envs=args.num_envs or debug_defaults.get("num_envs"),
++        num_eval_envs=args.num_eval_envs,
+         episode_length=args.episode_length or debug_defaults.get("episode_length"),
+         unroll_length=debug_defaults.get("unroll_length"),
+         batch_size=args.batch_size or debug_defaults.get("batch_size"),
+warning: in the working copy of 'biomechanics_env.py', CRLF will be replaced by LF the next time Git touches it

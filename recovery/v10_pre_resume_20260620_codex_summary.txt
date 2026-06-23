@@ -1,0 +1,6 @@
+Recovered from Codex local session log.
+Session: C:\Users\aleks\.codex\sessions\2026\06\20\rollout-2026-06-20T22-35-02-019ee6be-6482-73e1-8c8d-2e01d594219c.jsonl
+JSONL line: 384
+Timestamp UTC: 2026-06-20T21:39:54.461Z
+Meaning: git diff for config.py, biomechanics_env.py, train.py, evaluate.py from the June 20/21 session shortly before the V10 resume run.
+This file is evidence only; it has not been applied.

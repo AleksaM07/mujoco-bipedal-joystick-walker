@@ -116,7 +116,14 @@ def infer_command_profile(checkpoint_path: Path) -> str:
     run_config = find_run_config(checkpoint_path)
     if run_config is not None:
         profile = run_config.get("env", {}).get("command_profile")
-        if profile in {"forward", "walk", "steer", "standard_easy", "standard"}:
+        if profile in {
+            "forward_slow",
+            "forward",
+            "walk",
+            "steer",
+            "standard_easy",
+            "standard",
+        }:
             return profile
 
     obs_size = read_checkpoint_observation_size(checkpoint_path)
@@ -131,6 +138,14 @@ def infer_init_qpos_file(checkpoint_path: Path) -> str | None:
     if run_config is None:
         return None
     return run_config.get("env", {}).get("init_qpos_file")
+
+
+def infer_xml_path(checkpoint_path: Path) -> str | None:
+    """Procitaj konkretan XML path iz run configa ako postoji."""
+    run_config = find_run_config(checkpoint_path)
+    if run_config is None:
+        return None
+    return run_config.get("env", {}).get("xml_path")
 
 
 def infer_reference_gait(checkpoint_path: Path) -> str:
@@ -150,6 +165,38 @@ def infer_reference_gait_file(checkpoint_path: Path) -> str | list[str] | None:
     if run_config is None:
         return None
     return run_config.get("env", {}).get("reference_gait_file")
+
+
+def infer_reference_target_observation(checkpoint_path: Path) -> bool:
+    """Procitaj da li checkpoint ocekuje BVH target u policy observation-u."""
+    run_config = find_run_config(checkpoint_path)
+    if run_config is None:
+        return False
+    return bool(run_config.get("env", {}).get("reference_target_observation", False))
+
+
+def infer_reference_phase_randomization(checkpoint_path: Path) -> bool:
+    """Procitaj da li je trening koristio random BVH phase offset."""
+    run_config = find_run_config(checkpoint_path)
+    if run_config is None:
+        return False
+    return bool(run_config.get("env", {}).get("reference_phase_randomization", False))
+
+
+def infer_reference_state_init(checkpoint_path: Path) -> bool:
+    """Procitaj da li je trening koristio BVH random state initialization."""
+    run_config = find_run_config(checkpoint_path)
+    if run_config is None:
+        return False
+    return bool(run_config.get("env", {}).get("reference_state_init", False))
+
+
+def infer_legacy_action_prior(checkpoint_path: Path) -> bool:
+    """Procitaj da li checkpoint ocekuje stariji action scaling."""
+    run_config = find_run_config(checkpoint_path)
+    if run_config is None:
+        return False
+    return bool(run_config.get("env", {}).get("legacy_action_prior", False))
 
 
 def find_run_config(checkpoint_path: Path) -> dict | None:
@@ -425,7 +472,15 @@ def main():
     )
     parser.add_argument(
         "--command-profile",
-        choices=["auto", "forward", "walk", "steer", "standard_easy", "standard"],
+        choices=[
+            "auto",
+            "forward_slow",
+            "forward",
+            "walk",
+            "steer",
+            "standard_easy",
+            "standard",
+        ],
         default="auto",
     )
     parser.add_argument(
@@ -447,6 +502,10 @@ def main():
     )
     parser.add_argument("--action-smoothing", type=float, default=0.5)
     parser.add_argument("--init-qpos-file", type=Path, default=None)
+    parser.add_argument("--reference-phase-randomization", action="store_true")
+    parser.add_argument("--reference-state-init", action="store_true")
+    parser.add_argument("--xml-path", type=Path, default=None)
+    parser.add_argument("--legacy-action-prior", action="store_true")
     parser.add_argument("--command-x", type=float, default=None)
     parser.add_argument("--command-y", type=float, default=0.0)
     parser.add_argument("--command-yaw", type=float, default=0.0)
@@ -484,6 +543,11 @@ def main():
         if args.init_qpos_file is not None
         else infer_init_qpos_file(args.checkpoint)
     )
+    xml_path = (
+        str(args.xml_path)
+        if args.xml_path is not None
+        else infer_xml_path(args.checkpoint)
+    )
     reference_gait = (
         infer_reference_gait(args.checkpoint)
         if args.reference_gait == "auto"
@@ -494,15 +558,35 @@ def main():
             args.reference_gait_file,
             args.reference_gait_list,
         )
+        reference_target_observation = reference_gait == "bvh"
     else:
         reference_gait_file = infer_reference_gait_file(args.checkpoint)
+        reference_target_observation = infer_reference_target_observation(
+            args.checkpoint
+        )
+    reference_phase_randomization = (
+        args.reference_phase_randomization
+        or infer_reference_phase_randomization(args.checkpoint)
+    )
+    reference_state_init = (
+        args.reference_state_init or infer_reference_state_init(args.checkpoint)
+    )
+    legacy_action_prior = (
+        args.legacy_action_prior or infer_legacy_action_prior(args.checkpoint)
+    )
+
     print(
         "eval config | "
         f"command_profile={command_profile} | "
         f"command_x={command_x} | "
         f"init_qpos_file={init_qpos_file} | "
+        f"xml_path={xml_path} | "
+        f"legacy_action_prior={legacy_action_prior} | "
         f"reference_gait={reference_gait} | "
-        f"reference_gait_file={reference_gait_file}",
+        f"reference_gait_file={reference_gait_file} | "
+        f"reference_target_observation={reference_target_observation} | "
+        f"reference_phase_randomization={reference_phase_randomization} | "
+        f"reference_state_init={reference_state_init}",
         flush=True,
     )
 
@@ -513,6 +597,11 @@ def main():
         command_profile=command_profile,
         reference_gait=reference_gait,
         reference_gait_file=reference_gait_file,
+        reference_target_observation=reference_target_observation,
+        reference_phase_randomization=reference_phase_randomization,
+        reference_state_init=reference_state_init,
+        xml_path=xml_path,
+        legacy_action_prior=legacy_action_prior,
         action_smoothing=args.action_smoothing,
         init_qpos_file=init_qpos_file,
         accurate_physics=not args.fast_physics,
@@ -588,8 +677,14 @@ def make_environment(env_config: EnvConfig):
         "enable_erfi": False,
         "command_profile": env_config.command_profile,
         "reference_gait": env_config.reference_gait,
+        "reference_target_observation": env_config.reference_target_observation,
+        "reference_phase_randomization": env_config.reference_phase_randomization,
+        "reference_state_init": env_config.reference_state_init,
         "action_smoothing": env_config.action_smoothing,
+        "legacy_action_prior": env_config.legacy_action_prior,
     }
+    if env_config.xml_path is not None:
+        config_overrides["xml_path"] = env_config.xml_path
     if env_config.reference_gait_file is not None:
         config_overrides["reference_gait_file"] = env_config.reference_gait_file
     if env_config.init_qpos_file is not None:
