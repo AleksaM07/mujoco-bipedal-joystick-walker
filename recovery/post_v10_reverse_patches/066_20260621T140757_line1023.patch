@@ -1,0 +1,25 @@
+diff --git a/evaluate.py b/evaluate.py
+--- a/evaluate.py
++++ b/evaluate.py
+@@ -480,2 +480,4 @@
+     parser.add_argument("--init-qpos-file", type=Path, default=None)
++    parser.add_argument("--reference-phase-randomization", action="store_true")
++    parser.add_argument("--reference-state-init", action="store_true")
+     parser.add_argument("--xml-path", type=Path, default=None)
+@@ -549,3 +551,5 @@
+         f"reference_gait_file={reference_gait_file} | "
+-        f"reference_target_observation={reference_target_observation}",
++        f"reference_target_observation={reference_target_observation} | "
++        f"reference_phase_randomization={args.reference_phase_randomization} | "
++        f"reference_state_init={args.reference_state_init}",
+         flush=True,
+@@ -561,2 +565,4 @@
+         reference_target_observation=reference_target_observation,
++        reference_phase_randomization=args.reference_phase_randomization,
++        reference_state_init=args.reference_state_init,
+         xml_path=xml_path,
+@@ -639,2 +645,4 @@
+         "reference_target_observation": env_config.reference_target_observation,
++        "reference_phase_randomization": env_config.reference_phase_randomization,
++        "reference_state_init": env_config.reference_state_init,
+         "action_smoothing": env_config.action_smoothing,

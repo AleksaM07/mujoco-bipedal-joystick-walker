@@ -1,0 +1,120 @@
+diff --git a/biomechanics_env.py b/biomechanics_env.py
+--- a/biomechanics_env.py
++++ b/biomechanics_env.py
+@@ -659,24 +659,72 @@
+ 
+-    def reset(self, rng: jax.Array) -> mjx_env.State:
+-        """Resetuje human u pocetnu pozu i uzorkuje joystick komandu."""
+-        rng, command_key, pose_key, erfi_key, bias_key, gait_key, bvh_key = (
+-            jax.random.split(rng, 7)
++    def reset(self, rng: jax.Array) -> mjx_env.State:
++        """Resetuje human u pocetnu pozu i uzorkuje joystick komandu."""
++        (
++            rng,
++            command_key,
++            pose_key,
++            erfi_key,
++            bias_key,
++            gait_key,
++            bvh_key,
++            frame_key,
++        ) = jax.random.split(rng, 8)
++        bvh_reference_clip_id = jax.random.randint(
++            bvh_key,
++            shape=(),
++            minval=0,
++            maxval=int(self._bvh_reference_clip_count),
+         )
+-        qpos = self._init_q
+-        qpos = qpos.at[self._actuator_qpos_indices].add(
+-            jax.random.uniform(
+-                pose_key,
+-                shape=(self.action_size,),
+-                minval=-1.0,
+-                maxval=1.0,
+-            ) * self._init_actuator_noise
+-        )
+-        qvel = jp.zeros(self._mjx_model.nv)
+-        ctrl = self._default_ctrl
+-        data = mjx_env.make_data(self._mjx_model, qpos=qpos, qvel=qvel, ctrl=ctrl)
+-        data = mjx.forward(self._mjx_model, data)
+-        command = self.sample_command(command_key)
+-        info = {
+-            "rng": rng,
+-            "command": command,
++        frame_count = self._bvh_reference_frame_counts[bvh_reference_clip_id]
++        sampled_frame_offset = jax.random.randint(
++            frame_key,
++            shape=(),
++            minval=0,
++            maxval=frame_count,
++        )
++        if (
++            self._config.get("reference_phase_randomization", False)
++            or self._config.get("reference_state_init", False)
++        ):
++            bvh_reference_frame_offset = sampled_frame_offset
++        else:
++            bvh_reference_frame_offset = jp.array(0, dtype=jp.int32)
++        command = self.sample_command(command_key)
++        if (
++            self._config.get("reference_gait", "none") == "bvh"
++            and self._config.get("reference_state_init", False)
++        ):
++            qpos = self._bvh_reference_init_qpos_targets[
++                bvh_reference_clip_id,
++                bvh_reference_frame_offset,
++            ]
++            qvel = self._bvh_reference_init_qvel_targets[
++                bvh_reference_clip_id,
++                bvh_reference_frame_offset,
++            ]
++            qvel = qvel.at[0].set(
++                self._get_bvh_reference_root_velocity_target_by_frame(
++                    bvh_reference_clip_id,
++                    bvh_reference_frame_offset,
++                    command,
++                )
++            )
++            ctrl = qpos[self._actuator_qpos_indices]
++        else:
++            qpos = self._init_q
++            qpos = qpos.at[self._actuator_qpos_indices].add(
++                jax.random.uniform(
++                    pose_key,
++                    shape=(self.action_size,),
++                    minval=-1.0,
++                    maxval=1.0,
++                ) * self._init_actuator_noise
++            )
++            qvel = jp.zeros(self._mjx_model.nv)
++            ctrl = self._default_ctrl
++        data = mjx_env.make_data(self._mjx_model, qpos=qpos, qvel=qvel, ctrl=ctrl)
++        data = mjx.forward(self._mjx_model, data)
++        info = {
++            "rng": rng,
++            "command": command,
+             "last_action": jp.zeros(self.action_size),
+@@ -691,8 +739,4 @@
+             ),
+-            "bvh_reference_clip_id": jax.random.randint(
+-                bvh_key,
+-                shape=(),
+-                minval=0,
+-                maxval=int(self._bvh_reference_clip_count),
+-            ),
++            "bvh_reference_clip_id": bvh_reference_clip_id,
++            "bvh_reference_frame_offset": bvh_reference_frame_offset,
+             "last_foot_xy": self._foot_xy(data),
+@@ -719,2 +763,3 @@
+             "reference_foot": jp.array(0.0),
++            "reference_root": jp.array(0.0),
+             "contact_force": jp.array(0.0),
+@@ -783,2 +828,3 @@
+         reference_foot = self._get_reference_foot_reward(data, info)
++        reference_root = self._get_reference_root_reward(data, info)
+         contact_force = self._get_contact_force_cost(data)
+@@ -803,2 +849,3 @@
+         metrics["reference_foot"] = reference_foot
++        metrics["reference_root"] = reference_root
+         metrics["contact_force"] = contact_force

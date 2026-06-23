@@ -1,0 +1,9 @@
+diff --git a/biomechanics_env.py b/biomechanics_env.py
+--- a/biomechanics_env.py
++++ b/biomechanics_env.py
+@@ -883,2 +883,5 @@
+         metrics["double_support_drag"] = reward_components["double_support_drag"]
++        metrics["task_reward"] = reward_components["task_reward"]
++        metrics["zombie_sine_reward"] = reward_components["zombie_sine_reward"]
++        metrics["bvh_mimic_reward"] = reward_components["bvh_mimic_reward"]
+         metrics["base_height"] = reward_components["base_height"]

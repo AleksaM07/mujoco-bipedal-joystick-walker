@@ -1,0 +1,16 @@
+diff --git a/train.py b/train.py
+--- a/train.py
++++ b/train.py
+@@ -1137,2 +1137,8 @@
+     parser.add_argument(
++        "--diagnostic-rollout-steps",
++        type=int,
++        default=20,
++        help="Broj koraka po kratkom diagnostic rollout-u.",
++    )
++    parser.add_argument(
+         "--bare",
+@@ -1248,2 +1254,3 @@
+         diagnostic_rollout=args.diagnostic_rollout,
++        diagnostic_rollout_steps=args.diagnostic_rollout_steps,
+         debug_run=args.debug_run,

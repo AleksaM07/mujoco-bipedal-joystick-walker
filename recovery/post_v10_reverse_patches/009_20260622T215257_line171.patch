@@ -1,0 +1,26 @@
+diff --git a/biomechanics_env.py b/biomechanics_env.py
+--- a/biomechanics_env.py
++++ b/biomechanics_env.py
+@@ -848,2 +848,3 @@
+             "reward_done_override": jp.array(0.0),
++            "reward_nonterminal": jp.array(0.0),
+             "tracking_lin_vel": jp.array(0.0),
+@@ -866,2 +867,3 @@
+             "double_support_drag": jp.array(0.0),
++            "gait_cost_scale": jp.array(0.0),
+             "task_reward": jp.array(0.0),
+@@ -873,2 +875,3 @@
+             "bvh_regularization_cost": jp.array(0.0),
++            "bvh_regularization_raw": jp.array(0.0),
+             "bvh_locomotion_gate": jp.array(0.0),
+@@ -885,2 +888,10 @@
+             "illegal_contact": jp.array(0.0),
++            "foot_slip_cost": jp.array(0.0),
++            "swing_drag_cost": jp.array(0.0),
++            "swing_contact_cost": jp.array(0.0),
++            "clearance_deficit_cost": jp.array(0.0),
++            "double_contact_cost": jp.array(0.0),
++            "double_support_drag_cost": jp.array(0.0),
++            "overspeed_cost": jp.array(0.0),
++            "height_cost": jp.array(0.0),
+             "done_low_height": jp.array(0.0),

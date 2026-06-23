@@ -1,0 +1,122 @@
+diff --git a/biomechanics_env.py b/biomechanics_env.py
+--- a/biomechanics_env.py
++++ b/biomechanics_env.py
+@@ -1373,3 +1373,117 @@
+         }
+-
++
++    def _get_task_velocity_reward(
++        self,
++        terms: dict[str, jax.Array],
++    ) -> jax.Array:
++        """Standardni joystick/velocity reward bez explicit motion imitation-a."""
++        return (
++            self.ALIVE_REWARD_SCALE
++            + terms["gated_tracking"]
++            + terms["gated_progress"]
++            + terms["upright"]
++            + terms["head_up"]
++            + terms["base_height"]
++            + terms["posture"]
++            + terms["variable_posture"]
++            - terms["stuck"]
++            - terms["action"]
++            - terms["action_rate"]
++            - terms["trunk_posture"]
++            - terms["variable_posture_cost"]
++            - terms["contact_force"]
++            - terms["foot_slip"]
++            - terms["swing_drag"]
++            - terms["clearance_deficit"]
++            - terms["double_support_drag"]
++            - terms["height"]
++            - terms["overspeed"]
++            - terms["idle_motion"]
++            - terms["vertical_velocity"]
++            - terms["angular_velocity"]
++        )
++
++    def _get_zombie_walking_trajectory_sine_reward(
++        self,
++        terms: dict[str, jax.Array],
++    ) -> jax.Array:
++        """Proceduralni sine/zombie-walking gait reward, odvojen od BVH mimic-a."""
++        return (
++            self.ALIVE_REWARD_SCALE
++            + terms["gated_tracking"]
++            + terms["gated_progress"]
++            + terms["upright"]
++            + terms["head_up"]
++            + terms["base_height"]
++            + terms["posture"]
++            + terms["variable_posture"]
++            + terms["gait"]
++            + terms["reference_pose"]
++            - terms["stuck"]
++            - terms["action"]
++            - terms["action_rate"]
++            - terms["trunk_posture"]
++            - terms["variable_posture_cost"]
++            - terms["contact_force"]
++            - terms["foot_slip"]
++            - terms["swing_drag"]
++            - terms["clearance_deficit"]
++            - terms["double_support_drag"]
++            - terms["height"]
++            - terms["overspeed"]
++            - terms["idle_motion"]
++            - terms["vertical_velocity"]
++            - terms["angular_velocity"]
++        )
++
++    def _get_bvh_mimic_reward(
++        self,
++        pose_reward: jax.Array,
++        velocity_reward: jax.Array,
++        foot_reward: jax.Array,
++        root_reward: jax.Array,
++        contact_reward: jax.Array,
++        terms: dict[str, jax.Array],
++    ) -> jax.Array:
++        """DeepMimic/LocoMuJoCo-style BVH reward: mimic first, task second."""
++        mimic_reward = (
++            self.BVH_MIMIC_POSE_WEIGHT * pose_reward
++            + self.BVH_MIMIC_VELOCITY_WEIGHT * velocity_reward
++            + self.BVH_MIMIC_FOOT_WEIGHT * foot_reward
++            + self.BVH_MIMIC_ROOT_WEIGHT * root_reward
++            + self.BVH_MIMIC_CONTACT_WEIGHT * contact_reward
++        )
++        stability_reward = self.BVH_STABILITY_REWARD_SCALE * (
++            0.5 * terms["upright"]
++            + 0.2 * terms["head_up"]
++            + 0.3 * terms["base_height"]
++        )
++        joystick_reward = (
++            self.BVH_TASK_TRACKING_SCALE * terms["gated_tracking"]
++            + self.BVH_TASK_PROGRESS_SCALE * terms["gated_progress"]
++        )
++        regularization_cost = (
++            terms["action"]
++            + terms["action_rate"]
++            + terms["trunk_posture"]
++            + terms["variable_posture_cost"]
++            + terms["contact_force"]
++            + terms["foot_slip"]
++            + terms["swing_drag"]
++            + terms["clearance_deficit"]
++            + terms["double_support_drag"]
++            + terms["height"]
++            + terms["idle_motion"]
++            + terms["vertical_velocity"]
++            + terms["angular_velocity"]
++        )
++        return (
++            self.ALIVE_REWARD_SCALE
++            + self.BVH_MIMIC_REWARD_SCALE * mimic_reward
++            + stability_reward
++            + joystick_reward
++            - self.BVH_STUCK_PENALTY_SCALE * terms["stuck"]
++            - regularization_cost
++        )
++
+     def _get_done(self, data: mjx.Data) -> jax.Array:

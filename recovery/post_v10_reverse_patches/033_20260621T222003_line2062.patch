@@ -1,0 +1,8 @@
+diff --git a/biomechanics_env.py b/biomechanics_env.py
+--- a/biomechanics_env.py
++++ b/biomechanics_env.py
+@@ -1570,3 +1570,3 @@
+         too_low, tipped_over, invalid = self._get_done_reasons(data)
+-        return too_low | tipped_over | invalid
++        return too_low | tipped_over | invalid | self._get_fatal_illegal_contact(data)
+ 

@@ -1,0 +1,91 @@
+diff --git a/biomechanics_env.py b/biomechanics_env.py
+--- a/biomechanics_env.py
++++ b/biomechanics_env.py
+@@ -41,2 +41,4 @@
+     reference_target_observation: bool = False
++    reference_phase_randomization: bool = False
++    reference_state_init: bool = False
+     xml_path: str | None = None
+@@ -65,2 +67,4 @@
+         reference_target_observation=False,
++        reference_phase_randomization=False,
++        reference_state_init=False,
+         xml_path=None,
+@@ -227,2 +231,5 @@
+     REFERENCE_FOOT_ERROR_SCALE = 35.0
++    REFERENCE_ROOT_REWARD_SCALE = 0.35
++    REFERENCE_ROOT_HEIGHT_ERROR_SCALE = 35.0
++    REFERENCE_ROOT_VELOCITY_ERROR_SCALE = 8.0
+     CONTACT_FORCE_COST_SCALE = 1e-4
+@@ -382,2 +389,7 @@
+         self._bvh_reference_frame_counts = jp.array([1], dtype=jp.int32)
++        self._bvh_reference_root_height_offsets = jp.zeros((1, 1), dtype=jp.float32)
++        self._bvh_reference_root_velocity_factors = jp.ones(
++            (1, 1),
++            dtype=jp.float32,
++        )
+         default_foot_targets = self._build_reference_foot_position_targets(
+@@ -386,2 +398,11 @@
+         self._bvh_reference_foot_pos_targets = jp.array(default_foot_targets)
++        (
++            default_init_qpos,
++            default_init_qvel,
++        ) = self._build_reference_init_state_targets(
++            self._default_ctrl_np[None, None, :].astype(np.float32),
++            np.zeros((1, 1, self.action_size), dtype=np.float32),
++        )
++        self._bvh_reference_init_qpos_targets = jp.array(default_init_qpos)
++        self._bvh_reference_init_qvel_targets = jp.array(default_init_qvel)
+         self._bvh_reference_clip_count = 1
+@@ -442,2 +463,8 @@
+         self._bvh_reference_frame_counts = jp.array(references.frame_counts)
++        self._bvh_reference_root_height_offsets = jp.array(
++            references.root_height_offsets
++        )
++        self._bvh_reference_root_velocity_factors = jp.array(
++            references.root_forward_velocity_factors
++        )
+         self._bvh_reference_foot_pos_targets = jp.array(
+@@ -445,2 +472,8 @@
+         )
++        init_qpos, init_qvel = self._build_reference_init_state_targets(
++            references.qpos_targets,
++            references.qvel_targets,
++        )
++        self._bvh_reference_init_qpos_targets = jp.array(init_qpos)
++        self._bvh_reference_init_qvel_targets = jp.array(init_qvel)
+         self._bvh_reference_clip_count = len(references.source_paths)
+@@ -489,2 +522,33 @@
+ 
++    def _build_reference_init_state_targets(
++        self,
++        qpos_targets: np.ndarray,
++        qvel_targets: np.ndarray,
++    ) -> tuple[np.ndarray, np.ndarray]:
++        """Precompute DRLoco-style random-state init targets from BVH frames."""
++        qpos_init = np.zeros(
++            (*qpos_targets.shape[:2], self._mj_model.nq),
++            dtype=np.float32,
++        )
++        qvel_init = np.zeros(
++            (*qpos_targets.shape[:2], self._mj_model.nv),
++            dtype=np.float32,
++        )
++        for clip_index in range(qpos_targets.shape[0]):
++            for frame_index in range(qpos_targets.shape[1]):
++                qpos = np.array(self._init_q_np, copy=True)
++                qpos[self._actuator_qpos_indices_np] = qpos_targets[
++                    clip_index,
++                    frame_index,
++                ]
++                qpos = self._place_feet_on_floor(qpos)
++                qvel = np.zeros(self._mj_model.nv, dtype=np.float32)
++                qvel[self._actuator_dof_indices_np] = qvel_targets[
++                    clip_index,
++                    frame_index,
++                ]
++                qpos_init[clip_index, frame_index] = qpos.astype(np.float32)
++                qvel_init[clip_index, frame_index] = qvel
++        return qpos_init, qvel_init
++
+     def _reference_gait_files(self) -> tuple[str, ...]:

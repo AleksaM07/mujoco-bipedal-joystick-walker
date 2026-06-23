@@ -1,0 +1,16 @@
+diff --git a/biomechanics_env.py b/biomechanics_env.py
+--- a/biomechanics_env.py
++++ b/biomechanics_env.py
+@@ -1761,3 +1761,3 @@
+     def _get_locomotion_quality(self, data: mjx.Data, info: dict) -> jax.Array:
+-        """Single-support + clearance gate koji sprecava sliding reward loophole."""
++        """Meki lift-then-step gate koji ne ubija signal pre prvog koraka."""
+         command_active = jp.linalg.norm(info["command"]) > self.STUCK_COMMAND_THRESHOLD
+@@ -1771,3 +1771,6 @@
+         )
+-        quality = single_support * clearance_quality
++        quality = (
++            self.LOCOMOTION_QUALITY_CLEARANCE_WEIGHT * clearance_quality
++            + self.LOCOMOTION_QUALITY_SINGLE_SUPPORT_WEIGHT * single_support
++        )
+         return jp.where(command_active, quality, 1.0)

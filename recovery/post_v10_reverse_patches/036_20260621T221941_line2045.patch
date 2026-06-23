@@ -1,0 +1,22 @@
+diff --git a/biomechanics_env.py b/biomechanics_env.py
+--- a/biomechanics_env.py
++++ b/biomechanics_env.py
+@@ -858,4 +858,7 @@
+             "contact_force": jp.array(0.0),
++            "joint_limit": jp.array(0.0),
++            "illegal_contact": jp.array(0.0),
+             "done_low_height": jp.array(0.0),
+             "done_tipped": jp.array(0.0),
++            "done_illegal_contact": jp.array(0.0),
+             "done_invalid": jp.array(0.0),
+@@ -949,2 +952,4 @@
+         metrics["contact_force"] = reward_components["contact_force"]
++        metrics["joint_limit"] = reward_components["joint_limit"]
++        metrics["illegal_contact"] = reward_components["illegal_contact"]
+         metrics["done_low_height"] = reward_components["done_low_height"].astype(
+@@ -953,2 +958,5 @@
+         metrics["done_tipped"] = reward_components["done_tipped"].astype(reward.dtype)
++        metrics["done_illegal_contact"] = reward_components[
++            "done_illegal_contact"
++        ].astype(reward.dtype)
+         metrics["done_invalid"] = reward_components["done_invalid"].astype(

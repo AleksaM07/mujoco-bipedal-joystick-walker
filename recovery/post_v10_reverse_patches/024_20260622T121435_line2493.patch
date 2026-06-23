@@ -1,0 +1,7 @@
+diff --git a/config.py b/config.py
+--- a/config.py
++++ b/config.py
+@@ -177,2 +177,3 @@
+     diagnostic_rollout: bool = False
++    diagnostic_rollout_steps: int = 20
+     debug_run: bool = False

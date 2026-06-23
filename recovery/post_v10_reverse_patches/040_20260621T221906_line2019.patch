@@ -1,0 +1,25 @@
+diff --git a/biomechanics_model.py b/biomechanics_model.py
+--- a/biomechanics_model.py
++++ b/biomechanics_model.py
+@@ -642,3 +642,3 @@
+     worldbody = root.find("worldbody")
+-    ET.SubElement(
++    floor = ET.SubElement(
+         worldbody,
+@@ -650,4 +650,4 @@
+         friction="0.8",
+-        condim="3",
+     )
++    mark_terrain_geom(floor)
+     if env_version == "hardcore":
+@@ -662,3 +662,3 @@
+         height = 0.025 + 0.01 * (index % 3)
+-        ET.SubElement(
++        block = ET.SubElement(
+             worldbody,
+@@ -671,4 +671,4 @@
+             friction="0.9",
+-            condim="3",
+         )
++        mark_terrain_geom(block)
+ 

@@ -1,0 +1,13 @@
+diff --git a/biomechanics_env.py b/biomechanics_env.py
+--- a/biomechanics_env.py
++++ b/biomechanics_env.py
+@@ -1385,2 +1385,4 @@
+         stance_contact = jp.where(left_swing, foot_contact[1], foot_contact[0])
++        swing_contact = jp.where(left_swing, foot_contact[0], foot_contact[1])
++        single_support = stance_contact * (1.0 - swing_contact)
+         relative_clearance = self._get_swing_clearance(data, info)
+@@ -1395,3 +1397,3 @@
+             self.FOOT_CLEARANCE_REWARD_SCALE * clearance_reward
+-            + self.STANCE_CONTACT_REWARD_SCALE * stance_contact,
++            + self.STANCE_CONTACT_REWARD_SCALE * single_support,
+             0.0,

@@ -1,0 +1,9 @@
+diff --git a/biomechanics_env.py b/biomechanics_env.py
+--- a/biomechanics_env.py
++++ b/biomechanics_env.py
+@@ -792,2 +792,5 @@
+             "double_support_drag": jp.array(0.0),
++            "task_reward": jp.array(0.0),
++            "zombie_sine_reward": jp.array(0.0),
++            "bvh_mimic_reward": jp.array(0.0),
+             "base_height": jp.array(1.0),

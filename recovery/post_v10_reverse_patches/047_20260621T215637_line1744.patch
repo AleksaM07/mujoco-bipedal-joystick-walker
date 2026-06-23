@@ -1,0 +1,9 @@
+diff --git a/biomechanics_env.py b/biomechanics_env.py
+--- a/biomechanics_env.py
++++ b/biomechanics_env.py
+@@ -1354,2 +1354,5 @@
+             "double_support_drag": double_support_drag,
++            "task_reward": task_reward,
++            "zombie_sine_reward": zombie_sine_reward,
++            "bvh_mimic_reward": bvh_mimic_reward,
+             "base_height": base_height,

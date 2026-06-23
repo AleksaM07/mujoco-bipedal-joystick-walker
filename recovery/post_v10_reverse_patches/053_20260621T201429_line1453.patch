@@ -1,0 +1,58 @@
+diff --git a/biomechanics_env.py b/biomechanics_env.py
+--- a/biomechanics_env.py
++++ b/biomechanics_env.py
+@@ -1401,2 +1401,54 @@
+ 
++    def _get_stance_contact(self, data: mjx.Data, info: dict) -> jax.Array:
++        """Kontakt stance noge u aktivnoj gait fazi."""
++        left_swing = self._is_left_swing(info)
++        foot_contact = self._foot_contact(data)
++        return jp.where(left_swing, foot_contact[1], foot_contact[0])
++
++    def _get_swing_contact(self, data: mjx.Data, info: dict) -> jax.Array:
++        """Kontakt swing noge; za pravi korak ovo treba cesto da bude nula."""
++        left_swing = self._is_left_swing(info)
++        foot_contact = self._foot_contact(data)
++        return jp.where(left_swing, foot_contact[0], foot_contact[1])
++
++    def _get_double_contact(self, data: mjx.Data) -> jax.Array:
++        """Da li su oba stopala istovremeno u kontaktu sa podom."""
++        foot_contact = self._foot_contact(data)
++        return foot_contact[0] * foot_contact[1]
++
++    def _get_locomotion_quality(self, data: mjx.Data, info: dict) -> jax.Array:
++        """Single-support + clearance gate koji sprecava sliding reward loophole."""
++        command_active = jp.linalg.norm(info["command"]) > self.STUCK_COMMAND_THRESHOLD
++        stance_contact = self._get_stance_contact(data, info)
++        swing_contact = self._get_swing_contact(data, info)
++        single_support = stance_contact * (1.0 - swing_contact)
++        clearance_quality = jp.clip(
++            self._get_swing_clearance(data, info) / self.FOOT_CLEARANCE_TARGET,
++            0.0,
++            1.0,
++        )
++        quality = single_support * clearance_quality
++        return jp.where(command_active, quality, 1.0)
++
++    def _get_double_support_drag_cost(
++        self,
++        data: mjx.Data,
++        info: dict,
++        measured_command: jax.Array,
++        command_norm: jax.Array,
++    ) -> jax.Array:
++        """Kazni command tracking dok obe noge klize/vuku pod."""
++        command_active = command_norm > self.STUCK_COMMAND_THRESHOLD
++        commanded_axis = info["command"] / jp.maximum(command_norm, 1e-6)
++        velocity_along_command = jp.dot(measured_command, commanded_axis)
++        normalized_speed = jp.maximum(velocity_along_command, 0.0) / jp.maximum(
++            command_norm,
++            0.05,
++        )
++        return jp.where(
++            command_active,
++            self._get_double_contact(data) * jp.square(normalized_speed),
++            0.0,
++        )
++
+     def _get_swing_foot_drag_cost(self, data: mjx.Data, info: dict) -> jax.Array:

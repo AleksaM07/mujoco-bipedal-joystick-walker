@@ -1,0 +1,83 @@
+diff --git a/biomechanics_env.py b/biomechanics_env.py
+--- a/biomechanics_env.py
++++ b/biomechanics_env.py
+@@ -1179,28 +1179,31 @@
+         trunk_posture_cost = self.TRUNK_POSTURE_COST_SCALE * trunk_error
+-        base_height_reward = self.BASE_HEIGHT_REWARD_SCALE * (
+-            self._get_base_height_reward(data)
++        base_height = self._get_base_height_reward(data)
++        base_height_reward = self.BASE_HEIGHT_REWARD_SCALE * base_height
++        gait_reward = self._get_gait_reward(data, info)
++        swing_clearance = self._get_swing_clearance(data, info)
++        swing_clearance_deficit = self._get_swing_clearance_deficit_cost(
++            data,
++            info,
+         )
+-        gait_reward = self._get_gait_reward(data, info)
+         swing_clearance_deficit_cost = (
+-            self.SWING_CLEARANCE_DEFICIT_COST_SCALE
+-            * self._get_swing_clearance_deficit_cost(data, info)
++            self.SWING_CLEARANCE_DEFICIT_COST_SCALE * swing_clearance_deficit
+         )
++        reference_gait = self._get_reference_gait_reward(data, info)
+         reference_gait_reward = (
+-            self.REFERENCE_GAIT_REWARD_SCALE
+-            * self._get_reference_gait_reward(data, info)
++            self.REFERENCE_GAIT_REWARD_SCALE * reference_gait
+         )
++        reference_velocity = self._get_reference_velocity_reward(data, info)
+         reference_velocity_reward = (
+-            self.REFERENCE_VELOCITY_REWARD_SCALE
+-            * self._get_reference_velocity_reward(data, info)
++            self.REFERENCE_VELOCITY_REWARD_SCALE * reference_velocity
+         )
++        reference_foot = self._get_reference_foot_reward(data, info)
+         reference_foot_reward = (
+-            self.REFERENCE_FOOT_REWARD_SCALE
+-            * self._get_reference_foot_reward(data, info)
++            self.REFERENCE_FOOT_REWARD_SCALE * reference_foot
+         )
++        reference_root = self._get_reference_root_reward(data, info)
+         reference_root_reward = (
+-            self.REFERENCE_ROOT_REWARD_SCALE
+-            * self._get_reference_root_reward(data, info)
++            self.REFERENCE_ROOT_REWARD_SCALE * reference_root
+         )
+         contact_force_cost = self._get_contact_force_cost(data)
+-        foot_slip_cost = self.FOOT_SLIP_COST_SCALE * self._get_foot_slip_cost(
++        foot_slip = self._get_foot_slip_cost(
+             data,
+@@ -1208,5 +1211,6 @@
+         )
++        foot_slip_cost = self.FOOT_SLIP_COST_SCALE * foot_slip
++        swing_drag = self._get_swing_foot_drag_cost(data, info)
+         swing_drag_cost = (
+-            self.SWING_FOOT_DRAG_COST_SCALE
+-            * self._get_swing_foot_drag_cost(data, info)
++            self.SWING_FOOT_DRAG_COST_SCALE * swing_drag
+         )
+@@ -1270,15 +1274,13 @@
+             "height": data.qpos[2],
+-            "foot_slip": foot_slip_cost,
+-            "swing_drag": swing_drag_cost,
+-            "swing_clearance": self._get_swing_clearance(data, info),
+-            "swing_clearance_deficit": swing_clearance_deficit_cost,
+-            "base_height": base_height_reward / self.BASE_HEIGHT_REWARD_SCALE,
++            "foot_slip": foot_slip,
++            "swing_drag": swing_drag,
++            "swing_clearance": swing_clearance,
++            "swing_clearance_deficit": swing_clearance_deficit,
++            "base_height": base_height,
+             "variable_posture": variable_posture,
+             "gait_reward": gait_reward,
+-            "reference_gait": reference_gait_reward
+-            / self.REFERENCE_GAIT_REWARD_SCALE,
+-            "reference_velocity": reference_velocity_reward
+-            / self.REFERENCE_VELOCITY_REWARD_SCALE,
+-            "reference_foot": reference_foot_reward / self.REFERENCE_FOOT_REWARD_SCALE,
+-            "reference_root": reference_root_reward / self.REFERENCE_ROOT_REWARD_SCALE,
++            "reference_gait": reference_gait,
++            "reference_velocity": reference_velocity,
++            "reference_foot": reference_foot,
++            "reference_root": reference_root,
+             "contact_force": contact_force_cost,

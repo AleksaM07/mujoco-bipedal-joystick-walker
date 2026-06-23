@@ -1,0 +1,11 @@
+diff --git a/train.py b/train.py
+--- a/train.py
++++ b/train.py
+@@ -87,2 +87,3 @@
+         ("eval/episode_bvh_locomotion_gate", "bvh_gate"),
++        ("eval/episode_bvh_bootstrap_reward", "bvh_boot"),
+         ("eval/episode_variable_posture", "var_pose"),
+@@ -825,2 +826,3 @@
+     "bvh_locomotion_gate",
++    "bvh_bootstrap_reward",
+     "reference_gait",

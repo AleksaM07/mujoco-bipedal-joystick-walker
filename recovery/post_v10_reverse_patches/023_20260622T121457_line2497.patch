@@ -1,0 +1,92 @@
+diff --git a/train.py b/train.py
+--- a/train.py
++++ b/train.py
+@@ -612,3 +612,5 @@
+                 train_config.seed,
+-                rollout_steps=80 if train_config.diagnostic_rollout else 20,
++                rollout_steps=train_config.diagnostic_rollout_steps,
++                include_eager_step=train_config.debug_run,
++                include_rollouts=train_config.diagnostic_rollout,
+             )
+@@ -711,9 +713,17 @@
+ 
+-def debug_preflight(env, seed: int, rollout_steps: int = 20) -> None:
++def debug_preflight(
++    env,
++    seed: int,
++    rollout_steps: int = 20,
++    include_eager_step: bool = False,
++    include_rollouts: bool = False,
++) -> None:
+     """Proveri reset/step/JIT pre ulaska u Brax PPO."""
+     rng = jax.random.PRNGKey(seed)
+-    action = None
++    jit_reset = jax.jit(env.reset)
++    jit_step = jax.jit(env.step)
+ 
+     with logged_stage("preflight reset"):
+-        state = env.reset(rng)
++        state = jit_reset(rng)
++        jax.block_until_ready(state.reward)
+         obs_shape = jax.tree_util.tree_map(
+@@ -730,14 +740,14 @@
+ 
+-    with logged_stage("preflight eager step"):
+-        action = jnp.zeros(env.action_size)
+-        next_state = env.step(state, action)
+-        logger.info(
+-            "preflight eager step ok | reward={} | done={}",
+-            float(next_state.reward),
+-            float(next_state.done),
+-        )
+-        log_state_snapshot("preflight eager step metrics", next_state)
++    action = jnp.zeros(env.action_size)
++    if include_eager_step:
++        with logged_stage("preflight eager step"):
++            next_state = env.step(state, action)
++            logger.info(
++                "preflight eager step ok | reward={} | done={}",
++                float(next_state.reward),
++                float(next_state.done),
++            )
++            log_state_snapshot("preflight eager step metrics", next_state)
+ 
+     with logged_stage("preflight jit step compile"):
+-        jit_step = jax.jit(env.step)
+         compiled_state = jit_step(state, action)
+@@ -751,4 +761,8 @@
+ 
++    if not include_rollouts:
++        return
++
+     with logged_stage("preflight zero-action rollout"):
+-        rollout_state = env.reset(jax.random.PRNGKey(seed + 101))
++        rollout_state = jit_reset(jax.random.PRNGKey(seed + 101))
++        jax.block_until_ready(rollout_state.reward)
+         zero_action = jnp.zeros(env.action_size)
+@@ -758,3 +772,3 @@
+             lambda step_index, key: zero_action,
+-            env,
++            jit_step,
+             rollout_steps,
+@@ -764,3 +778,4 @@
+     with logged_stage("preflight small-random rollout"):
+-        rollout_state = env.reset(jax.random.PRNGKey(seed + 201))
++        rollout_state = jit_reset(jax.random.PRNGKey(seed + 201))
++        jax.block_until_ready(rollout_state.reward)
+         summarize_debug_rollout(
+@@ -774,3 +789,3 @@
+             ),
+-            env,
++            jit_step,
+             rollout_steps,
+@@ -818,3 +833,3 @@
+     action_fn,
+-    env,
++    step_fn,
+     rollout_steps: int,
+@@ -829,3 +844,3 @@
+         action = action_fn(step_index, action_key)
+-        final_state = env.step(final_state, action)
++        final_state = step_fn(final_state, action)
+         jax.block_until_ready(final_state.reward)

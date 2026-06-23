@@ -1,0 +1,25 @@
+diff --git a/train.py b/train.py
+--- a/train.py
++++ b/train.py
+@@ -854,2 +854,3 @@
+     "reward_done_override",
++    "reward_nonterminal",
+     "bvh_mimic_reward",
+@@ -859,2 +860,3 @@
+     "bvh_regularization_cost",
++    "bvh_regularization_raw",
+     "bvh_locomotion_gate",
+@@ -872,4 +874,13 @@
+     "double_contact",
++    "gait_cost_scale",
+     "illegal_contact",
+     "joint_limit",
++    "foot_slip_cost",
++    "swing_drag_cost",
++    "swing_contact_cost",
++    "clearance_deficit_cost",
++    "double_contact_cost",
++    "double_support_drag_cost",
++    "overspeed_cost",
++    "height_cost",
+     "height",

@@ -1,0 +1,12 @@
+diff --git a/train.py b/train.py
+--- a/train.py
++++ b/train.py
+@@ -640,2 +640,3 @@
+         "rao_limit={} | reference_target_observation={} | "
++        "reference_phase_randomization={} | reference_state_init={} | "
+         "legacy_action_prior={} | init_qpos_file={} | xml={}",
+@@ -656,2 +657,4 @@
+         getattr(env._config, "reference_target_observation", None),
++        getattr(env._config, "reference_phase_randomization", None),
++        getattr(env._config, "reference_state_init", None),
+         getattr(env._config, "legacy_action_prior", None),

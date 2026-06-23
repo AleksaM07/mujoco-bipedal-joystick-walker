@@ -1,0 +1,89 @@
+{
+  "env": {
+    "env_source": "biomechanics",
+    "env_version": "standard",
+    "playground_impl": "jax",
+    "prototype_flat_env": "BerkeleyHumanoidJoystickFlatTerrain",
+    "prototype_hardcore_env": "BerkeleyHumanoidJoystickRoughTerrain",
+    "command_change_rate": 0.1,
+    "command_profile": "forward_slow",
+    "reference_gait": "bvh",
+    "reference_gait_file": [
+      "BVH_walking_animation/cmuconvert-max-01-09/02/02_01.bvh",
+      "BVH_walking_animation/cmuconvert-max-01-09/02/02_02.bvh",
+      "BVH_walking_animation/cmuconvert-max-01-09/05/05_01.bvh",
+      "BVH_walking_animation/cmuconvert-max-01-09/06/06_01.bvh",
+      "BVH_walking_animation/cmuconvert-max-01-09/07/07_01.bvh",
+      "BVH_walking_animation/cmuconvert-max-01-09/07/07_02.bvh",
+      "BVH_walking_animation/cmuconvert-max-01-09/07/07_03.bvh",
+      "BVH_walking_animation/cmuconvert-max-01-09/07/07_06.bvh",
+      "BVH_walking_animation/cmuconvert-max-01-09/07/07_07.bvh",
+      "BVH_walking_animation/cmuconvert-max-01-09/07/07_08.bvh"
+    ],
+    "reference_target_observation": true,
+    "xml_path": "generated_models/human_male_180cm_75kg_standard_trainfast_v16.xml",
+    "legacy_action_prior": true,
+    "action_smoothing": 0.5,
+    "init_qpos_file": null,
+    "accurate_physics": true
+  },
+  "train": {
+    "seed": 7,
+    "num_timesteps": 80000000,
+    "num_evals": 25,
+    "num_envs": 1024,
+    "num_eval_envs": 16,
+    "episode_length": null,
+    "unroll_length": null,
+    "batch_size": null,
+    "num_minibatches": null,
+    "num_updates_per_batch": null,
+    "learning_rate": null,
+    "no_erfi": true,
+    "no_domain_randomization": true,
+    "save_checkpoints": true,
+    "checkpoint_out": null,
+    "resume_from": "runs/biomechanics_noerfi_nodr_forward_slow_ref_bvh_gym_unitree_v10_debug10_accurate_ppo_BiomechanicsHumanJoystickStandard_20260620_0211_25m_seed7_rew_546p4867_best_642p5360_s",
+    "run_tag": "slow_v10_resume_gate",
+    "debug_run": false,
+    "bare": false,
+    "algorithm": "ppo"
+  },
+  "brax_ppo": {
+    "action_repeat": 1,
+    "batch_size": 512,
+    "clipping_epsilon": 0.2,
+    "discounting": 0.97,
+    "entropy_cost": 0.003,
+    "episode_length": 500,
+    "gae_lambda": 0.95,
+    "learning_rate": 0.0003,
+    "max_grad_norm": 1.0,
+    "network_factory": {
+      "activation": "jax._src.nn.functions.silu",
+      "policy_hidden_layer_sizes": [
+        512,
+        256,
+        128
+      ],
+      "policy_obs_key": "state",
+      "value_hidden_layer_sizes": [
+        512,
+        256,
+        128
+      ],
+      "value_obs_key": "privileged_state"
+    },
+    "normalize_observations": true,
+    "normalize_observations_std_eps": 0.001,
+    "num_envs": 1024,
+    "num_eval_envs": 16,
+    "num_evals": 25,
+    "num_minibatches": 8,
+    "num_timesteps": 80000000,
+    "num_updates_per_batch": 4,
+    "reward_scaling": 1.0,
+    "unroll_length": 20,
+    "network_factory_fn": "brax.training.agents.ppo.networks.make_ppo_networks"
+  }
+}

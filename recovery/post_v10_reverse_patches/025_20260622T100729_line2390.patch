@@ -1,0 +1,18 @@
+diff --git a/train.py b/train.py
+--- a/train.py
++++ b/train.py
+@@ -1114,2 +1114,10 @@
+     parser.add_argument(
++        "--diagnostic-rollout",
++        action="store_true",
++        help=(
++            "Pre PPO treninga pusti kratke zero/small-random rollout-e i "
++            "uloguj raw reward, clipping, done razloge i BVH reward breakdown."
++        ),
++    )
++    parser.add_argument(
+         "--bare",
+@@ -1224,2 +1232,3 @@
+         run_tag=args.run_tag,
++        diagnostic_rollout=args.diagnostic_rollout,
+         debug_run=args.debug_run,

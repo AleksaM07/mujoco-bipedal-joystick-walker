@@ -1,0 +1,12 @@
+diff --git a/biomechanics_env.py b/biomechanics_env.py
+--- a/biomechanics_env.py
++++ b/biomechanics_env.py
+@@ -1652,4 +1652,6 @@
+             + self.BVH_REG_DOUBLE_CONTACT_WEIGHT * terms["double_contact"]
+-            + self.BVH_REG_DOUBLE_SUPPORT_DRAG_WEIGHT
+-            * jp.tanh(terms["double_support_drag"])
++            + (
++                self.BVH_REG_DOUBLE_SUPPORT_DRAG_WEIGHT
++                * jp.tanh(terms["double_support_drag"])
++            )
+             + 0.35 * jp.tanh(terms["height"])

@@ -1,0 +1,14 @@
+diff --git a/biomechanics_env.py b/biomechanics_env.py
+--- a/biomechanics_env.py
++++ b/biomechanics_env.py
+@@ -1472,5 +1472,7 @@
+             info["bvh_reference_frame_offset"].astype(jp.float32)
+-            + info["step"].astype(jp.float32)
+-            * jp.array(self.dt, dtype=jp.float32)
+-            / frame_time
++            + (
++                info["step"].astype(jp.float32)
++                * jp.array(self.dt, dtype=jp.float32)
++                / frame_time
++            )
+         )

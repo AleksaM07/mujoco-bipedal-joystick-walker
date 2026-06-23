@@ -1,0 +1,26 @@
+diff --git a/biomechanics_env.py b/biomechanics_env.py
+--- a/biomechanics_env.py
++++ b/biomechanics_env.py
+@@ -125,4 +125,11 @@
+ 
+-    WORLD_GRAVITY = jp.array([0.0, 0.0, -1.0])
++    WORLD_GRAVITY = jp.array([0.0, 0.0, -1.0])
+     FOOT_SOLE_GEOMS = ("left_foot_sole", "right_foot_sole")
++    ILLEGAL_CONTACT_BODY_NAMES = (
++        "left_thigh",
++        "right_thigh",
++        "left_shank",
++        "right_shank",
++    )
++    FATAL_CONTACT_BODY_NAMES = ("pelvis",)
+     FOOT_CONTACT_PRELOAD = 0.005
+@@ -130,2 +137,3 @@
+     FOOT_CONTACT_DISTANCE = 0.01
++    ILLEGAL_CONTACT_DISTANCE = 0.01
+     FORWARD_SLOW_COMMAND_RANGE = (0.02, 0.12)
+@@ -238,2 +246,5 @@
+     CONTACT_FORCE_COST_CLIP = 1000.0
++    SOFT_JOINT_LIMIT_FACTOR = 0.9
++    SOFT_JOINT_LIMIT_COST_SCALE = 5.0
++    ILLEGAL_CONTACT_COST_SCALE = 4.0
+     STUCK_COMMAND_THRESHOLD = 0.10

@@ -1,0 +1,17 @@
+diff --git a/biomechanics_env.py b/biomechanics_env.py
+--- a/biomechanics_env.py
++++ b/biomechanics_env.py
+@@ -687,7 +687,8 @@
+         frame_count = self._bvh_reference_frame_counts[bvh_reference_clip_id]
+-        sampled_frame_offset = jax.random.randint(
+-            frame_key,
+-            shape=(),
+-            minval=0,
+-            maxval=frame_count,
++        sampled_frame_offset = jp.floor(
++            jax.random.uniform(frame_key, shape=()) * frame_count.astype(jp.float32)
++        ).astype(jp.int32)
++        sampled_frame_offset = jp.minimum(
++            sampled_frame_offset,
++            frame_count - jp.array(1, dtype=jp.int32),
+         )

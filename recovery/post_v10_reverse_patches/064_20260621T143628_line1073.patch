@@ -1,0 +1,35 @@
+diff --git a/biomechanics_env.py b/biomechanics_env.py
+--- a/biomechanics_env.py
++++ b/biomechanics_env.py
+@@ -536,2 +536,3 @@
+         )
++        data = mujoco.MjData(self._mj_model)
+         for clip_index in range(qpos_targets.shape[0]):
+@@ -543,3 +544,3 @@
+                 ]
+-                qpos = self._place_feet_on_floor(qpos)
++                qpos = self._place_feet_on_floor_with_data(qpos, data)
+                 qvel = np.zeros(self._mj_model.nv, dtype=np.float32)
+@@ -599,8 +600,16 @@
+ 
+-    def _place_feet_on_floor(self, qpos: np.ndarray) -> np.ndarray:
+-        """Pomeraj root Z tako da najnizi djon pocne sa malim preload kontaktom."""
+-        data = mujoco.MjData(self._mj_model)
+-        data.qpos[:] = qpos
+-        mujoco.mj_forward(self._mj_model, data)
+-        qpos[2] -= self._minimum_geom_z(data) + self.FOOT_CONTACT_PRELOAD
++    def _place_feet_on_floor(self, qpos: np.ndarray) -> np.ndarray:
++        """Pomeraj root Z tako da najnizi djon pocne sa malim preload kontaktom."""
++        data = mujoco.MjData(self._mj_model)
++        return self._place_feet_on_floor_with_data(qpos, data)
++
++    def _place_feet_on_floor_with_data(
++        self,
++        qpos: np.ndarray,
++        data: mujoco.MjData,
++    ) -> np.ndarray:
++        """Varijanta za batch precompute bez alociranja MjData po frejmu."""
++        data.qpos[:] = qpos
++        mujoco.mj_forward(self._mj_model, data)
++        qpos[2] -= self._minimum_geom_z(data) + self.FOOT_CONTACT_PRELOAD
+         return qpos

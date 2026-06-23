@@ -1,0 +1,50 @@
+diff --git a/biomechanics_env.py b/biomechanics_env.py
+--- a/biomechanics_env.py
++++ b/biomechanics_env.py
+@@ -1285,5 +1285,8 @@
+         overspeed = jp.maximum(measured_norm - 1.25 * command_norm, 0.0)
+-        overspeed_cost = self.OVERSPEED_COST_SCALE * jp.square(
+-            overspeed / overspeed_denominator
+-        )
++        overspeed_cost = jp.minimum(
++            self.OVERSPEED_COST_SCALE * jp.square(
++                overspeed / overspeed_denominator
++            ),
++            self.OVERSPEED_COST_CAP,
++        )
+         idle_motion_cost = jp.where(
+@@ -1362,4 +1365,11 @@
+         gated_progress = command_progress * locomotion_quality
++        gait_cost_scale = jp.where(
++            command_active,
++            jp.clip(measured_norm / jp.maximum(command_norm, 0.10), 0.0, 1.0),
++            0.0,
++        )
+         swing_clearance_deficit_cost = (
+-            self.SWING_CLEARANCE_DEFICIT_COST_SCALE * swing_clearance_deficit
++            self.SWING_CLEARANCE_DEFICIT_COST_SCALE
++            * gait_cost_scale
++            * swing_clearance_deficit
+         )
+@@ -1390,6 +1400,9 @@
+         )
+-        foot_slip_cost = self.FOOT_SLIP_COST_SCALE * foot_slip
++        foot_slip_cost = (
++            self.FOOT_SLIP_COST_SCALE
++            * jp.minimum(foot_slip, self.FOOT_SLIP_COST_CAP)
++        )
+         swing_drag = self._get_swing_foot_drag_cost(data, info)
+         swing_drag_cost = (
+-            self.SWING_FOOT_DRAG_COST_SCALE * swing_drag
++            self.SWING_FOOT_DRAG_COST_SCALE * gait_cost_scale * swing_drag
+         )
+@@ -1397,3 +1410,3 @@
+             command_active,
+-            self.SWING_CONTACT_COST_SCALE * swing_contact,
++            self.SWING_CONTACT_COST_SCALE * gait_cost_scale * swing_contact,
+             0.0,
+@@ -1411,3 +1424,3 @@
+             command_active,
+-            self.DOUBLE_CONTACT_COST_SCALE * double_contact,
++            self.DOUBLE_CONTACT_COST_SCALE * gait_cost_scale * double_contact,
+             0.0,

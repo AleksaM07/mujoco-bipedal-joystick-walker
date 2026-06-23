@@ -1,0 +1,18 @@
+diff --git a/biomechanics_env.py b/biomechanics_env.py
+--- a/biomechanics_env.py
++++ b/biomechanics_env.py
+@@ -1467,2 +1467,4 @@
+             - terms["contact_force"]
++            - terms["joint_limit"]
++            - terms["illegal_contact"]
+             - terms["foot_slip"]
+@@ -1500,2 +1502,4 @@
+             - terms["contact_force"]
++            - terms["joint_limit"]
++            - terms["illegal_contact"]
+             - terms["foot_slip"]
+@@ -1543,2 +1547,4 @@
+             + terms["contact_force"]
++            + terms["joint_limit"]
++            + terms["illegal_contact"]
+             + terms["foot_slip"]

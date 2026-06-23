@@ -1,0 +1,7 @@
+diff --git a/train.py b/train.py
+--- a/train.py
++++ b/train.py
+@@ -54,2 +54,3 @@
+         ("eval/episode_bvh_locomotion_gate", "gate_avg"),
++        ("eval/episode_bvh_bootstrap_reward", "boot_avg"),
+     )

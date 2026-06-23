@@ -1,0 +1,7 @@
+diff --git a/config.py b/config.py
+--- a/config.py
++++ b/config.py
+@@ -176,2 +176,3 @@
+     run_tag: str | None = None
++    diagnostic_rollout: bool = False
+     debug_run: bool = False
