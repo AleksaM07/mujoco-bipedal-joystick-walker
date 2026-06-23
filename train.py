@@ -44,28 +44,8 @@ def logged_stage(name: str):
 class TrainingProgressLogger:
     """Prima PPO metrike i upisuje samo korisne linije."""
 
-    PER_STEP_DIAGNOSTICS = (
-        ("eval/episode_reward_raw", "raw_step"),
-        ("eval/episode_reward_nonterminal", "rew_floor"),
-        ("eval/episode_reward_clip_low", "clip_lo"),
-        ("eval/episode_forward_vel", "fwd_avg"),
-        ("eval/episode_locomotion_quality", "loco_avg"),
-        ("eval/episode_swing_contact", "swing_r"),
-        ("eval/episode_stance_contact", "stance_r"),
-        ("eval/episode_double_contact", "double_r"),
-        ("eval/episode_bvh_locomotion_gate", "gate_avg"),
-        ("eval/episode_bvh_bootstrap_reward", "boot_avg"),
-        ("eval/episode_bvh_regularization_raw", "reg_raw"),
-    )
-
     DIAGNOSTIC_METRICS = (
-        ("eval/episode_reward_raw", "raw"),
-        ("eval/episode_reward_clip_low", "clip_lo"),
-        ("eval/episode_reward_clip_high", "clip_hi"),
-        ("eval/episode_reward_done_override", "fall_rew"),
-        ("eval/episode_reward_nonterminal", "rew_nonterm"),
         ("eval/episode_tracking_lin_vel", "tracking"),
-        ("eval/episode_forward_vel", "fwd"),
         ("eval/episode_command_progress", "progress"),
         ("eval/episode_command_norm", "cmd_norm"),
         ("eval/episode_torso_up", "torso_up"),
@@ -75,44 +55,13 @@ class TrainingProgressLogger:
         ("eval/episode_swing_drag", "swing_drag"),
         ("eval/episode_swing_clearance", "swing_clear"),
         ("eval/episode_swing_clearance_deficit", "clear_deficit"),
-        ("eval/episode_locomotion_quality", "loco_q"),
-        ("eval/episode_gated_tracking", "gated_track"),
-        ("eval/episode_gated_progress", "gated_prog"),
-        ("eval/episode_swing_contact", "swing_ct"),
-        ("eval/episode_stance_contact", "stance_ct"),
-        ("eval/episode_double_contact", "double_ct"),
-        ("eval/episode_double_support_drag", "dbl_drag"),
-        ("eval/episode_task_reward", "task_rew"),
-        ("eval/episode_zombie_sine_reward", "zombie_rew"),
-        ("eval/episode_bvh_mimic_reward", "mimic_rew"),
-        ("eval/episode_bvh_mimic_core", "bvh_core"),
-        ("eval/episode_bvh_stability_reward", "bvh_stab"),
-        ("eval/episode_bvh_joystick_reward", "bvh_task"),
-        ("eval/episode_bvh_regularization_cost", "bvh_reg"),
-        ("eval/episode_bvh_regularization_raw", "bvh_reg_raw"),
-        ("eval/episode_bvh_locomotion_gate", "bvh_gate"),
-        ("eval/episode_bvh_bootstrap_reward", "bvh_boot"),
-        ("eval/episode_gait_cost_scale", "gait_scale"),
         ("eval/episode_variable_posture", "var_pose"),
         ("eval/episode_gait_reward", "gait"),
         ("eval/episode_reference_gait", "ref_gait"),
         ("eval/episode_reference_velocity", "ref_vel"),
-        ("eval/episode_reference_foot", "ref_foot"),
-        ("eval/episode_reference_root", "ref_root"),
         ("eval/episode_contact_force", "contact_force"),
-        ("eval/episode_joint_limit", "joint_limit"),
-        ("eval/episode_illegal_contact", "illegal_ct"),
-        ("eval/episode_foot_slip_cost", "foot_slip_c"),
-        ("eval/episode_swing_drag_cost", "swing_drag_c"),
-        ("eval/episode_swing_contact_cost", "swing_ct_c"),
-        ("eval/episode_clearance_deficit_cost", "clear_def_c"),
-        ("eval/episode_double_contact_cost", "double_ct_c"),
-        ("eval/episode_double_support_drag_cost", "dbl_drag_c"),
-        ("eval/episode_overspeed_cost", "overspeed_c"),
-        ("eval/episode_height_cost", "height_c"),
         ("eval/episode_done_low_height", "done_low"),
         ("eval/episode_done_tipped", "done_tip"),
-        ("eval/episode_done_illegal_contact", "done_illegal"),
         ("eval/episode_done_invalid", "done_nan"),
         ("eval/episode_done", "done"),
     )
@@ -137,13 +86,6 @@ class TrainingProgressLogger:
             value = metrics.get(key)
             if value is not None:
                 diagnostics.append(f"{label}={float(value):.3f}")
-        if episode_length is not None and float(episode_length) > 1e-6:
-            for key, label in self.PER_STEP_DIAGNOSTICS:
-                value = metrics.get(key)
-                if value is not None:
-                    diagnostics.append(
-                        f"{label}={float(value) / float(episode_length):.3f}"
-                    )
 
         logger.info(
             "eval | step={} | reward={} | episode_length={}{}",
@@ -451,24 +393,6 @@ def make_ppo_config(
     return rl_config
 
 
-def validate_ppo_batch_config(rl_config) -> None:
-    """Fail fast for Brax PPO batch/env divisibility constraints."""
-    batch_size = int(rl_config.batch_size)
-    num_minibatches = int(rl_config.num_minibatches)
-    num_envs = int(rl_config.num_envs)
-    batch_env_slots = batch_size * num_minibatches
-    if batch_env_slots % num_envs == 0:
-        return
-
-    raise ValueError(
-        "Invalid PPO config: batch_size * num_minibatches must be divisible "
-        f"by num_envs. Got {batch_size} * {num_minibatches} = "
-        f"{batch_env_slots}, which is not divisible by {num_envs}. "
-        "Try --num-envs 768 --batch-size 384, or use the smaller safe "
-        "fallback --num-envs 512 --batch-size 256."
-    )
-
-
 def biomechanics_ppo_config():
     """PPO polazne vrednosti za nas custom human joystick env."""
     return config_dict.create(
@@ -549,7 +473,6 @@ def run_training(
 
     env_name = env_display_name(env_config)
     rl_config = make_ppo_config(env_name, env_config, train_config)
-    validate_ppo_batch_config(rl_config)
     run_dir = make_run_dir(
         out_dir,
         run_source_name(env_config, train_config),
@@ -658,15 +581,9 @@ def run_training(
     if train_config.no_domain_randomization:
         logger.info("domain randomization disabled for this run")
 
-    if train_config.debug_run or train_config.diagnostic_rollout:
+    if train_config.debug_run:
         with logged_stage("debug_preflight"):
-            debug_preflight(
-                env,
-                train_config.seed,
-                rollout_steps=train_config.diagnostic_rollout_steps,
-                include_eager_step=train_config.debug_run,
-                include_rollouts=train_config.diagnostic_rollout,
-            )
+            debug_preflight(env, train_config.seed)
 
     logger.info("calling ppo.train")
     progress_logger = TrainingProgressLogger()
@@ -719,7 +636,6 @@ def log_environment_summary(env, label: str = "env") -> None:
         "nsite={} | action_size={} | substeps={} | erfi_enabled={} | "
         "command_profile={} | action_smoothing={} | rfi_limit={} | "
         "rao_limit={} | reference_target_observation={} | "
-        "reference_phase_randomization={} | reference_state_init={} | "
         "legacy_action_prior={} | init_qpos_file={} | xml={}",
         label,
         model.nq,
@@ -736,8 +652,6 @@ def log_environment_summary(env, label: str = "env") -> None:
         getattr(env._config, "rfi_torque_limit", None),
         getattr(env._config, "rao_torque_limit", None),
         getattr(env._config, "reference_target_observation", None),
-        getattr(env._config, "reference_phase_randomization", None),
-        getattr(env._config, "reference_state_init", None),
         getattr(env._config, "legacy_action_prior", None),
         getattr(env._config, "init_qpos_file", None),
         getattr(env, "xml_path", None),
@@ -764,21 +678,13 @@ def env_steps_per_training_block(rl_config) -> int:
     )
 
 
-def debug_preflight(
-    env,
-    seed: int,
-    rollout_steps: int = 20,
-    include_eager_step: bool = False,
-    include_rollouts: bool = False,
-) -> None:
+def debug_preflight(env, seed: int) -> None:
     """Proveri reset/step/JIT pre ulaska u Brax PPO."""
     rng = jax.random.PRNGKey(seed)
-    jit_reset = jax.jit(env.reset)
-    jit_step = jax.jit(env.step)
+    action = None
 
     with logged_stage("preflight reset"):
-        state = jit_reset(rng)
-        jax.block_until_ready(state.reward)
+        state = env.reset(rng)
         obs_shape = jax.tree_util.tree_map(
             lambda value: getattr(value, "shape", None),
             state.obs,
@@ -789,20 +695,18 @@ def debug_preflight(
             state.reward.dtype,
             state.done.dtype,
         )
-        log_state_snapshot("preflight reset metrics", state)
 
-    action = jnp.zeros(env.action_size)
-    if include_eager_step:
-        with logged_stage("preflight eager step"):
-            next_state = env.step(state, action)
-            logger.info(
-                "preflight eager step ok | reward={} | done={}",
-                float(next_state.reward),
-                float(next_state.done),
-            )
-            log_state_snapshot("preflight eager step metrics", next_state)
+    with logged_stage("preflight eager step"):
+        action = jnp.zeros(env.action_size)
+        next_state = env.step(state, action)
+        logger.info(
+            "preflight eager step ok | reward={} | done={}",
+            float(next_state.reward),
+            float(next_state.done),
+        )
 
     with logged_stage("preflight jit step compile"):
+        jit_step = jax.jit(env.step)
         compiled_state = jit_step(state, action)
         jax.block_until_ready(compiled_state.reward)
         logger.info(
@@ -810,172 +714,6 @@ def debug_preflight(
             float(compiled_state.reward),
             float(compiled_state.done),
         )
-        log_state_snapshot("preflight jit step metrics", compiled_state)
-
-    if not include_rollouts:
-        return
-
-    with logged_stage("preflight zero-action rollout"):
-        rollout_state = jit_reset(jax.random.PRNGKey(seed + 101))
-        jax.block_until_ready(rollout_state.reward)
-        zero_action = jnp.zeros(env.action_size)
-        summarize_debug_rollout(
-            "zero",
-            rollout_state,
-            lambda step_index, key: zero_action,
-            jit_step,
-            rollout_steps,
-            jax.random.PRNGKey(seed + 102),
-        )
-
-    with logged_stage("preflight small-random rollout"):
-        rollout_state = jit_reset(jax.random.PRNGKey(seed + 201))
-        jax.block_until_ready(rollout_state.reward)
-        summarize_debug_rollout(
-            "small_random",
-            rollout_state,
-            lambda step_index, key: jax.random.uniform(
-                key,
-                (env.action_size,),
-                minval=-0.2,
-                maxval=0.2,
-            ),
-            jit_step,
-            rollout_steps,
-            jax.random.PRNGKey(seed + 202),
-        )
-
-
-DEBUG_ROLLOUT_METRICS = (
-    "reward",
-    "reward_raw",
-    "reward_clip_low",
-    "reward_clip_high",
-    "reward_done_override",
-    "reward_nonterminal",
-    "bvh_mimic_reward",
-    "bvh_mimic_core",
-    "bvh_stability_reward",
-    "bvh_joystick_reward",
-    "bvh_regularization_cost",
-    "bvh_regularization_raw",
-    "bvh_locomotion_gate",
-    "bvh_bootstrap_reward",
-    "reference_gait",
-    "reference_velocity",
-    "reference_foot",
-    "reference_root",
-    "locomotion_quality",
-    "forward_vel",
-    "command_norm",
-    "command_progress",
-    "stance_contact",
-    "swing_contact",
-    "double_contact",
-    "gait_cost_scale",
-    "illegal_contact",
-    "joint_limit",
-    "foot_slip_cost",
-    "swing_drag_cost",
-    "swing_contact_cost",
-    "clearance_deficit_cost",
-    "double_contact_cost",
-    "double_support_drag_cost",
-    "overspeed_cost",
-    "height_cost",
-    "height",
-    "torso_up",
-    "done_low_height",
-    "done_tipped",
-    "done_illegal_contact",
-    "done_invalid",
-    "done",
-)
-
-
-def summarize_debug_rollout(
-    label: str,
-    state,
-    action_fn,
-    step_fn,
-    rollout_steps: int,
-    rng,
-) -> None:
-    """Run a tiny local rollout and log mean/final diagnostics before PPO."""
-    values = {key: [] for key in DEBUG_ROLLOUT_METRICS}
-    first_done_step = None
-    final_state = state
-    for step_index in range(rollout_steps):
-        rng, action_key = jax.random.split(rng)
-        action = action_fn(step_index, action_key)
-        final_state = step_fn(final_state, action)
-        jax.block_until_ready(final_state.reward)
-        for key in DEBUG_ROLLOUT_METRICS:
-            values[key].append(metric_float(final_state, key))
-        if values["done"][-1] >= 0.5 and first_done_step is None:
-            first_done_step = step_index + 1
-            break
-
-    summary = []
-    for key in DEBUG_ROLLOUT_METRICS:
-        metric_values = values[key]
-        if not metric_values:
-            continue
-        mean_value = float(np.mean(metric_values))
-        final_value = metric_values[-1]
-        summary.append(f"{key}_mean={mean_value:.3f}")
-        summary.append(f"{key}_final={final_value:.3f}")
-
-    logger.info(
-        "diagnostic rollout | label={} | steps={} | first_done_step={} | {}",
-        label,
-        len(values["reward"]),
-        first_done_step,
-        " | ".join(summary),
-    )
-    log_state_snapshot(f"diagnostic rollout {label} final metrics", final_state)
-
-
-def log_state_snapshot(label: str, state) -> None:
-    """Log one state snapshot with the same labels as rollout summaries."""
-    metrics = [
-        f"{key}={metric_float(state, key):.3f}"
-        for key in DEBUG_ROLLOUT_METRICS
-        if key in state.metrics
-    ]
-    info = []
-    for key in (
-        "command",
-        "gait_step",
-        "bvh_reference_clip_id",
-        "bvh_reference_frame_offset",
-    ):
-        if key in state.info:
-            info.append(f"{key}={metric_value_to_python(state.info[key])}")
-    logger.info(
-        "{} | {}{}",
-        label,
-        " | ".join(metrics),
-        "" if not info else " | " + " | ".join(info),
-    )
-
-
-def metric_float(state, key: str) -> float:
-    """Convert a scalar JAX metric to a Python float for loguru."""
-    if key not in state.metrics:
-        return 0.0
-    value = metric_value_to_python(state.metrics[key])
-    if isinstance(value, list):
-        return float(np.mean(value)) if value else 0.0
-    return float(value)
-
-
-def metric_value_to_python(value):
-    """Convert JAX/NumPy scalars and small arrays into readable Python values."""
-    array = np.asarray(jax.device_get(value))
-    if array.shape == ():
-        return float(array)
-    return array.tolist()
 
 
 def env_display_name(env_config: EnvConfig) -> str:
@@ -1039,10 +777,6 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = True):
             "command_profile": env_config.command_profile,
             "reference_gait": env_config.reference_gait,
             "reference_target_observation": env_config.reference_target_observation,
-            "reference_phase_randomization": (
-                env_config.reference_phase_randomization
-            ),
-            "reference_state_init": env_config.reference_state_init,
             "action_smoothing": env_config.action_smoothing,
             "legacy_action_prior": env_config.legacy_action_prior,
         }
@@ -1054,8 +788,6 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = True):
             config_overrides["init_qpos_file"] = env_config.init_qpos_file
         if env_config.accurate_physics:
             config_overrides["sim_dt"] = 0.005
-        else:
-            config_overrides["sim_dt"] = 0.01
         return BiomechanicsJoystickEnv(
             env_version=env_config.env_version,
             config_overrides=config_overrides,
@@ -1148,22 +880,6 @@ def main() -> None:
         ),
     )
     parser.add_argument(
-        "--reference-phase-randomization",
-        action="store_true",
-        help=(
-            "Randomizuje BVH phase/frame offset po epizodi. Ovo prati "
-            "DeepMimic/DRLoco RSI ideju, ali ne menja reset pozu samo po sebi."
-        ),
-    )
-    parser.add_argument(
-        "--reference-state-init",
-        action="store_true",
-        help=(
-            "Resetuje humanoida u retargetovanu BVH pozu i qvel na random "
-            "reference frame-u. Ovo je najblize DRLoco/LocoMuJoCo RSI setup-u."
-        ),
-    )
-    parser.add_argument(
         "--xml-path",
         type=Path,
         default=None,
@@ -1191,20 +907,6 @@ def main() -> None:
         "--debug-run",
         action="store_true",
         help="Mali izolacioni run bez domain randomization.",
-    )
-    parser.add_argument(
-        "--diagnostic-rollout",
-        action="store_true",
-        help=(
-            "Pre PPO treninga pusti kratke zero/small-random rollout-e i "
-            "uloguj raw reward, clipping, done razloge i BVH reward breakdown."
-        ),
-    )
-    parser.add_argument(
-        "--diagnostic-rollout-steps",
-        type=int,
-        default=20,
-        help="Broj koraka po kratkom diagnostic rollout-u.",
     )
     parser.add_argument(
         "--bare",
@@ -1281,15 +983,13 @@ def main() -> None:
             args.reference_gait_list,
         ),
         reference_target_observation=args.reference_gait == "bvh",
-        reference_phase_randomization=args.reference_phase_randomization,
-        reference_state_init=args.reference_state_init,
         xml_path=str(args.xml_path) if args.xml_path is not None else None,
         legacy_action_prior=args.legacy_action_prior,
         action_smoothing=args.action_smoothing,
         init_qpos_file=(
             str(args.init_qpos_file) if args.init_qpos_file is not None else None
         ),
-        accurate_physics=args.accurate_physics or not args.fast_physics,
+        accurate_physics=not args.fast_physics,
     )
     debug_defaults = debug_run_defaults(args.debug_run)
     train_config = TrainConfig(
@@ -1317,8 +1017,6 @@ def main() -> None:
         ),
         resume_from=str(args.resume_from) if args.resume_from is not None else None,
         run_tag=args.run_tag,
-        diagnostic_rollout=args.diagnostic_rollout,
-        diagnostic_rollout_steps=args.diagnostic_rollout_steps,
         debug_run=args.debug_run,
         bare=args.bare,
     )

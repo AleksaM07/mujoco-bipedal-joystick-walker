@@ -12,25 +12,12 @@ from config import BIOMECH_DIR, PROJECT_ROOT
 
 
 GENERATED_MODEL_DIR = PROJECT_ROOT / "generated_models"
-SCENE_XML_VERSION = "trainfast_v19"
+SCENE_XML_VERSION = "trainfast_v17"
 
 # Cache for the generator module to avoid reimporting
 _GENERATOR_CACHE = None
 
 FOOT_BODY_NAMES = ("left_foot", "right_foot")
-ILLEGAL_CONTACT_BODY_NAMES = (
-    "pelvis",
-    "left_thigh",
-    "right_thigh",
-    "left_shank",
-    "right_shank",
-)
-
-TERRAIN_CONTACT_TYPE = "1"
-FOOT_CONTACT_TYPE = "2"
-ILLEGAL_CONTACT_TYPE = "4"
-GROUND_CONTACT_AFFINITY = "1"
-NO_CONTACT_AFFINITY = "0"
 
 TRUNK_ACTUATED_JOINTS = (
     "abdomen_x",
@@ -528,7 +515,7 @@ def remove_trunk_equality_locks(root: ET.Element) -> None:
 
 
 def set_training_collision_filters(root: ET.Element) -> None:
-    """Ostavi foot kontakt i Unitree-style illegal lower-body kontakt."""
+    """Ostavi kontakt samo za teren i dodate sole geometrije."""
     worldbody = root.find("worldbody")
     for geom in worldbody.findall("geom"):
         mark_terrain_geom(geom)
@@ -537,15 +524,11 @@ def set_training_collision_filters(root: ET.Element) -> None:
 
 
 def mark_body_collision(body: ET.Element, in_foot: bool = False) -> None:
-    """Rekurzivno oznaci geometrije kao foot, illegal-contact ili visual-only."""
-    body_name = body.get("name", "")
-    current_is_foot = in_foot or body_name in FOOT_BODY_NAMES
-    current_is_illegal_contact = body_name in ILLEGAL_CONTACT_BODY_NAMES
-    for geom_index, geom in enumerate(body.findall("geom")):
+    """Rekurzivno oznaci body geometrije kao visual-only ili foot collision."""
+    current_is_foot = in_foot or body.get("name") in FOOT_BODY_NAMES
+    for geom in body.findall("geom"):
         if current_is_foot:
             mark_foot_geom(geom)
-        elif current_is_illegal_contact:
-            mark_illegal_contact_geom(geom, body_name, geom_index)
         else:
             mark_visual_only_geom(geom)
     for child in body.findall("body"):
@@ -554,71 +537,47 @@ def mark_body_collision(body: ET.Element, in_foot: bool = False) -> None:
 
 def mark_terrain_geom(geom: ET.Element) -> None:
     """Teren prima kontakt od stopala, ali ne pravi nepotrebne parove."""
-    geom.set("contype", TERRAIN_CONTACT_TYPE)
-    geom.set("conaffinity", NO_CONTACT_AFFINITY)
+    geom.set("contype", "1")
+    geom.set("conaffinity", "0")
     geom.set("condim", "3")
 
 
 def mark_foot_geom(geom: ET.Element) -> None:
     """Postojece foot geometrije ostaju fizicke, ali sole nosi glavni kontakt."""
-    geom.set("contype", FOOT_CONTACT_TYPE)
-    geom.set("conaffinity", GROUND_CONTACT_AFFINITY)
+    geom.set("contype", "1")
+    geom.set("conaffinity", "1")
     geom.set("condim", "3")
-
-
-def mark_illegal_contact_geom(
-    geom: ET.Element,
-    body_name: str,
-    geom_index: int,
-) -> None:
-    """Omoguci samo floor kontakt za pelvis/thigh/shank illegal-contact metrike."""
-    if not geom.get("name"):
-        suffix = "illegal_contact" if geom_index == 0 else f"illegal_contact_{geom_index}"
-        geom.set("name", f"{body_name}_{suffix}")
-    geom.set("contype", ILLEGAL_CONTACT_TYPE)
-    geom.set("conaffinity", GROUND_CONTACT_AFFINITY)
-    geom.set("condim", "1")
-    geom.set("friction", "0.6 0.01 0.001")
-    geom.set("solref", "0.02 1")
-    geom.set("solimp", "0.85 0.95 0.005")
 
 
 def mark_visual_only_geom(geom: ET.Element) -> None:
     """Geometrija ostaje vidljiva, ali ne ulazi u contact solver."""
     geom.set("contype", "0")
-    geom.set("conaffinity", NO_CONTACT_AFFINITY)
+    geom.set("conaffinity", "0")
 
 
 def add_stable_foot_contacts(root: ET.Element) -> None:
-    """Dodaj v15-style stabilan box djon i ostavi originalni foot kao visual."""
+    """Koristi originalnu generated foot capsule geometriju za kontakt."""
     worldbody = root.find("worldbody")
     for body in worldbody.iter("body"):
         if body.get("name") not in FOOT_BODY_NAMES:
             continue
 
-        for geom in body.findall("geom"):
-            mark_visual_only_geom(geom)
+        foot_geoms = body.findall("geom")
+        if not foot_geoms:
+            raise ValueError(f"{body.get('name')} nema foot geom za kontakt.")
 
         sole_name = f"{body.get('name')}_sole"
-        existing_sole = body.find(f"geom[@name='{sole_name}']")
-        if existing_sole is None:
-            existing_sole = ET.SubElement(
-                body,
-                "geom",
-                name=sole_name,
-                type="box",
-                pos="0.09 -0.045 0",
-                size="0.145 0.012 0.075",
-                rgba="0.1 0.1 0.1 0.35",
-            )
+        contact_geom = foot_geoms[0]
+        for geom in foot_geoms:
+            mark_visual_only_geom(geom)
+            if geom.get("name") == sole_name:
+                contact_geom = geom
 
-        mark_foot_geom(existing_sole)
-        existing_sole.set("type", "box")
-        existing_sole.set("pos", "0.09 -0.045 0")
-        existing_sole.set("size", "0.145 0.012 0.075")
-        existing_sole.set("friction", "1.0 0.01 0.001")
-        existing_sole.set("solref", "0.02 1")
-        existing_sole.set("solimp", "0.85 0.95 0.005")
+        contact_geom.set("name", sole_name)
+        mark_foot_geom(contact_geom)
+        contact_geom.set("friction", "1.0 0.01 0.001")
+        contact_geom.set("solref", "0.02 1")
+        contact_geom.set("solimp", "0.85 0.95 0.005")
 
 
 def add_terrain(root: ET.Element, env_version: str) -> None:
@@ -647,7 +606,7 @@ def add_terrain(root: ET.Element, env_version: str) -> None:
     )
 
     worldbody = root.find("worldbody")
-    floor = ET.SubElement(
+    ET.SubElement(
         worldbody,
         "geom",
         name="floor",
@@ -655,8 +614,8 @@ def add_terrain(root: ET.Element, env_version: str) -> None:
         size="0 0 0.01",
         material="groundplane",
         friction="0.8",
+        condim="3",
     )
-    mark_terrain_geom(floor)
     if env_version == "hardcore":
         add_rough_blocks(worldbody)
 
@@ -667,7 +626,7 @@ def add_rough_blocks(worldbody: ET.Element) -> None:
         x_pos = 0.7 + 0.45 * index
         y_pos = -0.45 if index % 2 else 0.35
         height = 0.025 + 0.01 * (index % 3)
-        block = ET.SubElement(
+        ET.SubElement(
             worldbody,
             "geom",
             name=f"rough_block_{index}",
@@ -676,8 +635,8 @@ def add_rough_blocks(worldbody: ET.Element) -> None:
             size=f"0.18 0.22 {height}",
             rgba=".55 .55 .55 1",
             friction="0.9",
+            condim="3",
         )
-        mark_terrain_geom(block)
 
 
 def add_actuators(root: ET.Element) -> None:

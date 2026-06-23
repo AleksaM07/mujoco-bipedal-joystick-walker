@@ -10,8 +10,6 @@ class BvhReference:
 
     qpos_targets: np.ndarray
     qvel_targets: np.ndarray
-    root_height_offsets: np.ndarray
-    root_forward_velocity_factors: np.ndarray
     frame_time: float
     source_path: Path
 
@@ -22,8 +20,6 @@ class BvhReferenceBatch:
 
     qpos_targets: np.ndarray
     qvel_targets: np.ndarray
-    root_height_offsets: np.ndarray
-    root_forward_velocity_factors: np.ndarray
     frame_times: np.ndarray
     frame_counts: np.ndarray
     source_paths: tuple[Path, ...]
@@ -57,11 +53,6 @@ def load_bvh_references(
         (len(references), max_frames, action_size),
         dtype=np.float32,
     )
-    root_height_offsets = np.zeros((len(references), max_frames), dtype=np.float32)
-    root_forward_velocity_factors = np.ones(
-        (len(references), max_frames),
-        dtype=np.float32,
-    )
     frame_times = np.zeros(len(references), dtype=np.float32)
     frame_counts = np.zeros(len(references), dtype=np.int32)
 
@@ -71,21 +62,12 @@ def load_bvh_references(
         targets[index, frame_count:] = reference.qpos_targets[-1]
         velocities[index, :frame_count] = reference.qvel_targets
         velocities[index, frame_count:] = 0.0
-        root_height_offsets[index, :frame_count] = reference.root_height_offsets
-        root_height_offsets[index, frame_count:] = reference.root_height_offsets[-1]
-        root_forward_velocity_factors[
-            index,
-            :frame_count,
-        ] = reference.root_forward_velocity_factors
-        root_forward_velocity_factors[index, frame_count:] = 1.0
         frame_times[index] = reference.frame_time
         frame_counts[index] = frame_count
 
     return BvhReferenceBatch(
         qpos_targets=targets,
         qvel_targets=velocities,
-        root_height_offsets=root_height_offsets,
-        root_forward_velocity_factors=root_forward_velocity_factors,
         frame_times=frame_times,
         frame_counts=frame_counts,
         source_paths=tuple(reference.source_path for reference in references),
@@ -146,8 +128,6 @@ def load_bvh_reference(
     return BvhReference(
         qpos_targets=targets.astype(np.float32),
         qvel_targets=_target_velocities(targets, bvh.frame_time),
-        root_height_offsets=_root_height_offsets(bvh),
-        root_forward_velocity_factors=_root_forward_velocity_factors(bvh),
         frame_time=bvh.frame_time,
         source_path=source_path,
     )
@@ -257,50 +237,3 @@ def _positive_flexion(
     degrees = _rotation_degrees(bvh, joint_name, channel_name)
     baseline = np.percentile(degrees, 5.0)
     return np.deg2rad(np.maximum(degrees - baseline, 0.0))
-
-
-def _position_channel(
-    bvh: ParsedBvh,
-    joint_name: str,
-    channel_name: str,
-) -> np.ndarray:
-    """Vrati BVH root translaciju za dati kanal."""
-    try:
-        channel_index = bvh.channels.index((joint_name, channel_name))
-    except ValueError as exc:
-        raise ValueError(
-            f"BVH nema kanal {joint_name}.{channel_name}."
-        ) from exc
-    return bvh.motion[:, channel_index]
-
-
-def _root_height_offsets(bvh: ParsedBvh) -> np.ndarray:
-    """Root height oscilacija iz CMU Hips.Y, u relativnoj humanoid skali."""
-    root_y = _position_channel(bvh, "Hips", "Yposition")
-    centered = root_y - np.median(root_y)
-    scale = _cmu_unit_to_model_meter_scale(bvh)
-    return (centered * scale).astype(np.float32)
-
-
-def _root_forward_velocity_factors(bvh: ParsedBvh) -> np.ndarray:
-    """Normalizovan forward-speed profil iz CMU Hips.Z translacije."""
-    root_z = _position_channel(bvh, "Hips", "Zposition")
-    forward_velocity = np.gradient(root_z, bvh.frame_time).astype(np.float32)
-    positive_velocity = forward_velocity[forward_velocity > 0.0]
-    if positive_velocity.size == 0:
-        return np.ones(bvh.frames, dtype=np.float32)
-    nominal_velocity = float(np.mean(positive_velocity))
-    if nominal_velocity < 1e-6:
-        return np.ones(bvh.frames, dtype=np.float32)
-    factors = forward_velocity / nominal_velocity
-    return np.clip(factors, 0.0, 2.5).astype(np.float32)
-
-
-def _cmu_unit_to_model_meter_scale(bvh: ParsedBvh) -> float:
-    """Proceni m/BVH-unit iz root visine; CMU fajlovi nisu u MuJoCo metrima."""
-    root_y = _position_channel(bvh, "Hips", "Yposition")
-    median_height = float(np.median(root_y))
-    if median_height <= 1e-6:
-        return 0.0254
-    # Nas root je oko pelvis/torso visine, ne puna ljudska visina.
-    return 1.5 / median_height

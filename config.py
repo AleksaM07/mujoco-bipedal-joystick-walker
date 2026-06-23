@@ -117,8 +117,6 @@ class EnvConfig:
     reference_gait: str = "none"
     reference_gait_file: str | list[str] | None = None
     reference_target_observation: bool = False
-    reference_phase_randomization: bool = False
-    reference_state_init: bool = False
 
     # Opcioni konkretan XML model. Korisno za nastavak starog checkpoint-a kada
     # je globalni generated XML version u kodu vec promenjen.
@@ -174,8 +172,6 @@ class TrainConfig:
     checkpoint_out: str | None = None
     resume_from: str | None = None
     run_tag: str | None = None
-    diagnostic_rollout: bool = False
-    diagnostic_rollout_steps: int = 20
     debug_run: bool = False
     bare: bool = False
 

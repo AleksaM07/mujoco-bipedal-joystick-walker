@@ -175,30 +175,6 @@ def infer_reference_target_observation(checkpoint_path: Path) -> bool:
     return bool(run_config.get("env", {}).get("reference_target_observation", False))
 
 
-def infer_reference_phase_randomization(checkpoint_path: Path) -> bool:
-    """Procitaj da li je trening koristio random BVH phase offset."""
-    run_config = find_run_config(checkpoint_path)
-    if run_config is None:
-        return False
-    return bool(run_config.get("env", {}).get("reference_phase_randomization", False))
-
-
-def infer_reference_state_init(checkpoint_path: Path) -> bool:
-    """Procitaj da li je trening koristio BVH random state initialization."""
-    run_config = find_run_config(checkpoint_path)
-    if run_config is None:
-        return False
-    return bool(run_config.get("env", {}).get("reference_state_init", False))
-
-
-def infer_legacy_action_prior(checkpoint_path: Path) -> bool:
-    """Procitaj da li checkpoint ocekuje stariji action scaling."""
-    run_config = find_run_config(checkpoint_path)
-    if run_config is None:
-        return False
-    return bool(run_config.get("env", {}).get("legacy_action_prior", False))
-
-
 def find_run_config(checkpoint_path: Path) -> dict | None:
     """Nadji config.json u roditeljskom run direktorijumu checkpointa."""
     for path in (checkpoint_path, *checkpoint_path.parents):
@@ -502,8 +478,6 @@ def main():
     )
     parser.add_argument("--action-smoothing", type=float, default=0.5)
     parser.add_argument("--init-qpos-file", type=Path, default=None)
-    parser.add_argument("--reference-phase-randomization", action="store_true")
-    parser.add_argument("--reference-state-init", action="store_true")
     parser.add_argument("--xml-path", type=Path, default=None)
     parser.add_argument("--legacy-action-prior", action="store_true")
     parser.add_argument("--command-x", type=float, default=None)
@@ -564,29 +538,16 @@ def main():
         reference_target_observation = infer_reference_target_observation(
             args.checkpoint
         )
-    reference_phase_randomization = (
-        args.reference_phase_randomization
-        or infer_reference_phase_randomization(args.checkpoint)
-    )
-    reference_state_init = (
-        args.reference_state_init or infer_reference_state_init(args.checkpoint)
-    )
-    legacy_action_prior = (
-        args.legacy_action_prior or infer_legacy_action_prior(args.checkpoint)
-    )
-
     print(
         "eval config | "
         f"command_profile={command_profile} | "
         f"command_x={command_x} | "
         f"init_qpos_file={init_qpos_file} | "
         f"xml_path={xml_path} | "
-        f"legacy_action_prior={legacy_action_prior} | "
+        f"legacy_action_prior={args.legacy_action_prior} | "
         f"reference_gait={reference_gait} | "
         f"reference_gait_file={reference_gait_file} | "
-        f"reference_target_observation={reference_target_observation} | "
-        f"reference_phase_randomization={reference_phase_randomization} | "
-        f"reference_state_init={reference_state_init}",
+        f"reference_target_observation={reference_target_observation}",
         flush=True,
     )
 
@@ -598,10 +559,8 @@ def main():
         reference_gait=reference_gait,
         reference_gait_file=reference_gait_file,
         reference_target_observation=reference_target_observation,
-        reference_phase_randomization=reference_phase_randomization,
-        reference_state_init=reference_state_init,
         xml_path=xml_path,
-        legacy_action_prior=legacy_action_prior,
+        legacy_action_prior=args.legacy_action_prior,
         action_smoothing=args.action_smoothing,
         init_qpos_file=init_qpos_file,
         accurate_physics=not args.fast_physics,
@@ -678,8 +637,6 @@ def make_environment(env_config: EnvConfig):
         "command_profile": env_config.command_profile,
         "reference_gait": env_config.reference_gait,
         "reference_target_observation": env_config.reference_target_observation,
-        "reference_phase_randomization": env_config.reference_phase_randomization,
-        "reference_state_init": env_config.reference_state_init,
         "action_smoothing": env_config.action_smoothing,
         "legacy_action_prior": env_config.legacy_action_prior,
     }

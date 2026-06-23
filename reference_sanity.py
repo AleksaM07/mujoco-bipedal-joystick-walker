@@ -38,8 +38,6 @@ def main() -> None:
         help="Text file with one BVH path per line.",
     )
     parser.add_argument("--xml-path", type=Path, default=None)
-    parser.add_argument("--reference-phase-randomization", action="store_true")
-    parser.add_argument("--reference-state-init", action="store_true")
     parser.add_argument(
         "--fast-physics",
         action="store_true",
@@ -63,8 +61,6 @@ def main() -> None:
         "reference_gait": "bvh",
         "reference_gait_file": reference_files,
         "reference_target_observation": True,
-        "reference_phase_randomization": args.reference_phase_randomization,
-        "reference_state_init": args.reference_state_init,
     }
     if args.xml_path is not None:
         config_overrides["xml_path"] = str(args.xml_path)
@@ -75,8 +71,6 @@ def main() -> None:
     qpos_targets = np.asarray(env._bvh_reference_qpos_targets)
     qvel_targets = np.asarray(env._bvh_reference_qvel_targets)
     foot_targets = np.asarray(env._bvh_reference_foot_pos_targets)
-    root_height_offsets = np.asarray(env._bvh_reference_root_height_offsets)
-    root_velocity_factors = np.asarray(env._bvh_reference_root_velocity_factors)
     frame_counts = np.asarray(env._bvh_reference_frame_counts)
     frame_times = np.asarray(env._bvh_reference_frame_times)
     active_mask = np.asarray(env._reference_gait_mask, dtype=bool)
@@ -93,18 +87,6 @@ def main() -> None:
     summarize_range("active_qvel", qvel_targets[:, :, active_mask])
     summarize_range("left_foot_local", foot_targets[:, :, 0, :])
     summarize_range("right_foot_local", foot_targets[:, :, 1, :])
-    print(
-        "root_height_offset: "
-        f"min={float(np.min(root_height_offsets)):.4f} "
-        f"max={float(np.max(root_height_offsets)):.4f} "
-        f"span={float(np.ptp(root_height_offsets)):.4f}"
-    )
-    print(
-        "root_velocity_factor: "
-        f"min={float(np.min(root_velocity_factors)):.4f} "
-        f"max={float(np.max(root_velocity_factors)):.4f} "
-        f"mean={float(np.mean(root_velocity_factors)):.4f}"
-    )
 
     left_span = np.ptp(foot_targets[:, :, 0, :], axis=(0, 1))
     right_span = np.ptp(foot_targets[:, :, 1, :], axis=(0, 1))
