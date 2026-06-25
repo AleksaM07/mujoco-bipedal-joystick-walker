@@ -132,6 +132,27 @@ def infer_command_profile(checkpoint_path: Path) -> str:
     return "forward"
 
 
+def infer_env_source(checkpoint_path: Path) -> str:
+    """Procitaj da li checkpoint pripada biomechanics ili prototype env-u."""
+    run_config = find_run_config(checkpoint_path)
+    if run_config is None:
+        return "biomechanics"
+
+    env_config = run_config.get("env", {})
+    env_source = env_config.get("env_source")
+    if env_source in {"biomechanics", "prototip"}:
+        return env_source
+
+    # Legacy Berkeley runs used these keys before EnvConfig.env_source existed.
+    if (
+        "playground_flat_env" in env_config
+        or "playground_hardcore_env" in env_config
+    ):
+        return "prototip"
+
+    return "biomechanics"
+
+
 def infer_init_qpos_file(checkpoint_path: Path) -> str | None:
     """Procitaj init_qpos_file iz run configa ako je trening koristio tu opciju."""
     run_config = find_run_config(checkpoint_path)
@@ -173,6 +194,14 @@ def infer_reference_target_observation(checkpoint_path: Path) -> bool:
     if run_config is None:
         return False
     return bool(run_config.get("env", {}).get("reference_target_observation", False))
+
+
+def infer_legacy_action_prior(checkpoint_path: Path) -> bool:
+    """Procitaj da li checkpoint koristi stari action prior."""
+    run_config = find_run_config(checkpoint_path)
+    if run_config is None:
+        return False
+    return bool(run_config.get("env", {}).get("legacy_action_prior", False))
 
 
 def find_run_config(checkpoint_path: Path) -> dict | None:
@@ -267,6 +296,32 @@ def parse_observation_size(raw_observation_size):
         name: tuple(value["shape"])
         for name, value in raw_observation_size.items()
     }
+
+
+def policy_observation_size(obs) -> int:
+    """Vrati velicinu observation-a koji policy cita."""
+    if isinstance(obs, dict):
+        return int(obs["state"].shape[0])
+    return int(obs.shape[0])
+
+
+def validate_observation_compatibility(checkpoint_path: Path, obs) -> None:
+    """Uhvatiti checkpoint/env mismatch pre nejasnog JAX broadcast error-a."""
+    expected_size = read_checkpoint_observation_size(checkpoint_path)
+    if expected_size is None:
+        return
+
+    actual_size = policy_observation_size(obs)
+    if actual_size == expected_size:
+        return
+
+    raise ValueError(
+        "Checkpoint i env nisu kompatibilni: "
+        f"checkpoint ocekuje policy observation {expected_size}, "
+        f"a trenutni env daje {actual_size}. "
+        "Proveri --env-source, --env-version, --reference-gait, "
+        "--reference-target-observation i --xml-path."
+    )
 
 
 def set_command(state, command: np.ndarray):
@@ -433,8 +488,8 @@ def main():
     parser.add_argument("--device", choices=["gpu", "cpu"], default="gpu")
     parser.add_argument(
         "--env-source",
-        choices=["biomechanics", "prototip"],
-        default="biomechanics",
+        choices=["auto", "biomechanics", "prototip"],
+        default="auto",
     )
     parser.add_argument(
         "--env-version",
@@ -479,7 +534,11 @@ def main():
     parser.add_argument("--action-smoothing", type=float, default=0.5)
     parser.add_argument("--init-qpos-file", type=Path, default=None)
     parser.add_argument("--xml-path", type=Path, default=None)
-    parser.add_argument("--legacy-action-prior", action="store_true")
+    parser.add_argument(
+        "--legacy-action-prior",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+    )
     parser.add_argument("--command-x", type=float, default=None)
     parser.add_argument("--command-y", type=float, default=0.0)
     parser.add_argument("--command-yaw", type=float, default=0.0)
@@ -504,6 +563,11 @@ def main():
     device = choose_device(args.device)
     jax.config.update("jax_default_device", device)
 
+    env_source = (
+        infer_env_source(args.checkpoint)
+        if args.env_source == "auto"
+        else args.env_source
+    )
     command_profile = (
         infer_command_profile(args.checkpoint)
         if args.command_profile == "auto"
@@ -538,13 +602,19 @@ def main():
         reference_target_observation = infer_reference_target_observation(
             args.checkpoint
         )
+    legacy_action_prior = (
+        infer_legacy_action_prior(args.checkpoint)
+        if args.legacy_action_prior is None
+        else args.legacy_action_prior
+    )
     print(
         "eval config | "
+        f"env_source={env_source} | "
         f"command_profile={command_profile} | "
         f"command_x={command_x} | "
         f"init_qpos_file={init_qpos_file} | "
         f"xml_path={xml_path} | "
-        f"legacy_action_prior={args.legacy_action_prior} | "
+        f"legacy_action_prior={legacy_action_prior} | "
         f"reference_gait={reference_gait} | "
         f"reference_gait_file={reference_gait_file} | "
         f"reference_target_observation={reference_target_observation}",
@@ -552,7 +622,7 @@ def main():
     )
 
     env_config = EnvConfig(
-        env_source=args.env_source,
+        env_source=env_source,
         env_version=args.env_version,
         playground_impl=args.playground_impl,
         command_profile=command_profile,
@@ -560,7 +630,7 @@ def main():
         reference_gait_file=reference_gait_file,
         reference_target_observation=reference_target_observation,
         xml_path=xml_path,
-        legacy_action_prior=args.legacy_action_prior,
+        legacy_action_prior=legacy_action_prior,
         action_smoothing=args.action_smoothing,
         init_qpos_file=init_qpos_file,
         accurate_physics=not args.fast_physics,
@@ -576,6 +646,7 @@ def main():
     )
     clip_command(command)
     state = set_command(state, command)
+    validate_observation_compatibility(args.checkpoint, state.obs)
 
     if args.inspect:
         inspect_policy(env, policy, rng, command, args.inspect_steps)

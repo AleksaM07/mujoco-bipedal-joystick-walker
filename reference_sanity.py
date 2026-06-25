@@ -70,10 +70,13 @@ def main() -> None:
     env = BiomechanicsJoystickEnv(config_overrides=config_overrides)
     qpos_targets = np.asarray(env._bvh_reference_qpos_targets)
     qvel_targets = np.asarray(env._bvh_reference_qvel_targets)
-    foot_targets = np.asarray(env._bvh_reference_foot_pos_targets)
     frame_counts = np.asarray(env._bvh_reference_frame_counts)
     frame_times = np.asarray(env._bvh_reference_frame_times)
-    active_mask = np.asarray(env._reference_gait_mask, dtype=bool)
+    active_mask = getattr(env, "_reference_gait_mask", None)
+    if active_mask is None:
+        active_mask = np.ones(qpos_targets.shape[-1], dtype=bool)
+    else:
+        active_mask = np.asarray(active_mask, dtype=bool)
 
     print(f"xml={env.xml_path}")
     print(f"clips={qpos_targets.shape[0]} max_frames={qpos_targets.shape[1]}")
@@ -85,17 +88,20 @@ def main() -> None:
     )
     summarize_range("active_qpos", qpos_targets[:, :, active_mask])
     summarize_range("active_qvel", qvel_targets[:, :, active_mask])
-    summarize_range("left_foot_local", foot_targets[:, :, 0, :])
-    summarize_range("right_foot_local", foot_targets[:, :, 1, :])
+    foot_targets = getattr(env, "_bvh_reference_foot_pos_targets", None)
+    if foot_targets is not None:
+        foot_targets = np.asarray(foot_targets)
+        summarize_range("left_foot_local", foot_targets[:, :, 0, :])
+        summarize_range("right_foot_local", foot_targets[:, :, 1, :])
 
-    left_span = np.ptp(foot_targets[:, :, 0, :], axis=(0, 1))
-    right_span = np.ptp(foot_targets[:, :, 1, :], axis=(0, 1))
-    smallest_span = float(min(np.max(left_span), np.max(right_span)))
-    if smallest_span < 0.02:
-        print(
-            "warning: foot target span is very small; this reference may be "
-            "too weak or the BVH retargeting may be nearly static."
-        )
+        left_span = np.ptp(foot_targets[:, :, 0, :], axis=(0, 1))
+        right_span = np.ptp(foot_targets[:, :, 1, :], axis=(0, 1))
+        smallest_span = float(min(np.max(left_span), np.max(right_span)))
+        if smallest_span < 0.02:
+            print(
+                "warning: foot target span is very small; this reference may be "
+                "too weak or the BVH retargeting may be nearly static."
+            )
 
 
 if __name__ == "__main__":
