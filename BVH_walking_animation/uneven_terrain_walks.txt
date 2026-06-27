@@ -1,0 +1,106 @@
+# One BVH path per non-comment line.
+# Description is kept above each path for review.
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-01-09/03/03_01.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-01-09/03/03_02.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-01-09/03/03_03.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-01-09/03/03_04.bvh
+# Walking up stairs
+BVH_walking_animation/cmuconvert-max-102-111/111/111_27.bvh
+# Walking up and down stairs
+BVH_walking_animation/cmuconvert-max-113-128/113/113_19.bvh
+# Walk up and down stairs
+BVH_walking_animation/cmuconvert-max-113-128/113/113_20.bvh
+# Walking up and down stairs
+BVH_walking_animation/cmuconvert-max-113-128/114/114_07.bvh
+# Walking up and down stairs
+BVH_walking_animation/cmuconvert-max-113-128/114/114_08.bvh
+# Walking up and down stairs
+BVH_walking_animation/cmuconvert-max-113-128/114/114_09.bvh
+# Walk Up Stairs And Over
+BVH_walking_animation/cmuconvert-max-141-144/143/143_17.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_01.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_04.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_05.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_06.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_07.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_08.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_10.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_11.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_12.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_13.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_14.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_15.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_16.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_17.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_18.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_19.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_20.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_21.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_22.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_23.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_24.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_25.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_26.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_27.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_28.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_29.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_30.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_31.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_32.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_33.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_34.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_35.bvh
+# walk on uneven terrain
+BVH_walking_animation/cmuconvert-max-35-39/36/36_36.bvh
+# walk forward stepping up stairs
+BVH_walking_animation/cmuconvert-max-81-85/83/83_27.bvh
+# walk forward stepping up stairs
+BVH_walking_animation/cmuconvert-max-81-85/83/83_28.bvh
+# walk forward stepping up stairs
+BVH_walking_animation/cmuconvert-max-81-85/83/83_29.bvh
+# walk forward stepping up stairs
+BVH_walking_animation/cmuconvert-max-81-85/83/83_30.bvh
+# walk forward stepping up stairs
+BVH_walking_animation/cmuconvert-max-81-85/83/83_31.bvh
+# walk forward stepping up stairs
+BVH_walking_animation/cmuconvert-max-81-85/83/83_32.bvh
+# walk forward and up stairs
+BVH_walking_animation/cmuconvert-max-81-85/83/83_34.bvh
+# walk forward and stepping up stairs
+BVH_walking_animation/cmuconvert-max-81-85/83/83_35.bvh
