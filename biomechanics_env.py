@@ -9,6 +9,7 @@ import mujoco
 import numpy as np
 from ml_collections import config_dict
 from mujoco import mjx
+from mujoco_playground._src import mjx_env
 
 from bvh_reference import load_bvh_references
 from biomechanics_model import (
@@ -18,7 +19,6 @@ from biomechanics_model import (
     build_trainable_scene_xml,
 )
 from config import PROJECT_ROOT
-from mujoco_playground._src import mjx_env
 
 
 QPOS_NUMBER_PATTERN = re.compile(
@@ -120,6 +120,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
     """Joystick locomotion env za humanoida iz `mujoco-biomechanics`."""
 
     WORLD_GRAVITY = jp.array([0.0, 0.0, -1.0])
+
     FOOT_SOLE_GEOMS = ("left_foot_sole", "right_foot_sole")
     FOOT_CONTACT_PRELOAD = 0.005
     FOOT_CONTACT_HEIGHT = 0.095
@@ -539,22 +540,29 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         return float(geom_pos[2] - np.max(geom_size))
 
     def reset(self, rng: jax.Array) -> mjx_env.State:
-        """Resetuje human u pocetnu pozu i uzorkuje joystick komandu."""
+        """Resetuje humana u pocetnu pozu i uzorkuje joystick komandu."""
         rng, command_key, pose_key, erfi_key, bias_key, gait_key, bvh_key = (
             jax.random.split(rng, 7)
         )
-        qpos = self._init_q
-        qpos = qpos.at[self._actuator_qpos_indices].add(
+        qpos = self._init_q.at[2].set(self._standing_height())
+        pose_noise = (
             jax.random.uniform(
                 pose_key,
                 shape=(self.action_size,),
                 minval=-1.0,
                 maxval=1.0,
-            ) * self._init_actuator_noise
+            )
+            * self._init_actuator_noise
         )
+        qpos = qpos.at[self._actuator_qpos_indices].add(pose_noise)
         qvel = jp.zeros(self._mjx_model.nv)
         ctrl = self._default_ctrl
-        data = mjx_env.make_data(self._mjx_model, qpos=qpos, qvel=qvel, ctrl=ctrl)
+        data = mjx_env.make_data(
+            self._mjx_model,
+            qpos=qpos,
+            qvel=qvel,
+            ctrl=ctrl,
+        )
         data = mjx.forward(self._mjx_model, data)
         command = self.sample_command(command_key)
         info = {
@@ -603,7 +611,14 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "done_invalid": jp.array(0.0),
             "done": jp.array(0.0),
         }
-        return mjx_env.State(data, obs, jp.array(0.0), jp.array(0.0), metrics, info)
+        return mjx_env.State(
+            data,
+            obs,
+            jp.array(0.0),
+            jp.array(0.0),
+            metrics,
+            info,
+        )
 
     def step(self, state: mjx_env.State, action: jax.Array) -> mjx_env.State:
         """Izvrsi jedan locomotion korak za zadatu akciju politike."""
@@ -617,21 +632,13 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             self._config.action_smoothing * policy_action
             + (1.0 - self._config.action_smoothing) * previous_action
         )
-        erfi_torque = self.sample_erfi_torque(
+        motor_targets = self._default_ctrl + (smoothed_action * self._action_scale)
+        data = self.step_with_joint_torque_injection(
+            state.data,
+            motor_targets,
             rfi_key,
             info["episode_torque_offset"],
             info["use_rfi"],
-        )
-        data_with_erfi = self.apply_joint_torque_injection(
-            state.data,
-            erfi_torque,
-        )
-        motor_targets = self._default_ctrl + (smoothed_action * self._action_scale)
-        data = mjx_env.step(
-            self._mjx_model,
-            data_with_erfi,
-            motor_targets,
-            self._n_substeps,
         )
 
         should_resample = info["step"] > self._config.command_resample_steps
@@ -648,6 +655,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         )
 
         obs = self._get_obs(data, info)
+
         reward = self._get_reward(data, smoothed_action, previous_action, info)
         done = self._get_done(data)
         done_low_height, done_tipped, done_invalid = self._get_done_reasons(data)
@@ -685,6 +693,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         metrics["done_invalid"] = done_invalid.astype(reward.dtype)
         metrics["done"] = done.astype(reward.dtype)
         info["last_foot_xy"] = self._foot_xy(data)
+
         return state.replace(
             data=data,
             obs=obs,
@@ -815,6 +824,33 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         qfrc_applied = qfrc_applied.at[self._actuator_dof_indices].set(joint_torque)
         return data.replace(qfrc_applied=qfrc_applied)
 
+    def step_with_joint_torque_injection(
+        self,
+        data: mjx.Data,
+        motor_targets: jax.Array,
+        rng: jax.Array,
+        episode_offset: jax.Array,
+        use_rfi: jax.Array,
+    ) -> mjx.Data:
+        """Korak fizike uz RFI uzorkovanje na svakom impedance substep-u."""
+        substep_keys = jax.random.split(rng, self._n_substeps)
+
+        def single_step(current_data, substep_key):
+            erfi_torque = self.sample_erfi_torque(
+                substep_key,
+                episode_offset,
+                use_rfi,
+            )
+            current_data = self.apply_joint_torque_injection(
+                current_data,
+                erfi_torque,
+            )
+            current_data = current_data.replace(ctrl=motor_targets)
+            current_data = mjx.step(self._mjx_model, current_data)
+            return current_data, None
+
+        return jax.lax.scan(single_step, data, substep_keys)[0]
+
     def _get_obs(self, data: mjx.Data, info: dict) -> dict[str, jax.Array]:
         """Sastavi policy i privileged critic observation."""
         local_linvel = self._local_root_linvel(data)
@@ -928,7 +964,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         head_up = jp.clip(self._head_up(data), 0.0, 1.0)
         low_height = jp.maximum(
             0.0,
-            self.HEIGHT_PENALTY_START_RATIO * self._init_q[2] - data.qpos[2],
+            self.HEIGHT_PENALTY_START_RATIO * self._standing_height()
+            - data.qpos[2],
         )
         action_cost = self.ACTION_COST_SCALE * jp.sum(jp.square(action))
         action_rate_cost = self.ACTION_RATE_COST_SCALE * jp.sum(
@@ -991,7 +1028,6 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         if self._config.command_profile == "forward_slow":
             velocity_tracking_scale = 0.8
             forward_progress_scale = 0.25
-
         height_cost = self.LOW_HEIGHT_COST_SCALE * jp.square(low_height)
         reward = (
             self.ALIVE_REWARD_SCALE
@@ -1034,9 +1070,14 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         too_low, tipped_over, invalid = self._get_done_reasons(data)
         return too_low | tipped_over | invalid
 
-    def _get_done_reasons(self, data: mjx.Data) -> tuple[jax.Array, jax.Array, jax.Array]:
+    def _get_done_reasons(
+        self,
+        data: mjx.Data,
+    ) -> tuple[jax.Array, jax.Array, jax.Array]:
         """Vrati pojedinacne termination razloge za debug logove."""
-        too_low = data.qpos[2] < self.MIN_STANDING_HEIGHT_RATIO * self._init_q[2]
+        too_low = (
+            data.qpos[2] < self.MIN_STANDING_HEIGHT_RATIO * self._standing_height()
+        )
         tipped_over = self._torso_up(data) < 0.25
         invalid = jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any()
         return too_low, tipped_over, invalid
@@ -1256,8 +1297,12 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
 
     def _get_base_height_reward(self, data: mjx.Data) -> jax.Array:
         """Mala gusta nagrada za drzanje root visine blizu pocetne stojece poze."""
-        height_error = (data.qpos[2] - self._init_q[2]) / 0.15
+        height_error = (data.qpos[2] - self._standing_height()) / 0.15
         return jp.exp(-jp.square(height_error))
+
+    def _standing_height(self) -> jax.Array:
+        """Root height for the active MJX model, including size randomization."""
+        return self._mjx_model.qpos0[2]
 
     def _foot_positions(self, data: mjx.Data) -> jax.Array:
         """World pozicije oba djona, redosled: levo, desno."""
@@ -1431,12 +1476,12 @@ def randomize_single_model(model, key):
     )
 
 
-# Pre-jit the vmap for domain randomization
+# Pre-jit vmap za domain randomization.
 _randomize_vmap = jax.jit(jax.vmap(randomize_single_model, in_axes=(None, 0)))
 
 
 def domain_randomize(model, rng):
-    """Randomizuje human velicinu i masu direktno u MJX model arrays (optimizovano sa JIT).
+    """Randomizuje velicinu i masu direktno u MJX model arrays.
 
     Ovo je deo koji sprecava generisanje novog XML-a po epizodi: topologija
     ostaje ista, a Brax/MJX dobija razlicite numericke modele po env-u.

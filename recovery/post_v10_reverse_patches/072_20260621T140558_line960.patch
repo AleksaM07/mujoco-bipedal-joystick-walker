@@ -1,8 +1,0 @@
-diff --git a/config.py b/config.py
---- a/config.py
-+++ b/config.py
-@@ -119,2 +119,4 @@
-     reference_target_observation: bool = False
-+    reference_phase_randomization: bool = False
-+    reference_state_init: bool = False
- 

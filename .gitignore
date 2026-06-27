@@ -22,15 +22,19 @@ ENV/
 .env.*
 !.env.example
 
-# # Training outputs and checkpoints
-# runs/*
-# !runs/.gitkeep
-# generated_models/
-# *.pkl
-# *.ckpt
-# *.pt
-# *.pth
-# *.npz
+# Training outputs and checkpoints
+runs/*
+!runs/.gitkeep
+!runs/README.md
+generated_models/*
+!generated_models/.gitkeep
+*.pkl
+*.ckpt
+*.pt
+*.pth
+*.npz
+*.mp4
+artifacts/
 
 # Logs
 *.log
@@ -45,3 +49,4 @@ Thumbs.db
 # .temp
 .temp/*
 .tmp_*/
+recovery/

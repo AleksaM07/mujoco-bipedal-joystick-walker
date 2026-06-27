@@ -1,5 +1,4 @@
 import contextlib
-import hashlib
 import importlib.util
 import os
 import xml.etree.ElementTree as ET
@@ -346,21 +345,14 @@ def load_generator():
     return _GENERATOR_CACHE
 
 
-def spec_to_hash(spec: HumanSpec) -> str:
-    """Generiše hash od HumanSpec za cache keying."""
-    key = f"{spec.mass}_{spec.height}_{spec.sex}_{spec.alpha}"
-    return hashlib.md5(key.encode()).hexdigest()[:8]
-
-
 def generate_base_human_xml(spec: HumanSpec) -> Path:
     """Generise osnovni human XML sa antropometrijskim parametrima (cached)."""
     GENERATED_MODEL_DIR.mkdir(parents=True, exist_ok=True)
     output_path = GENERATED_MODEL_DIR / f"{spec.file_stem}_base.xml"
-    
-    # Ako XML vec postoji, ne regenerisuj
+
     if output_path.exists():
         return output_path
-    
+
     generate_human_model = load_generator()
 
     with working_directory(BIOMECH_DIR):
@@ -379,11 +371,10 @@ def build_trainable_scene_xml(env_version: str, spec: HumanSpec) -> Path:
     output_path = GENERATED_MODEL_DIR / (
         f"{spec.file_stem}_{env_version}_{SCENE_XML_VERSION}.xml"
     )
-    
-    # Ako XML vec postoji, vrati ga bez regenerisanja
+
     if output_path.exists():
         return output_path
-    
+
     base_path = generate_base_human_xml(spec)
     tree = ET.parse(base_path)
     root = tree.getroot()
@@ -405,8 +396,6 @@ def build_trainable_scene_xml(env_version: str, spec: HumanSpec) -> Path:
 
     ET.indent(tree, space="  ", level=0)
     tree.write(output_path, encoding="utf-8", xml_declaration=True)
-    # Validacija se preskace ako je XML vec generisan (mala verovatnoca greske)
-    # Ako trebas validaciju, uglasi --validate-xml flag
     return output_path
 
 

@@ -14,36 +14,33 @@ from brax.training import networks as brax_networks
 from brax.training.acme import running_statistics
 from brax.training.agents.ppo import networks as ppo_networks
 from mujoco import mjx
-from mujoco_playground import locomotion
 
 from biomechanics_env import BiomechanicsJoystickEnv
 from config import (
     EnvConfig,
-    KEY_A,
-    KEY_D,
-    KEY_DOWN,
-    KEY_E,
-    KEY_LEFT,
-    KEY_NUMPAD_2,
-    KEY_NUMPAD_4,
-    KEY_NUMPAD_6,
-    KEY_NUMPAD_7,
-    KEY_NUMPAD_8,
-    KEY_NUMPAD_9,
-    KEY_Q,
-    KEY_RIGHT,
-    KEY_S,
-    KEY_SPACE,
-    KEY_UP,
-    KEY_W,
     expand_reference_gait_files,
 )
 
 
-OBS_COMMAND_START = 9
-OBS_COMMAND_END = 12
-BIOMECH_COMMAND_START = 9
-BIOMECH_COMMAND_END = 12
+KEY_SPACE = 32
+KEY_LEFT = 263
+KEY_RIGHT = 262
+KEY_DOWN = 264
+KEY_UP = 265
+KEY_A = 65
+KEY_D = 68
+KEY_E = 69
+KEY_Q = 81
+KEY_S = 83
+KEY_W = 87
+KEY_NUMPAD_2 = 322
+KEY_NUMPAD_4 = 324
+KEY_NUMPAD_6 = 326
+KEY_NUMPAD_7 = 327
+KEY_NUMPAD_8 = 328
+KEY_NUMPAD_9 = 329
+COMMAND_OBS_START = 9
+COMMAND_OBS_END = 12
 DEBUG_PRINT_INTERVAL = 120
 DEFAULT_WALK_COMMAND_X = 0.25
 
@@ -111,20 +108,25 @@ def clip_command(command: np.ndarray) -> None:
     command[2] = np.clip(command[2], -1.5, 1.5)
 
 
-def infer_command_profile(checkpoint_path: Path) -> str:
+def run_env_value(run_config: dict | None, name: str, default=None):
+    """Read one value from a saved run config."""
+    if run_config is None:
+        return default
+    return run_config.get("env", {}).get(name, default)
+
+
+def infer_command_profile(checkpoint_path: Path, run_config: dict | None) -> str:
     """Procitaj command_profile iz run configa, uz fallback na obs size."""
-    run_config = find_run_config(checkpoint_path)
-    if run_config is not None:
-        profile = run_config.get("env", {}).get("command_profile")
-        if profile in {
-            "forward_slow",
-            "forward",
-            "walk",
-            "steer",
-            "standard_easy",
-            "standard",
-        }:
-            return profile
+    profile = run_env_value(run_config, "command_profile")
+    if profile in {
+        "forward_slow",
+        "forward",
+        "walk",
+        "steer",
+        "standard_easy",
+        "standard",
+    }:
+        return profile
 
     obs_size = read_checkpoint_observation_size(checkpoint_path)
     if obs_size == 92:
@@ -132,76 +134,12 @@ def infer_command_profile(checkpoint_path: Path) -> str:
     return "forward"
 
 
-def infer_env_source(checkpoint_path: Path) -> str:
-    """Procitaj da li checkpoint pripada biomechanics ili prototype env-u."""
-    run_config = find_run_config(checkpoint_path)
-    if run_config is None:
-        return "biomechanics"
-
-    env_config = run_config.get("env", {})
-    env_source = env_config.get("env_source")
-    if env_source in {"biomechanics", "prototip"}:
-        return env_source
-
-    # Legacy Berkeley runs used these keys before EnvConfig.env_source existed.
-    if (
-        "playground_flat_env" in env_config
-        or "playground_hardcore_env" in env_config
-    ):
-        return "prototip"
-
-    return "biomechanics"
-
-
-def infer_init_qpos_file(checkpoint_path: Path) -> str | None:
-    """Procitaj init_qpos_file iz run configa ako je trening koristio tu opciju."""
-    run_config = find_run_config(checkpoint_path)
-    if run_config is None:
-        return None
-    return run_config.get("env", {}).get("init_qpos_file")
-
-
-def infer_xml_path(checkpoint_path: Path) -> str | None:
-    """Procitaj konkretan XML path iz run configa ako postoji."""
-    run_config = find_run_config(checkpoint_path)
-    if run_config is None:
-        return None
-    return run_config.get("env", {}).get("xml_path")
-
-
-def infer_reference_gait(checkpoint_path: Path) -> str:
+def infer_reference_gait(run_config: dict | None) -> str:
     """Procitaj reference_gait iz run configa."""
-    run_config = find_run_config(checkpoint_path)
-    if run_config is None:
-        return "none"
-    reference_gait = run_config.get("env", {}).get("reference_gait", "none")
+    reference_gait = run_env_value(run_config, "reference_gait", "none")
     if reference_gait in {"none", "sine", "bvh"}:
         return reference_gait
     return "none"
-
-
-def infer_reference_gait_file(checkpoint_path: Path) -> str | list[str] | None:
-    """Procitaj reference_gait_file iz run configa."""
-    run_config = find_run_config(checkpoint_path)
-    if run_config is None:
-        return None
-    return run_config.get("env", {}).get("reference_gait_file")
-
-
-def infer_reference_target_observation(checkpoint_path: Path) -> bool:
-    """Procitaj da li checkpoint ocekuje BVH target u policy observation-u."""
-    run_config = find_run_config(checkpoint_path)
-    if run_config is None:
-        return False
-    return bool(run_config.get("env", {}).get("reference_target_observation", False))
-
-
-def infer_legacy_action_prior(checkpoint_path: Path) -> bool:
-    """Procitaj da li checkpoint koristi stari action prior."""
-    run_config = find_run_config(checkpoint_path)
-    if run_config is None:
-        return False
-    return bool(run_config.get("env", {}).get("legacy_action_prior", False))
 
 
 def find_run_config(checkpoint_path: Path) -> dict | None:
@@ -319,7 +257,7 @@ def validate_observation_compatibility(checkpoint_path: Path, obs) -> None:
         "Checkpoint i env nisu kompatibilni: "
         f"checkpoint ocekuje policy observation {expected_size}, "
         f"a trenutni env daje {actual_size}. "
-        "Proveri --env-source, --env-version, --reference-gait, "
+        "Proveri --env-version, --reference-gait, "
         "--reference-target-observation i --xml-path."
     )
 
@@ -332,14 +270,14 @@ def set_command(state, command: np.ndarray):
     info["command"] = command_array
     if isinstance(state.obs, dict):
         obs = dict(state.obs)
-        obs["state"] = obs["state"].at[OBS_COMMAND_START:OBS_COMMAND_END].set(
+        obs["state"] = obs["state"].at[COMMAND_OBS_START:COMMAND_OBS_END].set(
             command_array
         )
         obs["privileged_state"] = obs["privileged_state"].at[
-            OBS_COMMAND_START:OBS_COMMAND_END
+            COMMAND_OBS_START:COMMAND_OBS_END
         ].set(command_array)
     else:
-        obs = state.obs.at[BIOMECH_COMMAND_START:BIOMECH_COMMAND_END].set(
+        obs = state.obs.at[COMMAND_OBS_START:COMMAND_OBS_END].set(
             command_array
         )
     return state.replace(info=info, obs=obs)
@@ -365,9 +303,9 @@ def print_debug(step: int, state, action) -> None:
         return
 
     if isinstance(state.obs, dict):
-        command = np.asarray(state.obs["state"][OBS_COMMAND_START:OBS_COMMAND_END])
+        command = np.asarray(state.obs["state"][COMMAND_OBS_START:COMMAND_OBS_END])
     else:
-        command = np.asarray(state.obs[BIOMECH_COMMAND_START:BIOMECH_COMMAND_END])
+        command = np.asarray(state.obs[COMMAND_OBS_START:COMMAND_OBS_END])
     qpos = np.asarray(state.data.qpos[:3])
     qvel = np.asarray(state.data.qvel[:6])
     torso_up = get_torso_up(state)
@@ -487,11 +425,6 @@ def main():
     parser.add_argument("--checkpoint", required=True, type=Path)
     parser.add_argument("--device", choices=["gpu", "cpu"], default="gpu")
     parser.add_argument(
-        "--env-source",
-        choices=["auto", "biomechanics", "prototip"],
-        default="auto",
-    )
-    parser.add_argument(
         "--env-version",
         choices=["standard", "hardcore"],
         default="standard",
@@ -549,27 +482,18 @@ def main():
     parser.add_argument("--inspect", action="store_true")
     parser.add_argument("--inspect-steps", type=int, default=2000)
     parser.add_argument(
-        "--accurate-physics",
-        action="store_true",
-        help=argparse.SUPPRESS,
-    )
-    parser.add_argument(
         "--fast-physics",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help="Use sim_dt=0.01 instead of the default accurate 0.005 setup.",
     )
     args = parser.parse_args()
 
     device = choose_device(args.device)
     jax.config.update("jax_default_device", device)
+    run_config = find_run_config(args.checkpoint)
 
-    env_source = (
-        infer_env_source(args.checkpoint)
-        if args.env_source == "auto"
-        else args.env_source
-    )
     command_profile = (
-        infer_command_profile(args.checkpoint)
+        infer_command_profile(args.checkpoint, run_config)
         if args.command_profile == "auto"
         else args.command_profile
     )
@@ -579,15 +503,15 @@ def main():
     init_qpos_file = (
         str(args.init_qpos_file)
         if args.init_qpos_file is not None
-        else infer_init_qpos_file(args.checkpoint)
+        else run_env_value(run_config, "init_qpos_file")
     )
     xml_path = (
         str(args.xml_path)
         if args.xml_path is not None
-        else infer_xml_path(args.checkpoint)
+        else run_env_value(run_config, "xml_path")
     )
     reference_gait = (
-        infer_reference_gait(args.checkpoint)
+        infer_reference_gait(run_config)
         if args.reference_gait == "auto"
         else args.reference_gait
     )
@@ -598,18 +522,17 @@ def main():
         )
         reference_target_observation = reference_gait == "bvh"
     else:
-        reference_gait_file = infer_reference_gait_file(args.checkpoint)
-        reference_target_observation = infer_reference_target_observation(
-            args.checkpoint
+        reference_gait_file = run_env_value(run_config, "reference_gait_file")
+        reference_target_observation = bool(
+            run_env_value(run_config, "reference_target_observation", False)
         )
     legacy_action_prior = (
-        infer_legacy_action_prior(args.checkpoint)
+        bool(run_env_value(run_config, "legacy_action_prior", False))
         if args.legacy_action_prior is None
         else args.legacy_action_prior
     )
     print(
         "eval config | "
-        f"env_source={env_source} | "
         f"command_profile={command_profile} | "
         f"command_x={command_x} | "
         f"init_qpos_file={init_qpos_file} | "
@@ -622,7 +545,6 @@ def main():
     )
 
     env_config = EnvConfig(
-        env_source=env_source,
         env_version=args.env_version,
         playground_impl=args.playground_impl,
         command_profile=command_profile,
@@ -697,11 +619,6 @@ def main():
 
 def make_environment(env_config: EnvConfig):
     """Napravi env za viewer."""
-    if env_config.env_source == "prototip":
-        return locomotion.load(
-            env_config.prototype_env_name(),
-            config_overrides={"impl": env_config.playground_impl},
-        )
     config_overrides = {
         "impl": env_config.playground_impl,
         "enable_erfi": False,

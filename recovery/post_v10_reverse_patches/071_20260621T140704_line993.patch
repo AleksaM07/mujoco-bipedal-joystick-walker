@@ -1,7 +1,0 @@
-diff --git a/train.py b/train.py
---- a/train.py
-+++ b/train.py
-@@ -62,2 +62,3 @@
-         ("eval/episode_reference_foot", "ref_foot"),
-+        ("eval/episode_reference_root", "ref_root"),
-         ("eval/episode_contact_force", "contact_force"),

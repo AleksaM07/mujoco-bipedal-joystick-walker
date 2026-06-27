@@ -1,8 +1,0 @@
-diff --git a/train.py b/train.py
---- a/train.py
-+++ b/train.py
-@@ -1010,2 +1010,4 @@
-         reference_target_observation=args.reference_gait == "bvh",
-+        reference_phase_randomization=args.reference_phase_randomization,
-+        reference_state_init=args.reference_state_init,
-         xml_path=str(args.xml_path) if args.xml_path is not None else None,

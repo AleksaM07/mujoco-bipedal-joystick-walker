@@ -1,9 +1,0 @@
-diff --git a/train.py b/train.py
---- a/train.py
-+++ b/train.py
-@@ -64,2 +64,5 @@
-         ("eval/episode_double_support_drag", "dbl_drag"),
-+        ("eval/episode_task_reward", "task_rew"),
-+        ("eval/episode_zombie_sine_reward", "zombie_rew"),
-+        ("eval/episode_bvh_mimic_reward", "mimic_rew"),
-         ("eval/episode_variable_posture", "var_pose"),

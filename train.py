@@ -15,9 +15,6 @@ from brax.training.agents.ppo import train as ppo
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 from loguru import logger
 from ml_collections import config_dict
-from mujoco_playground import locomotion
-from mujoco_playground._src import wrapper
-from mujoco_playground.config import locomotion_params
 
 from biomechanics_env import BiomechanicsJoystickEnv, domain_randomize
 from config import (
@@ -27,6 +24,7 @@ from config import (
     TrainConfig,
     expand_reference_gait_files,
 )
+from training_wrappers import wrap_biomechanics_training
 
 
 @contextmanager
@@ -216,20 +214,29 @@ def format_steps(steps: int) -> str:
 
 def make_run_dir(
     base_dir: Path,
-    env_source: str,
+    run_mode: str,
     env_name: str,
     timesteps: int,
     seed: int,
 ) -> Path:
-    """Pravi deterministicki citljivo ime run foldera."""
+    """Create a compact, readable run folder name."""
     stamp = datetime.now().strftime("%Y%m%d_%H%M")
     return (
         base_dir
         / (
-            f"{env_source}_ppo_{env_name}_{stamp}_"
+            f"{stamp}_{run_mode}_ppo_{short_env_name(env_name)}_"
             f"{format_steps(timesteps)}_seed{seed}_running"
         )
     )
+
+
+def short_env_name(env_name: str) -> str:
+    """Shorten verbose env class names used in run folders."""
+    aliases = {
+        "BiomechanicsHumanJoystickStandard": "standard",
+        "BiomechanicsHumanJoystickHardcore": "hardcore",
+    }
+    return aliases.get(env_name, sanitize_run_tag(env_name))
 
 
 def mark_run_status(
@@ -361,18 +368,10 @@ def normalize_logged_xml_path(raw_path: str) -> str:
 
 
 def make_ppo_config(
-    env_name: str,
-    env_config: EnvConfig,
     train_config: TrainConfig,
 ):
-    """Pravi PPO config za prototip ili biomehanicki human env."""
-    if env_config.env_source == "prototip":
-        rl_config = locomotion_params.brax_ppo_config(
-            env_name,
-            impl=env_config.playground_impl,
-        )
-    else:
-        rl_config = biomechanics_ppo_config()
+    """Pravi PPO config za biomehanicki human env."""
+    rl_config = biomechanics_ppo_config()
 
     overrides = {
         "num_timesteps": train_config.num_timesteps,
@@ -472,7 +471,7 @@ def run_training(
     patch_jax_for_brax_compatibility()
 
     env_name = env_display_name(env_config)
-    rl_config = make_ppo_config(env_name, env_config, train_config)
+    rl_config = make_ppo_config(train_config)
     run_dir = make_run_dir(
         out_dir,
         run_source_name(env_config, train_config),
@@ -555,7 +554,7 @@ def run_training(
             "run will overshoot to at least {} env steps",
             env_steps_per_training_block(rl_config),
         )
-    if env_config.env_source == "biomechanics" and rl_config.num_envs < 512:
+    if rl_config.num_envs < 512:
         logger.warning(
             "biomechanics run uses only {} envs; GPU throughput is usually "
             "better with --num-envs 512 or 1024",
@@ -568,12 +567,20 @@ def run_training(
         train_kwargs["run_evals"] = False
         train_kwargs["num_evals"] = 11
     train_kwargs_extra = {}
-    if (
-        env_config.env_source == "biomechanics"
-        and not train_config.bare
-        and not train_config.no_domain_randomization
-    ):
-        train_kwargs_extra["randomization_fn"] = domain_randomize
+    if not train_config.bare and not train_config.no_domain_randomization:
+        randomization_rng = jax.random.split(
+            jax.random.PRNGKey(train_config.seed + 10_000),
+            rl_config.num_envs,
+        )
+        train_kwargs_extra["randomization_fn"] = functools.partial(
+            domain_randomize,
+            rng=randomization_rng,
+        )
+        logger.info(
+            "domain randomization enabled | train resamples numeric MJX "
+            "model on full episode reset | eval uses nominal model | bank_size={}",
+            rl_config.num_envs,
+        )
     if train_config.bare:
         logger.info("bare mode | ERFI disabled | domain randomization disabled")
     if train_config.no_erfi:
@@ -600,7 +607,7 @@ def run_training(
                 policy_params_fn=PpoPercentLogger(rl_config.num_timesteps),
                 save_checkpoint_path=save_checkpoint_path,
                 restore_checkpoint_path=restore_checkpoint_path,
-                wrap_env_fn=wrapper.wrap_for_brax_training,
+                wrap_env_fn=make_wrap_env_fn(eval_env),
                 **train_kwargs_extra,
                 **train_kwargs,
             )
@@ -626,6 +633,28 @@ def run_training(
         progress_logger.best_step,
     )
     return success_dir
+
+
+def make_wrap_env_fn(eval_env):
+    """Return Brax wrapper with nominal eval and reset-time DR for training."""
+    def wrap_env(
+        wrapped_env,
+        episode_length: int = 1000,
+        action_repeat: int = 1,
+        randomization_fn=None,
+        full_reset: bool = False,
+    ):
+        del full_reset
+        if wrapped_env is eval_env:
+            randomization_fn = None
+        return wrap_biomechanics_training(
+            wrapped_env,
+            episode_length=episode_length,
+            action_repeat=action_repeat,
+            randomization_fn=randomization_fn,
+        )
+
+    return wrap_env
 
 
 def log_environment_summary(env, label: str = "env") -> None:
@@ -681,7 +710,6 @@ def env_steps_per_training_block(rl_config) -> int:
 def debug_preflight(env, seed: int) -> None:
     """Proveri reset/step/JIT pre ulaska u Brax PPO."""
     rng = jax.random.PRNGKey(seed)
-    action = None
 
     with logged_stage("preflight reset"):
         state = env.reset(rng)
@@ -718,31 +746,29 @@ def debug_preflight(env, seed: int) -> None:
 
 def env_display_name(env_config: EnvConfig) -> str:
     """Vraca ime env-a za logove i run foldere."""
-    if env_config.env_source == "prototip":
-        return env_config.prototype_env_name()
     return f"BiomechanicsHumanJoystick{env_config.env_version.title()}"
 
 
 def run_source_name(env_config: EnvConfig, train_config: TrainConfig) -> str:
-    """Dodaje mode u ime run foldera kada nije standardni trening."""
-    env_source = env_config.env_source
+    """Build a compact run mode label for the folder name."""
+    run_mode = "biomech"
     if train_config.bare:
-        env_source = f"{env_source}_bare"
+        run_mode = f"{run_mode}_bare"
     elif train_config.no_erfi:
-        env_source = f"{env_source}_noerfi"
+        run_mode = f"{run_mode}_noerfi"
     if train_config.no_domain_randomization and not train_config.bare:
-        env_source = f"{env_source}_nodr"
+        run_mode = f"{run_mode}_nodr"
     if env_config.command_profile != "standard":
-        env_source = f"{env_source}_{env_config.command_profile}"
+        run_mode = f"{run_mode}_{env_config.command_profile}"
     if env_config.reference_gait != "none":
-        env_source = f"{env_source}_ref_{sanitize_run_tag(env_config.reference_gait)}"
+        run_mode = f"{run_mode}_{sanitize_run_tag(env_config.reference_gait)}"
     if env_config.init_qpos_file:
-        env_source = f"{env_source}_initqpos"
+        run_mode = f"{run_mode}_init"
     if train_config.run_tag:
-        env_source = f"{env_source}_{sanitize_run_tag(train_config.run_tag)}"
+        run_mode = f"{run_mode}_{sanitize_run_tag(train_config.run_tag)}"
     if env_config.accurate_physics:
-        env_source = f"{env_source}_accurate"
-    return env_source
+        run_mode = f"{run_mode}_accurate"
+    return run_mode
 
 
 def sanitize_run_tag(run_tag: str) -> str:
@@ -764,35 +790,28 @@ def sanitize_run_tag(run_tag: str) -> str:
 
 
 def make_environment(env_config: EnvConfig, enable_erfi: bool = True):
-    """Napravi prototip ili pravi biomehanicki joystick env."""
-    if env_config.env_source == "prototip":
-        return locomotion.load(
-            env_config.prototype_env_name(),
-            config_overrides={"impl": env_config.playground_impl},
-        )
-    if env_config.env_source == "biomechanics":
-        config_overrides = {
-            "impl": env_config.playground_impl,
-            "enable_erfi": enable_erfi,
-            "command_profile": env_config.command_profile,
-            "reference_gait": env_config.reference_gait,
-            "reference_target_observation": env_config.reference_target_observation,
-            "action_smoothing": env_config.action_smoothing,
-            "legacy_action_prior": env_config.legacy_action_prior,
-        }
-        if env_config.xml_path is not None:
-            config_overrides["xml_path"] = env_config.xml_path
-        if env_config.reference_gait_file is not None:
-            config_overrides["reference_gait_file"] = env_config.reference_gait_file
-        if env_config.init_qpos_file is not None:
-            config_overrides["init_qpos_file"] = env_config.init_qpos_file
-        if env_config.accurate_physics:
-            config_overrides["sim_dt"] = 0.005
-        return BiomechanicsJoystickEnv(
-            env_version=env_config.env_version,
-            config_overrides=config_overrides,
-        )
-    raise ValueError("env_source mora biti 'biomechanics' ili 'prototip'.")
+    """Napravi biomehanicki joystick env."""
+    config_overrides = {
+        "impl": env_config.playground_impl,
+        "enable_erfi": enable_erfi,
+        "command_profile": env_config.command_profile,
+        "reference_gait": env_config.reference_gait,
+        "reference_target_observation": env_config.reference_target_observation,
+        "action_smoothing": env_config.action_smoothing,
+        "legacy_action_prior": env_config.legacy_action_prior,
+    }
+    if env_config.xml_path is not None:
+        config_overrides["xml_path"] = env_config.xml_path
+    if env_config.reference_gait_file is not None:
+        config_overrides["reference_gait_file"] = env_config.reference_gait_file
+    if env_config.init_qpos_file is not None:
+        config_overrides["init_qpos_file"] = env_config.init_qpos_file
+    if env_config.accurate_physics:
+        config_overrides["sim_dt"] = 0.005
+    return BiomechanicsJoystickEnv(
+        env_version=env_config.env_version,
+        config_overrides=config_overrides,
+    )
 
 
 def main() -> None:
@@ -803,11 +822,6 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--device", choices=["gpu", "cpu"], default="gpu")
     parser.add_argument("--allow-cpu", action="store_true")
-    parser.add_argument(
-        "--env-source",
-        choices=["biomechanics", "prototip"],
-        default="biomechanics",
-    )
     parser.add_argument(
         "--env-version",
         choices=["standard", "hardcore"],
@@ -876,7 +890,7 @@ def main() -> None:
         default=None,
         help=(
             "Opcioni MJDATA/QPOS fajl za pocetnu pozu, npr. "
-            "MJDATA_neutral_poze.TXT."
+            "assets/poses/MJDATA_neutral_poze.TXT."
         ),
     )
     parser.add_argument(
@@ -957,14 +971,9 @@ def main() -> None:
         ),
     )
     parser.add_argument(
-        "--accurate-physics",
-        action="store_true",
-        help=argparse.SUPPRESS,
-    )
-    parser.add_argument(
         "--fast-physics",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help="Use sim_dt=0.01 instead of the default accurate 0.005 setup.",
     )
     parser.add_argument("--out", type=Path, default=RUNS_DIR)
     args = parser.parse_args()
@@ -973,7 +982,6 @@ def main() -> None:
     jax.config.update("jax_default_device", device)
 
     env_config = EnvConfig(
-        env_source=args.env_source,
         env_version=args.env_version,
         playground_impl=args.playground_impl,
         command_profile=args.command_profile,
