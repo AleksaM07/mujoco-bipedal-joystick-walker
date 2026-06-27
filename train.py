@@ -1,8 +1,10 @@
 import argparse
+import contextlib
 import functools
 import json
 import sys
 import time
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -10,21 +12,26 @@ from pathlib import Path
 import jax
 import jax.numpy as jnp
 import numpy as np
+from brax.envs.wrappers import training as brax_training
 from brax.training.agents.ppo import networks as ppo_networks
 from brax.training.agents.ppo import train as ppo
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 from loguru import logger
-from ml_collections import config_dict
+from mujoco import mjx
+from mujoco_playground._src import mjx_env
+from mujoco_playground._src import wrapper as playground_wrapper
 
 from biomechanics_env import BiomechanicsJoystickEnv, domain_randomize
 from config import (
+    DOMAIN_RANDOMIZATION_ID,
     PROJECT_ROOT,
     RUNS_DIR,
     EnvConfig,
+    TRAIN_DIAGNOSTIC_METRICS,
     TrainConfig,
+    default_biomechanics_ppo_config,
     expand_reference_gait_files,
 )
-from training_wrappers import wrap_biomechanics_training
 
 
 @contextmanager
@@ -42,28 +49,6 @@ def logged_stage(name: str):
 class TrainingProgressLogger:
     """Prima PPO metrike i upisuje samo korisne linije."""
 
-    DIAGNOSTIC_METRICS = (
-        ("eval/episode_tracking_lin_vel", "tracking"),
-        ("eval/episode_command_progress", "progress"),
-        ("eval/episode_command_norm", "cmd_norm"),
-        ("eval/episode_torso_up", "torso_up"),
-        ("eval/episode_head_up", "head_up"),
-        ("eval/episode_height", "height"),
-        ("eval/episode_foot_slip", "foot_slip"),
-        ("eval/episode_swing_drag", "swing_drag"),
-        ("eval/episode_swing_clearance", "swing_clear"),
-        ("eval/episode_swing_clearance_deficit", "clear_deficit"),
-        ("eval/episode_variable_posture", "var_pose"),
-        ("eval/episode_gait_reward", "gait"),
-        ("eval/episode_reference_gait", "ref_gait"),
-        ("eval/episode_reference_velocity", "ref_vel"),
-        ("eval/episode_contact_force", "contact_force"),
-        ("eval/episode_done_low_height", "done_low"),
-        ("eval/episode_done_tipped", "done_tip"),
-        ("eval/episode_done_invalid", "done_nan"),
-        ("eval/episode_done", "done"),
-    )
-
     def __init__(self):
         self.final_reward = None
         self.best_reward = None
@@ -80,7 +65,7 @@ class TrainingProgressLogger:
             return
 
         diagnostics = []
-        for key, label in self.DIAGNOSTIC_METRICS:
+        for key, label in TRAIN_DIAGNOSTIC_METRICS:
             value = metrics.get(key)
             if value is not None:
                 diagnostics.append(f"{label}={float(value):.3f}")
@@ -214,29 +199,17 @@ def format_steps(steps: int) -> str:
 
 def make_run_dir(
     base_dir: Path,
-    run_mode: str,
-    env_name: str,
+    run_label: str,
     timesteps: int,
-    seed: int,
 ) -> Path:
     """Create a compact, readable run folder name."""
     stamp = datetime.now().strftime("%Y%m%d_%H%M")
     return (
         base_dir
         / (
-            f"{stamp}_{run_mode}_ppo_{short_env_name(env_name)}_"
-            f"{format_steps(timesteps)}_seed{seed}_running"
+            f"{stamp}_{run_label}_{format_steps(timesteps)}_running"
         )
     )
-
-
-def short_env_name(env_name: str) -> str:
-    """Shorten verbose env class names used in run folders."""
-    aliases = {
-        "BiomechanicsHumanJoystickStandard": "standard",
-        "BiomechanicsHumanJoystickHardcore": "hardcore",
-    }
-    return aliases.get(env_name, sanitize_run_tag(env_name))
 
 
 def mark_run_status(
@@ -371,7 +344,7 @@ def make_ppo_config(
     train_config: TrainConfig,
 ):
     """Pravi PPO config za biomehanicki human env."""
-    rl_config = biomechanics_ppo_config()
+    rl_config = default_biomechanics_ppo_config()
 
     overrides = {
         "num_timesteps": train_config.num_timesteps,
@@ -390,38 +363,6 @@ def make_ppo_config(
             rl_config[key] = value
 
     return rl_config
-
-
-def biomechanics_ppo_config():
-    """PPO polazne vrednosti za nas custom human joystick env."""
-    return config_dict.create(
-        num_timesteps=50_000_000,
-        num_evals=10,
-        num_envs=1024,
-        num_eval_envs=32,
-        episode_length=500,
-        action_repeat=1,
-        learning_rate=3e-4,
-        entropy_cost=3e-3,
-        discounting=0.97,
-        unroll_length=20,
-        batch_size=512,
-        num_minibatches=8,
-        num_updates_per_batch=4,
-        normalize_observations=True,
-        normalize_observations_std_eps=1e-3,
-        reward_scaling=1.0,
-        clipping_epsilon=0.2,
-        gae_lambda=0.95,
-        max_grad_norm=1.0,
-        network_factory=config_dict.create(
-            policy_hidden_layer_sizes=(512, 256, 128),
-            value_hidden_layer_sizes=(512, 256, 128),
-            activation=jax.nn.silu,
-            policy_obs_key="state",
-            value_obs_key="privileged_state",
-        ),
-    )
 
 
 def make_network_factory(rl_config):
@@ -475,9 +416,7 @@ def run_training(
     run_dir = make_run_dir(
         out_dir,
         run_source_name(env_config, train_config),
-        env_name,
         rl_config.num_timesteps,
-        train_config.seed,
     )
     checkpoint_dir = (
         Path(train_config.checkpoint_out).expanduser()
@@ -637,6 +576,7 @@ def run_training(
 
 def make_wrap_env_fn(eval_env):
     """Return Brax wrapper with nominal eval and reset-time DR for training."""
+
     def wrap_env(
         wrapped_env,
         episode_length: int = 1000,
@@ -655,6 +595,203 @@ def make_wrap_env_fn(eval_env):
         )
 
     return wrap_env
+
+
+class BiomechanicsVmapWrapper(playground_wrapper.Wrapper):
+    """Vectorizes the env and keeps ERFI-50 split exact per parallel batch."""
+
+    def reset(self, rng: jax.Array) -> mjx_env.State:
+        state = jax.vmap(self.env.reset)(rng)
+        return _with_erfi50_split(state)
+
+    def step(self, state: mjx_env.State, action: jax.Array) -> mjx_env.State:
+        return jax.vmap(self.env.step)(state, action)
+
+
+class PerEpisodeDomainRandomizationVmapWrapper(playground_wrapper.Wrapper):
+    """Vectorizes envs with a prebuilt randomized MJX model bank.
+
+    The expensive XML/MjModel construction stays outside the hot path. Each env
+    reset samples one model id and subsequent steps gather that numeric MJX
+    model from the bank.
+    """
+
+    def __init__(
+        self,
+        env: mjx_env.MjxEnv,
+        randomization_fn: Callable[[mjx.Model], tuple[mjx.Model, mjx.Model]],
+    ) -> None:
+        super().__init__(env)
+        self._mjx_model_bank, self._in_axes = randomization_fn(self.mjx_model)
+        self._bank_size = self._infer_bank_size()
+
+    def _infer_bank_size(self) -> int:
+        sizes: list[int] = []
+
+        def collect_size(value, axis) -> None:
+            if axis == 0:
+                sizes.append(int(value.shape[0]))
+
+        jax.tree_util.tree_map(collect_size, self._mjx_model_bank, self._in_axes)
+        if not sizes:
+            raise ValueError("domain randomization did not create a model bank.")
+
+        unique_sizes = set(sizes)
+        if len(unique_sizes) != 1:
+            raise ValueError(
+                "domain randomization model bank has inconsistent leaf sizes: "
+                f"{sorted(unique_sizes)}"
+            )
+        return unique_sizes.pop()
+
+    def _select_model(self, model_id: jax.Array) -> mjx.Model:
+        return jax.tree_util.tree_map(
+            lambda value, axis: value[model_id] if axis == 0 else value,
+            self._mjx_model_bank,
+            self._in_axes,
+        )
+
+    @contextlib.contextmanager
+    def _using_model(self, mjx_model: mjx.Model) -> Iterator[mjx_env.MjxEnv]:
+        env = self.env.unwrapped
+        old_mjx_model = env._mjx_model
+        try:
+            env._mjx_model = mjx_model
+            yield env
+        finally:
+            env._mjx_model = old_mjx_model
+
+    def reset(self, rng: jax.Array) -> mjx_env.State:
+        def reset_one(reset_rng):
+            model_key, env_key = jax.random.split(reset_rng)
+            model_id = jax.random.randint(
+                model_key,
+                shape=(),
+                minval=0,
+                maxval=self._bank_size,
+            )
+            mjx_model = self._select_model(model_id)
+            with self._using_model(mjx_model) as env:
+                state = env.reset(env_key)
+            state.info[DOMAIN_RANDOMIZATION_ID] = model_id
+            return state
+
+        state = jax.vmap(reset_one)(rng)
+        return _with_erfi50_split(state)
+
+    def step(self, state: mjx_env.State, action: jax.Array) -> mjx_env.State:
+        def step_one(model_id, env_state, env_action):
+            mjx_model = self._select_model(model_id.astype(jnp.int32))
+            with self._using_model(mjx_model) as env:
+                return env.step(env_state, env_action)
+
+        return jax.vmap(step_one)(
+            state.info[DOMAIN_RANDOMIZATION_ID],
+            state,
+            action,
+        )
+
+
+class ConditionalAutoResetWrapper(playground_wrapper.Wrapper):
+    """Full-reset auto wrapper that only builds reset states when needed."""
+
+    def __init__(self, env) -> None:
+        super().__init__(env)
+        self._info_key = "AutoResetWrapper"
+
+    def _key(self, name: str) -> str:
+        return f"{self._info_key}_{name}"
+
+    def reset(self, rng: jax.Array) -> mjx_env.State:
+        rng_key = jax.vmap(jax.random.split)(rng)
+        rng, key = rng_key[..., 0], rng_key[..., 1]
+        state = self.env.reset(key)
+        state.info[self._key("first_data")] = state.data
+        state.info[self._key("first_obs")] = state.obs
+        state.info[self._key("rng")] = rng
+        state.info[self._key("done_count")] = jnp.zeros(
+            key.shape[:-1],
+            dtype=int,
+        )
+        return state
+
+    def step(self, state: mjx_env.State, action: jax.Array) -> mjx_env.State:
+        rng_key = jax.vmap(jax.random.split)(state.info[self._key("rng")])
+        reset_rng, reset_key = rng_key[..., 0], rng_key[..., 1]
+
+        if "steps" in state.info:
+            steps = state.info["steps"]
+            steps = jnp.where(state.done, jnp.zeros_like(steps), steps)
+            state.info.update(steps=steps)
+
+        state = state.replace(done=jnp.zeros_like(state.done))
+        stepped_state = self.env.step(state, action)
+
+        reset_state = jax.lax.cond(
+            jnp.any(stepped_state.done),
+            lambda _: self.reset(reset_key),
+            lambda _: state,
+            operand=None,
+        )
+
+        def where_done(reset_value, step_value):
+            done = stepped_state.done
+            if done.shape and done.shape[0] != reset_value.shape[0]:
+                return step_value
+            if done.shape:
+                done = jnp.reshape(
+                    done,
+                    [reset_value.shape[0]] + [1] * (len(reset_value.shape) - 1),
+                )
+            return jnp.where(done, reset_value, step_value)
+
+        data = jax.tree.map(where_done, reset_state.data, stepped_state.data)
+        obs = jax.tree.map(where_done, reset_state.obs, stepped_state.obs)
+        next_info = jax.tree.map(
+            where_done,
+            reset_state.info,
+            stepped_state.info,
+        )
+
+        done_count_key = self._key("done_count")
+        next_info[done_count_key] = stepped_state.info[done_count_key]
+        if "steps" in next_info:
+            next_info["steps"] = stepped_state.info["steps"]
+
+        preserve_info_key = self._key("preserve_info")
+        if preserve_info_key in next_info:
+            next_info[preserve_info_key] = stepped_state.info[preserve_info_key]
+
+        next_info[done_count_key] += stepped_state.done.astype(int)
+        next_info[self._key("rng")] = reset_rng
+
+        return stepped_state.replace(data=data, obs=obs, info=next_info)
+
+
+def wrap_biomechanics_training(
+    env: mjx_env.MjxEnv,
+    episode_length: int = 1000,
+    action_repeat: int = 1,
+    randomization_fn: Callable[[mjx.Model], tuple[mjx.Model, mjx.Model]]
+    | None = None,
+) -> playground_wrapper.Wrapper:
+    """Wrap biomechanics envs for PPO with true reset-time randomization."""
+    if randomization_fn is None:
+        env = BiomechanicsVmapWrapper(env)
+    else:
+        env = PerEpisodeDomainRandomizationVmapWrapper(env, randomization_fn)
+    env = brax_training.EpisodeWrapper(env, episode_length, action_repeat)
+    return ConditionalAutoResetWrapper(env)
+
+
+def _with_erfi50_split(state: mjx_env.State) -> mjx_env.State:
+    """Force exactly half of batched envs into RFI and half into RAO."""
+    if "use_rfi" not in state.info:
+        return state
+    batch_size = state.info["use_rfi"].shape[0]
+    split = batch_size // 2
+    state.info["use_rfi"] = jnp.arange(batch_size) < split
+    return state
 
 
 def log_environment_summary(env, label: str = "env") -> None:
@@ -751,7 +888,12 @@ def env_display_name(env_config: EnvConfig) -> str:
 
 def run_source_name(env_config: EnvConfig, train_config: TrainConfig) -> str:
     """Build a compact run mode label for the folder name."""
-    run_mode = "biomech"
+    if train_config.run_tag:
+        return f"bio_{sanitize_run_tag(train_config.run_tag)}"
+
+    run_mode = "bio"
+    if env_config.env_version != "standard":
+        run_mode = f"{run_mode}_{sanitize_run_tag(env_config.env_version)}"
     if train_config.bare:
         run_mode = f"{run_mode}_bare"
     elif train_config.no_erfi:
@@ -764,10 +906,8 @@ def run_source_name(env_config: EnvConfig, train_config: TrainConfig) -> str:
         run_mode = f"{run_mode}_{sanitize_run_tag(env_config.reference_gait)}"
     if env_config.init_qpos_file:
         run_mode = f"{run_mode}_init"
-    if train_config.run_tag:
-        run_mode = f"{run_mode}_{sanitize_run_tag(train_config.run_tag)}"
-    if env_config.accurate_physics:
-        run_mode = f"{run_mode}_accurate"
+    if not env_config.accurate_physics:
+        run_mode = f"{run_mode}_fast"
     return run_mode
 
 

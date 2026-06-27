@@ -63,7 +63,7 @@ Count: 166
 
 ## tier3_style_or_complex_walks.txt
 
-Count: 297
+Count: 260
 
 - `BVH_walking_animation/cmuconvert-max-102-111/102/102_16.bvh` - WalkEvasiveLeft
 - `BVH_walking_animation/cmuconvert-max-102-111/102/102_17.bvh` - WalkEvasiveRight
@@ -85,7 +85,7 @@ Count: 297
 - `BVH_walking_animation/cmuconvert-max-102-111/104/104_35.bvh` - SlowWalk
 - `BVH_walking_animation/cmuconvert-max-102-111/104/104_36.bvh` - SlowWalk8
 - `BVH_walking_animation/cmuconvert-max-102-111/104/104_39.bvh` - SlowWalkRightAngleTurns
-- ... 277 more
+- ... 240 more
 
 ## uneven_terrain_walks.txt
 

@@ -476,20 +476,12 @@ BVH_walking_animation/cmuconvert-max-76-80/77/77_25.bvh
 BVH_walking_animation/cmuconvert-max-76-80/77/77_26.bvh
 # careful walk and search
 BVH_walking_animation/cmuconvert-max-76-80/77/77_27.bvh
-# careful walk
-BVH_walking_animation/cmuconvert-max-76-80/77/77_28.bvh
 # creeping walk
 BVH_walking_animation/cmuconvert-max-76-80/77/77_29.bvh
-# creeping walk
-BVH_walking_animation/cmuconvert-max-76-80/77/77_30.bvh
 # silent walk
 BVH_walking_animation/cmuconvert-max-76-80/77/77_31.bvh
 # creeping walk
 BVH_walking_animation/cmuconvert-max-76-80/77/77_32.bvh
-# WalkEvasiveLeft      CleanedGRS
-BVH_walking_animation/cmuconvert-max-76-80/78/78_18.bvh
-# WalkEvasiveRight              CleanedGRS
-BVH_walking_animation/cmuconvert-max-76-80/78/78_19.bvh
 # walking, running, jumping, kicking, and stretching
 BVH_walking_animation/cmuconvert-max-86-94/86/86_03.bvh
 # walking, stretching, punching, chopping, and drinking
@@ -526,71 +518,5 @@ BVH_walking_animation/cmuconvert-max-86-94/90/90_26.bvh
 BVH_walking_animation/cmuconvert-max-86-94/90/90_27.bvh
 # moonwalk
 BVH_walking_animation/cmuconvert-max-86-94/90/90_32.bvh
-# Walk digital figure eight
-BVH_walking_animation/cmuconvert-max-86-94/91/91_01.bvh
-# WalkStraight
-BVH_walking_animation/cmuconvert-max-86-94/91/91_02.bvh
-# Walk figure eight
-BVH_walking_animation/cmuconvert-max-86-94/91/91_03.bvh
 # Walking
 BVH_walking_animation/cmuconvert-max-86-94/91/91_04.bvh
-# Mummy Walk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_05.bvh
-# DrunkWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_09.bvh
-# SlowWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_10.bvh
-# LavishWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_11.bvh
-# TooCoolWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_12.bvh
-# SadWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_13.bvh
-# DepressedWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_14.bvh
-# ClumsyWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_15.bvh
-# QuickWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_17.bvh
-# CarefulWalk LookingAround
-BVH_walking_animation/cmuconvert-max-86-94/91/91_18.bvh
-# ShyWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_20.bvh
-# acheyWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_21.bvh
-# CasualQuickWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_22.bvh
-# CoolWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_23.bvh
-# HurtLegWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_24.bvh
-# DragBadLegWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_25.bvh
-# HurtStomachWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_26.bvh
-# SlowWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_27.bvh
-# GhettoWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_28.bvh
-# NormalWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_29.bvh
-# SexyWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_30.bvh
-# NormalWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_31.bvh
-# ScaredWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_32.bvh
-# MachoWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_33.bvh
-# NormalWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_34.bvh
-# TrafficWalk
-BVH_walking_animation/cmuconvert-max-86-94/91/91_35.bvh
-# WalkStraight
-BVH_walking_animation/cmuconvert-max-86-94/91/91_36.bvh
-# WalkForward
-BVH_walking_animation/cmuconvert-max-86-94/91/91_57.bvh
-# walkFigure8
-BVH_walking_animation/cmuconvert-max-86-94/91/91_62.bvh
-# Casual Walk
-BVH_walking_animation/cmuconvert-max-86-94/93/93_07.bvh

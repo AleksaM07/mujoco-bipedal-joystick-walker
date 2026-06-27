@@ -7,308 +7,50 @@ from pathlib import Path
 
 import mujoco
 
-from config import BIOMECH_DIR, PROJECT_ROOT
+from config import (
+    ACTUATOR_SPECS,
+    BIOMECH_DIR,
+    DEFAULT_HUMAN_ALPHA,
+    DEFAULT_HUMAN_HEIGHT_M,
+    DEFAULT_HUMAN_MASS_KG,
+    DEFAULT_HUMAN_SEX,
+    FLOOR_GEOM_ATTRIBUTES,
+    FOOT_BODY_NAMES,
+    GENERATED_MODEL_DIR,
+    GENERATOR_MODULE_NAME,
+    GROUND_MATERIAL_ATTRIBUTES,
+    GROUND_TEXTURE_ATTRIBUTES,
+    LEG_ACTUATED_JOINTS,
+    LEG_JOINT_SPECS,
+    LOCOMOTION_ACTUATED_JOINTS,
+    PASSIVE_UPPER_BODY_JOINT_SPECS,
+    ROUGH_BLOCK_BASE_HEIGHT,
+    ROUGH_BLOCK_COUNT,
+    ROUGH_BLOCK_GEOM_ATTRIBUTES,
+    ROUGH_BLOCK_HEIGHT_PERIOD,
+    ROUGH_BLOCK_HEIGHT_STEP,
+    ROUGH_BLOCK_SIZE_X,
+    ROUGH_BLOCK_SIZE_Y,
+    ROUGH_BLOCK_START_X,
+    ROUGH_BLOCK_X_STEP,
+    ROUGH_BLOCK_Y_EVEN,
+    ROUGH_BLOCK_Y_ODD,
+    SCENE_XML_VERSION,
+    SOLE_CONTACT_GEOM_ATTRIBUTES,
+    TRUNK_ACTUATED_JOINTS,
+    TRUNK_JOINT_SPECS,
+)
 
 
-GENERATED_MODEL_DIR = PROJECT_ROOT / "generated_models"
-SCENE_XML_VERSION = "trainfast_v17"
-
-# Cache for the generator module to avoid reimporting
 _GENERATOR_CACHE = None
-
-FOOT_BODY_NAMES = ("left_foot", "right_foot")
-
-TRUNK_ACTUATED_JOINTS = (
-    "abdomen_x",
-    "abdomen_y",
-    "abdomen_z",
-    "pelvis_x",
-    "pelvis_y",
-    "pelvis_z",
-)
-
-LEG_ACTUATED_JOINTS = (
-    "left_hip_x",
-    "left_hip_y",
-    "left_hip_z",
-    "left_knee_z",
-    "left_ankle_y",
-    "left_ankle_z",
-    "right_hip_x",
-    "right_hip_y",
-    "right_hip_z",
-    "right_knee_z",
-    "right_ankle_y",
-    "right_ankle_z",
-)
-
-LOCOMOTION_ACTUATED_JOINTS = TRUNK_ACTUATED_JOINTS + LEG_ACTUATED_JOINTS
-
-TRUNK_JOINT_SPECS = {
-    "abdomen_x": {
-        "range": "-12.5 12.5",
-        "stiffness": "45",
-        "damping": "8",
-        "frictionloss": "1.0",
-        "armature": "0.02",
-    },
-    "abdomen_y": {
-        "range": "-15 15",
-        "stiffness": "40",
-        "damping": "8",
-        "frictionloss": "1.0",
-        "armature": "0.02",
-    },
-    "abdomen_z": {
-        "range": "-18 18",
-        "stiffness": "45",
-        "damping": "8",
-        "frictionloss": "1.0",
-        "armature": "0.02",
-    },
-    "pelvis_x": {
-        "range": "-10 10",
-        "stiffness": "70",
-        "damping": "12",
-        "frictionloss": "1.5",
-        "armature": "0.025",
-    },
-    "pelvis_y": {
-        "range": "-10 10",
-        "stiffness": "65",
-        "damping": "12",
-        "frictionloss": "1.5",
-        "armature": "0.025",
-    },
-    "pelvis_z": {
-        "range": "-12 12",
-        "stiffness": "70",
-        "damping": "12",
-        "frictionloss": "1.5",
-        "armature": "0.025",
-    },
-}
-
-LEG_JOINT_SPECS = {
-    "left_hip_x": {
-        "range": "-30 45",
-        "damping": "2.0",
-        "frictionloss": "0.3",
-        "armature": "0.015",
-    },
-    "right_hip_x": {
-        "range": "-45 30",
-        "damping": "2.0",
-        "frictionloss": "0.3",
-        "armature": "0.015",
-    },
-    "left_hip_y": {
-        "range": "-22 22",
-        "damping": "2.0",
-        "frictionloss": "0.4",
-        "armature": "0.015",
-    },
-    "right_hip_y": {
-        "range": "-22 22",
-        "damping": "2.0",
-        "frictionloss": "0.4",
-        "armature": "0.015",
-    },
-    "left_hip_z": {
-        "range": "-30 60",
-        "damping": "2.0",
-        "frictionloss": "0.4",
-        "armature": "0.015",
-    },
-    "right_hip_z": {
-        "range": "-30 60",
-        "damping": "2.0",
-        "frictionloss": "0.4",
-        "armature": "0.015",
-    },
-    "left_knee_z": {
-        "range": "-135 0",
-        "damping": "2.5",
-        "frictionloss": "0.35",
-        "armature": "0.02",
-    },
-    "right_knee_z": {
-        "range": "-135 0",
-        "damping": "2.5",
-        "frictionloss": "0.35",
-        "armature": "0.02",
-    },
-    "left_ankle_y": {
-        "range": "-25 25",
-        "damping": "1.5",
-        "frictionloss": "0.25",
-        "armature": "0.01",
-    },
-    "right_ankle_y": {
-        "range": "-25 25",
-        "damping": "1.5",
-        "frictionloss": "0.25",
-        "armature": "0.01",
-    },
-    "left_ankle_z": {
-        "range": "-12 12",
-        "damping": "1.5",
-        "frictionloss": "0.3",
-        "armature": "0.01",
-    },
-    "right_ankle_z": {
-        "range": "-12 12",
-        "damping": "1.5",
-        "frictionloss": "0.3",
-        "armature": "0.01",
-    },
-}
-
-ACTUATOR_SPECS = {
-    "abdomen_x": {"kp": "180", "ctrlrange": "-0.18 0.18", "forcerange": "-120 120"},
-    "abdomen_y": {"kp": "180", "ctrlrange": "-0.14 0.14", "forcerange": "-120 120"},
-    "abdomen_z": {"kp": "180", "ctrlrange": "-0.18 0.18", "forcerange": "-120 120"},
-    "pelvis_x": {"kp": "220", "ctrlrange": "-0.12 0.12", "forcerange": "-150 150"},
-    "pelvis_y": {"kp": "220", "ctrlrange": "-0.10 0.10", "forcerange": "-150 150"},
-    "pelvis_z": {"kp": "220", "ctrlrange": "-0.12 0.12", "forcerange": "-150 150"},
-    "left_hip_x": {
-        "kp": "100",
-        "ctrlrange": "-0.349066 0.698132",
-        "forcerange": "-180 180",
-    },
-    "left_hip_y": {
-        "kp": "100",
-        "ctrlrange": "-0.383972 0.383972",
-        "forcerange": "-180 180",
-    },
-    "left_hip_z": {
-        "kp": "100",
-        "ctrlrange": "-0.523599 1.047198",
-        "forcerange": "-180 180",
-    },
-    "left_knee_z": {
-        "kp": "120",
-        "ctrlrange": "-2.356194 0.000000",
-        "forcerange": "-180 180",
-    },
-    "left_ankle_y": {
-        "kp": "120",
-        "ctrlrange": "-0.436332 0.436332",
-        "forcerange": "-220 220",
-    },
-    "left_ankle_z": {
-        "kp": "120",
-        "ctrlrange": "-0.209440 0.209440",
-        "forcerange": "-220 220",
-    },
-    "right_hip_x": {
-        "kp": "100",
-        "ctrlrange": "-0.698132 0.349066",
-        "forcerange": "-180 180",
-    },
-    "right_hip_y": {
-        "kp": "100",
-        "ctrlrange": "-0.383972 0.383972",
-        "forcerange": "-180 180",
-    },
-    "right_hip_z": {
-        "kp": "100",
-        "ctrlrange": "-0.523599 1.047198",
-        "forcerange": "-180 180",
-    },
-    "right_knee_z": {
-        "kp": "120",
-        "ctrlrange": "-2.356194 0.000000",
-        "forcerange": "-180 180",
-    },
-    "right_ankle_y": {
-        "kp": "120",
-        "ctrlrange": "-0.436332 0.436332",
-        "forcerange": "-220 220",
-    },
-    "right_ankle_z": {
-        "kp": "120",
-        "ctrlrange": "-0.209440 0.209440",
-        "forcerange": "-220 220",
-    },
-}
-
-PASSIVE_UPPER_BODY_JOINT_SPECS = {
-    "head_x": {
-        "stiffness": "35",
-        "damping": "5",
-        "frictionloss": "0.5",
-        "armature": "0.003",
-    },
-    "head_y": {
-        "stiffness": "35",
-        "damping": "5",
-        "frictionloss": "0.5",
-        "armature": "0.003",
-    },
-    "head_z": {
-        "stiffness": "30",
-        "damping": "4",
-        "frictionloss": "0.5",
-        "armature": "0.003",
-    },
-    "left_shoulder_x": {
-        "stiffness": "25",
-        "damping": "3",
-        "frictionloss": "0.8",
-        "armature": "0.006",
-    },
-    "left_shoulder_y": {
-        "stiffness": "25",
-        "damping": "3",
-        "frictionloss": "0.8",
-        "armature": "0.006",
-    },
-    "left_shoulder_z": {
-        "stiffness": "25",
-        "damping": "3",
-        "frictionloss": "0.8",
-        "armature": "0.006",
-    },
-    "right_shoulder_x": {
-        "stiffness": "25",
-        "damping": "3",
-        "frictionloss": "0.8",
-        "armature": "0.006",
-    },
-    "right_shoulder_y": {
-        "stiffness": "25",
-        "damping": "3",
-        "frictionloss": "0.8",
-        "armature": "0.006",
-    },
-    "right_shoulder_z": {
-        "stiffness": "25",
-        "damping": "3",
-        "frictionloss": "0.8",
-        "armature": "0.006",
-    },
-    "left_elbow_z": {
-        "stiffness": "12",
-        "damping": "2",
-        "frictionloss": "0.5",
-        "armature": "0.006",
-    },
-    "right_elbow_z": {
-        "stiffness": "12",
-        "damping": "2",
-        "frictionloss": "0.5",
-        "armature": "0.006",
-    },
-}
 
 
 @dataclass(frozen=True)
 class HumanSpec:
-    mass: float = 75.0
-    height: float = 1.80
-    sex: str = "male"
-    alpha: float = 1.0
+    mass: float = DEFAULT_HUMAN_MASS_KG
+    height: float = DEFAULT_HUMAN_HEIGHT_M
+    sex: str = DEFAULT_HUMAN_SEX
+    alpha: float = DEFAULT_HUMAN_ALPHA
 
     @property
     def file_stem(self) -> str:
@@ -333,10 +75,10 @@ def load_generator():
     global _GENERATOR_CACHE
     if _GENERATOR_CACHE is not None:
         return _GENERATOR_CACHE
-    
+
     generator_path = BIOMECH_DIR / "generate_human_model.py"
     spec = importlib.util.spec_from_file_location(
-        "mujoco_biomechanics_generator",
+        GENERATOR_MODULE_NAME,
         generator_path,
     )
     module = importlib.util.module_from_spec(spec)
@@ -564,9 +306,8 @@ def add_stable_foot_contacts(root: ET.Element) -> None:
 
         contact_geom.set("name", sole_name)
         mark_foot_geom(contact_geom)
-        contact_geom.set("friction", "1.0 0.01 0.001")
-        contact_geom.set("solref", "0.02 1")
-        contact_geom.set("solimp", "0.85 0.95 0.005")
+        for key, value in SOLE_CONTACT_GEOM_ATTRIBUTES.items():
+            contact_geom.set(key, value)
 
 
 def add_terrain(root: ET.Element, env_version: str) -> None:
@@ -574,57 +315,31 @@ def add_terrain(root: ET.Element, env_version: str) -> None:
     asset = root.find("asset")
     if asset is None:
         asset = ET.SubElement(root, "asset")
-    ET.SubElement(
-        asset,
-        "texture",
-        type="2d",
-        name="groundplane",
-        builtin="checker",
-        width="300",
-        height="300",
-        rgb1="1 1 1",
-        rgb2=".85 .85 .85",
-    )
-    ET.SubElement(
-        asset,
-        "material",
-        name="groundplane",
-        texture="groundplane",
-        texrepeat="6 6",
-        texuniform="true",
-    )
+    ET.SubElement(asset, "texture", **GROUND_TEXTURE_ATTRIBUTES)
+    ET.SubElement(asset, "material", **GROUND_MATERIAL_ATTRIBUTES)
 
     worldbody = root.find("worldbody")
-    ET.SubElement(
-        worldbody,
-        "geom",
-        name="floor",
-        type="plane",
-        size="0 0 0.01",
-        material="groundplane",
-        friction="0.8",
-        condim="3",
-    )
+    ET.SubElement(worldbody, "geom", **FLOOR_GEOM_ATTRIBUTES)
     if env_version == "hardcore":
         add_rough_blocks(worldbody)
 
 
 def add_rough_blocks(worldbody: ET.Element) -> None:
     """Doda deterministicke niske prepreke za hardcore varijantu."""
-    for index in range(12):
-        x_pos = 0.7 + 0.45 * index
-        y_pos = -0.45 if index % 2 else 0.35
-        height = 0.025 + 0.01 * (index % 3)
+    for index in range(ROUGH_BLOCK_COUNT):
+        x_pos = ROUGH_BLOCK_START_X + ROUGH_BLOCK_X_STEP * index
+        y_pos = ROUGH_BLOCK_Y_ODD if index % 2 else ROUGH_BLOCK_Y_EVEN
+        height = (
+            ROUGH_BLOCK_BASE_HEIGHT
+            + ROUGH_BLOCK_HEIGHT_STEP * (index % ROUGH_BLOCK_HEIGHT_PERIOD)
+        )
         ET.SubElement(
             worldbody,
             "geom",
             name=f"rough_block_{index}",
-            type="box",
             pos=f"{x_pos} {y_pos} {height}",
-            size=f"0.18 0.22 {height}",
-            rgba=".55 .55 .55 1",
-            friction="0.9",
-            condim="3",
+            size=f"{ROUGH_BLOCK_SIZE_X} {ROUGH_BLOCK_SIZE_Y} {height}",
+            **ROUGH_BLOCK_GEOM_ATTRIBUTES,
         )
 
 

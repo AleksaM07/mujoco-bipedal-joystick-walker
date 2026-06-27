@@ -1,5 +1,4 @@
 import re
-from dataclasses import dataclass
 from itertools import product
 from pathlib import Path
 
@@ -18,63 +17,7 @@ from biomechanics_model import (
     TRUNK_ACTUATED_JOINTS,
     build_trainable_scene_xml,
 )
-from config import PROJECT_ROOT
-
-
-QPOS_NUMBER_PATTERN = re.compile(
-    r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
-)
-
-
-@dataclass(frozen=True)
-class BiomechanicsEnvConfig:
-    env_version: str = "standard"
-    impl: str = "jax"
-    ctrl_dt: float = 0.02
-    sim_dt: float = 0.005
-    episode_length: int = 1000
-    action_scale: float = 0.5
-    action_smoothing: float = 0.5
-    command_profile: str = "standard"
-    reference_gait: str = "none"
-    reference_gait_file: str | list[str] | None = None
-    reference_target_observation: bool = False
-    xml_path: str | None = None
-    legacy_action_prior: bool = False
-    command_resample_steps: int = 500
-    tracking_sigma: float = 0.25
-    action_noise_std: float = 0.03
-    episode_bias_std: float = 0.02
-    rfi_torque_limit: float = 2.0
-    rao_torque_limit: float = 2.0
-    enable_erfi: bool = True
-    init_qpos_file: str | None = None
-
-
-def default_config() -> config_dict.ConfigDict:
-    """Vraca config kompatibilan sa MuJoCo Playground MjxEnv bazom."""
-    return config_dict.create(
-        ctrl_dt=0.02,
-        sim_dt=0.005,
-        episode_length=1000,
-        action_scale=0.5,
-        action_smoothing=0.5,
-        command_profile="standard",
-        reference_gait="none",
-        reference_gait_file=None,
-        reference_target_observation=False,
-        xml_path=None,
-        legacy_action_prior=False,
-        command_resample_steps=500,
-        tracking_sigma=0.25,
-        action_noise_std=0.03,
-        episode_bias_std=0.02,
-        rfi_torque_limit=2.0,
-        rao_torque_limit=2.0,
-        enable_erfi=True,
-        init_qpos_file=None,
-        impl="jax",
-    )
+from config import default_biomechanics_env_config, resolve_project_path
 
 
 def load_qpos_from_mjdata_file(path: str | Path, expected_size: int) -> np.ndarray:
@@ -98,7 +41,10 @@ def load_qpos_from_mjdata_file(path: str | Path, expected_size: int) -> np.ndarr
 
     values = [
         float(value)
-        for value in QPOS_NUMBER_PATTERN.findall("\n".join(qpos_lines))
+        for value in re.findall(
+            r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?",
+            "\n".join(qpos_lines),
+        )
     ]
     if len(values) != expected_size:
         raise ValueError(
@@ -106,15 +52,6 @@ def load_qpos_from_mjdata_file(path: str | Path, expected_size: int) -> np.ndarr
             f"a model ocekuje nq={expected_size}."
         )
     return np.asarray(values, dtype=np.float64)
-
-
-def resolve_project_path(path: str | Path) -> Path:
-    """Vrati apsolutnu putanju, uz podrsku za repo-relative fajlove."""
-    resolved = Path(path).expanduser()
-    if resolved.is_absolute() or resolved.exists():
-        return resolved
-    return PROJECT_ROOT / resolved
-
 
 class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
     """Joystick locomotion env za humanoida iz `mujoco-biomechanics`."""
@@ -242,7 +179,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         config_overrides: dict | None = None,
     ) -> None:
         if config is None:
-            config = default_config()
+            config = default_biomechanics_env_config()
         super().__init__(config, config_overrides)
         configured_xml_path = self._config.get("xml_path", None)
         if configured_xml_path:

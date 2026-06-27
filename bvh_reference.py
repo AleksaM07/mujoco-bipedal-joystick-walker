@@ -1,7 +1,20 @@
+import argparse
+import hashlib
+import re
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+
+from config import (
+    BVH_INDEX_PATTERN,
+    BVH_ROOT,
+    BVH_TIER1_EXCLUDE,
+    BVH_TIER2_HINTS,
+    BVH_UNEVEN_HINTS,
+    PROJECT_ROOT,
+)
 
 
 @dataclass(frozen=True)
@@ -16,7 +29,12 @@ class BvhReference:
 
 @dataclass(frozen=True)
 class BvhReferenceBatch:
-    """Vise retargetovanih BVH referenci padovanih na istu duzinu."""
+    """Padded BVH clips ready for JAX/MJX static-shape reference tracking.
+
+    Raw BVH clips have different frame counts. The env samples clips by index,
+    so the references are padded into dense tensors and `frame_counts` keeps
+    the real per-clip length.
+    """
 
     qpos_targets: np.ndarray
     qvel_targets: np.ndarray
@@ -237,3 +255,188 @@ def _positive_flexion(
     degrees = _rotation_degrees(bvh, joint_name, channel_name)
     baseline = np.percentile(degrees, 5.0)
     return np.deg2rad(np.maximum(degrees - baseline, 0.0))
+
+
+def build_walk_tiers_main() -> None:
+    """Build BVH walking tier lists from the CMU index text files."""
+    args = parse_walk_tier_args()
+    if not BVH_ROOT.exists():
+        raise FileNotFoundError(f"BVH folder not found: {BVH_ROOT}")
+
+    descriptions = read_bvh_descriptions()
+    existing_bvh = sorted(BVH_ROOT.rglob("*.bvh"))
+    if not existing_bvh:
+        raise ValueError(f"No BVH files found under {BVH_ROOT}")
+
+    buckets = build_tier_buckets(existing_bvh, descriptions)
+
+    if not args.dry_run:
+        for filename, entries in buckets.items():
+            write_reference_list(BVH_ROOT / filename, entries)
+        write_walk_tier_summary(BVH_ROOT / "walk_tiers_summary.md", buckets)
+
+    action = "checked" if args.dry_run else "wrote"
+    print(f"{action} BVH walking tier lists")
+    for filename, entries in buckets.items():
+        print(f"{filename}: {len(entries)}")
+
+    if args.check_duplicates:
+        duplicate_groups = find_duplicate_bvh_files(existing_bvh)
+        print_duplicate_report(duplicate_groups)
+
+
+def parse_walk_tier_args() -> argparse.Namespace:
+    """Parse BVH walking tier CLI arguments."""
+    parser = argparse.ArgumentParser(
+        description="Build BVH walking tiers and optionally audit exact duplicates.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Classify files and print counts without writing tier lists.",
+    )
+    parser.add_argument(
+        "--check-duplicates",
+        action="store_true",
+        help="Print exact duplicate BVH files grouped by SHA-256 hash.",
+    )
+    return parser.parse_args()
+
+
+def build_tier_buckets(
+    bvh_paths: list[Path],
+    descriptions: dict[str, str],
+) -> dict[str, list[tuple[str, str]]]:
+    """Classify BVH paths into curriculum tiers."""
+    buckets = {
+        "tier1_forward_walk.txt": [],
+        "tier2_walk_variations.txt": [],
+        "tier3_style_or_complex_walks.txt": [],
+        "uneven_terrain_walks.txt": [],
+    }
+
+    for bvh_path in bvh_paths:
+        description = descriptions.get(bvh_path.stem, "")
+        bucket = classify_bvh_description(description)
+        relative_path = bvh_path.relative_to(PROJECT_ROOT).as_posix()
+        buckets[bucket].append((relative_path, description))
+    return buckets
+
+
+def read_bvh_descriptions() -> dict[str, str]:
+    """Read motion id descriptions from every bundled CMU text index."""
+    descriptions: dict[str, str] = {}
+    for index_path in BVH_ROOT.rglob("cmu-mocap-index-text.txt"):
+        for line in index_path.read_text(
+            encoding="utf-8",
+            errors="replace",
+        ).splitlines():
+            match = BVH_INDEX_PATTERN.match(line)
+            if not match:
+                continue
+            motion_id, description = match.groups()
+            descriptions.setdefault(motion_id, description.strip())
+    return descriptions
+
+
+def classify_bvh_description(description: str) -> str:
+    """Classify a walking clip into curriculum tiers."""
+    normalized = description.lower()
+    words = set(re.findall(r"[a-z]+", normalized))
+
+    if words & BVH_UNEVEN_HINTS:
+        return "uneven_terrain_walks.txt"
+    if is_tier1_forward_walk(normalized, words):
+        return "tier1_forward_walk.txt"
+    if words & BVH_TIER2_HINTS:
+        return "tier2_walk_variations.txt"
+    return "tier3_style_or_complex_walks.txt"
+
+
+def is_tier1_forward_walk(description: str, words: set[str]) -> bool:
+    """Return True for plain forward walking references."""
+    if words & BVH_TIER1_EXCLUDE:
+        return False
+    return description in {"walk", "normal walk"} or "normal walk" in description
+
+
+def write_reference_list(path: Path, entries: list[tuple[str, str]]) -> None:
+    """Write one path-per-line list with descriptions as comments."""
+    lines = [
+        "# One BVH path per non-comment line.",
+        "# Description is kept above each path for review.",
+    ]
+    for relative_path, description in entries:
+        lines.append(f"# {description}")
+        lines.append(relative_path)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def write_walk_tier_summary(
+    path: Path,
+    buckets: dict[str, list[tuple[str, str]]],
+) -> None:
+    """Write a short human-readable summary of the tiers."""
+    lines = [
+        "# BVH Walking Tiers",
+        "",
+        "Generated from `cmu-mocap-index-text.txt` descriptions.",
+        "",
+        "Recommended curriculum:",
+        "",
+        "- Start with `tier1_forward_walk.txt` only.",
+        "- After stable walking, resume with tier1 + tier2.",
+        "- Keep tier3 and uneven terrain for later robustness experiments.",
+        "- Do not switch tiers automatically inside the env; use separate runs.",
+        "",
+    ]
+    for filename, entries in buckets.items():
+        lines.append(f"## {filename}")
+        lines.append("")
+        lines.append(f"Count: {len(entries)}")
+        lines.append("")
+        for relative_path, description in entries[:20]:
+            lines.append(f"- `{relative_path}` - {description}")
+        if len(entries) > 20:
+            lines.append(f"- ... {len(entries) - 20} more")
+        lines.append("")
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def find_duplicate_bvh_files(paths: list[Path]) -> list[list[Path]]:
+    """Find exact duplicate BVH files by hashing file contents."""
+    paths_by_hash: defaultdict[str, list[Path]] = defaultdict(list)
+    for path in paths:
+        paths_by_hash[file_sha256(path)].append(path)
+    return [group for group in paths_by_hash.values() if len(group) > 1]
+
+
+def file_sha256(path: Path) -> str:
+    """Return a SHA-256 hash for one file."""
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def print_duplicate_report(duplicate_groups: list[list[Path]]) -> None:
+    """Print duplicate BVH groups in repo-relative form."""
+    if not duplicate_groups:
+        print("duplicate BVH files: none")
+        return
+
+    duplicate_file_count = sum(len(group) for group in duplicate_groups)
+    extra_copy_count = duplicate_file_count - len(duplicate_groups)
+    print(
+        "duplicate BVH files: "
+        f"{len(duplicate_groups)} groups, {extra_copy_count} removable copies"
+    )
+    for group_index, group in enumerate(duplicate_groups, start=1):
+        print(f"duplicate group {group_index}:")
+        for path in group:
+            print(f"  {path.relative_to(PROJECT_ROOT).as_posix()}")
+
+
+if __name__ == "__main__":
+    build_walk_tiers_main()

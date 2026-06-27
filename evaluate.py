@@ -17,32 +17,30 @@ from mujoco import mjx
 
 from biomechanics_env import BiomechanicsJoystickEnv
 from config import (
+    COMMAND_OBS_END,
+    COMMAND_OBS_START,
+    DEBUG_PRINT_INTERVAL,
+    DEFAULT_WALK_COMMAND_X,
     EnvConfig,
+    KEY_A,
+    KEY_D,
+    KEY_DOWN,
+    KEY_E,
+    KEY_LEFT,
+    KEY_NUMPAD_2,
+    KEY_NUMPAD_4,
+    KEY_NUMPAD_6,
+    KEY_NUMPAD_7,
+    KEY_NUMPAD_8,
+    KEY_NUMPAD_9,
+    KEY_Q,
+    KEY_RIGHT,
+    KEY_S,
+    KEY_SPACE,
+    KEY_UP,
+    KEY_W,
     expand_reference_gait_files,
 )
-
-
-KEY_SPACE = 32
-KEY_LEFT = 263
-KEY_RIGHT = 262
-KEY_DOWN = 264
-KEY_UP = 265
-KEY_A = 65
-KEY_D = 68
-KEY_E = 69
-KEY_Q = 81
-KEY_S = 83
-KEY_W = 87
-KEY_NUMPAD_2 = 322
-KEY_NUMPAD_4 = 324
-KEY_NUMPAD_6 = 326
-KEY_NUMPAD_7 = 327
-KEY_NUMPAD_8 = 328
-KEY_NUMPAD_9 = 329
-COMMAND_OBS_START = 9
-COMMAND_OBS_END = 12
-DEBUG_PRINT_INTERVAL = 120
-DEFAULT_WALK_COMMAND_X = 0.25
 
 
 class JoystickController:

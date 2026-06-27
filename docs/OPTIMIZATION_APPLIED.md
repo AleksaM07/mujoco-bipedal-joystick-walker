@@ -647,7 +647,7 @@ Default biomechanics PPO config:
 
 ### 33. BVH walking tier lists
 
-**Files:** `BVH_walking_animation/build_walk_tiers.py`,
+**Files:** `bvh_reference.py`,
 `BVH_walking_animation/tier1_forward_walk.txt`,
 `BVH_walking_animation/tier2_walk_variations.txt`,
 `BVH_walking_animation/tier3_style_or_complex_walks.txt`,
