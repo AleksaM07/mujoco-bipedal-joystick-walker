@@ -1,0 +1,4 @@
+odakle sam skinuo bvh walking za point 2
+https://mocap.cs.cmu.edu/?utm_source=chatgpt.com (originalni sajt)
+(ovde ima bvh verzija)
+https://sites.google.com/a/cgspeed.com/cgspeed/motion-capture/the-3dsmax-friendly-bvh-release-of-cmus-motion-capture-database

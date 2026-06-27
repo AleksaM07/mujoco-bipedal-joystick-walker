@@ -1,0 +1,22 @@
+# Small BVH subset for fast debugging.
+# Use the full tier1 list for serious training after this looks sane.
+# walk
+BVH_walking_animation/cmuconvert-max-01-09/02/02_01.bvh
+# walk
+BVH_walking_animation/cmuconvert-max-01-09/02/02_02.bvh
+# walk
+BVH_walking_animation/cmuconvert-max-01-09/05/05_01.bvh
+# walk
+BVH_walking_animation/cmuconvert-max-01-09/06/06_01.bvh
+# walk
+BVH_walking_animation/cmuconvert-max-01-09/07/07_01.bvh
+# walk
+BVH_walking_animation/cmuconvert-max-01-09/07/07_02.bvh
+# walk
+BVH_walking_animation/cmuconvert-max-01-09/07/07_03.bvh
+# walk
+BVH_walking_animation/cmuconvert-max-01-09/07/07_06.bvh
+# walk
+BVH_walking_animation/cmuconvert-max-01-09/07/07_07.bvh
+# walk
+BVH_walking_animation/cmuconvert-max-01-09/07/07_08.bvh

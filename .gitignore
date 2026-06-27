@@ -25,17 +25,31 @@ ENV/
 # Training outputs and checkpoints
 runs/*
 !runs/.gitkeep
+!runs/README.md
+generated_models/*
+!generated_models/.gitkeep
 *.pkl
 *.ckpt
 *.pt
 *.pth
 *.npz
+*.mp4
+artifacts/
 
 # Logs
 *.log
+MUJOCO_LOG.TXT
 
 # IDE/OS noise
 .idea/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# .temp
+.temp/*
+.tmp_*/
+recovery/
+
+# Miscellaneous
+.agents/

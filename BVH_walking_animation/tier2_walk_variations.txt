@@ -1,0 +1,334 @@
+# One BVH path per non-comment line.
+# Description is kept above each path for review.
+# slow walk
+BVH_walking_animation/cmuconvert-max-01-09/07/07_04.bvh
+# slow walk
+BVH_walking_animation/cmuconvert-max-01-09/07/07_05.bvh
+# brisk walk
+BVH_walking_animation/cmuconvert-max-01-09/07/07_12.bvh
+# slow walk
+BVH_walking_animation/cmuconvert-max-01-09/08/08_04.bvh
+# walk/stride
+BVH_walking_animation/cmuconvert-max-01-09/08/08_05.bvh
+# walk, exaggerated stride
+BVH_walking_animation/cmuconvert-max-01-09/08/08_07.bvh
+# slow walk/stride
+BVH_walking_animation/cmuconvert-max-01-09/08/08_11.bvh
+# navigate - walk forward, backward, sideways
+BVH_walking_animation/cmuconvert-max-01-09/09/09_12.bvh
+# Walk slow
+BVH_walking_animation/cmuconvert-max-113-128/120/120_19.bvh
+# Walk to Run
+BVH_walking_animation/cmuconvert-max-113-128/127/127_04.bvh
+# Start Walk Stop
+BVH_walking_animation/cmuconvert-max-131-135/131/131_01.bvh
+# Start Walk Stop
+BVH_walking_animation/cmuconvert-max-131-135/131/131_02.bvh
+# Start Walk Left
+BVH_walking_animation/cmuconvert-max-131-135/131/131_09.bvh
+# Start Walk Left
+BVH_walking_animation/cmuconvert-max-131-135/131/131_10.bvh
+# Start Walk Left
+BVH_walking_animation/cmuconvert-max-131-135/131/131_11.bvh
+# Start Walk Right
+BVH_walking_animation/cmuconvert-max-131-135/131/131_12.bvh
+# Start Walk Right
+BVH_walking_animation/cmuconvert-max-131-135/131/131_13.bvh
+# Start Walk Right
+BVH_walking_animation/cmuconvert-max-131-135/131/131_14.bvh
+# Walk Fast
+BVH_walking_animation/cmuconvert-max-131-135/132/132_17.bvh
+# Walk Fast
+BVH_walking_animation/cmuconvert-max-131-135/132/132_18.bvh
+# Walk Fast
+BVH_walking_animation/cmuconvert-max-131-135/132/132_19.bvh
+# Walk Fast
+BVH_walking_animation/cmuconvert-max-131-135/132/132_20.bvh
+# Walk Fast
+BVH_walking_animation/cmuconvert-max-131-135/132/132_21.bvh
+# Walk Fast
+BVH_walking_animation/cmuconvert-max-131-135/132/132_22.bvh
+# Walk Leaning To The Right
+BVH_walking_animation/cmuconvert-max-131-135/132/132_35.bvh
+# Walk Leaning To The Right
+BVH_walking_animation/cmuconvert-max-131-135/132/132_36.bvh
+# Walk Slow
+BVH_walking_animation/cmuconvert-max-131-135/132/132_45.bvh
+# Walk Slow
+BVH_walking_animation/cmuconvert-max-131-135/132/132_46.bvh
+# Walk Slow
+BVH_walking_animation/cmuconvert-max-131-135/132/132_47.bvh
+# Walk Slow
+BVH_walking_animation/cmuconvert-max-131-135/132/132_48.bvh
+# Walk Slow
+BVH_walking_animation/cmuconvert-max-131-135/132/132_49.bvh
+# Walk Slow
+BVH_walking_animation/cmuconvert-max-131-135/132/132_50.bvh
+# Walk Stop Walk
+BVH_walking_animation/cmuconvert-max-131-135/133/133_11.bvh
+# Walk Stop Walk
+BVH_walking_animation/cmuconvert-max-131-135/133/133_12.bvh
+# Walk Stop Walk
+BVH_walking_animation/cmuconvert-max-131-135/133/133_13.bvh
+# Walk Left
+BVH_walking_animation/cmuconvert-max-131-135/133/133_14.bvh
+# Walk Left
+BVH_walking_animation/cmuconvert-max-131-135/133/133_15.bvh
+# Walk Left
+BVH_walking_animation/cmuconvert-max-131-135/133/133_16.bvh
+# Walk Right
+BVH_walking_animation/cmuconvert-max-131-135/133/133_17.bvh
+# Walk Right
+BVH_walking_animation/cmuconvert-max-131-135/133/133_18.bvh
+# Walk Right
+BVH_walking_animation/cmuconvert-max-131-135/133/133_19.bvh
+# Walk Right
+BVH_walking_animation/cmuconvert-max-131-135/133/133_20.bvh
+# Walk Bent Forward
+BVH_walking_animation/cmuconvert-max-136-140/136/136_01.bvh
+# Walk Bent Forward
+BVH_walking_animation/cmuconvert-max-136-140/136/136_02.bvh
+# Walk Backwards Bent Forward
+BVH_walking_animation/cmuconvert-max-136-140/136/136_03.bvh
+# Walk Backwards Bent Forward
+BVH_walking_animation/cmuconvert-max-136-140/136/136_04.bvh
+# Walk on Toes Bent Forward
+BVH_walking_animation/cmuconvert-max-136-140/136/136_05.bvh
+# Walk on Toes Bent Forward
+BVH_walking_animation/cmuconvert-max-136-140/136/136_06.bvh
+# Walk Backward on Toes Bent Forward
+BVH_walking_animation/cmuconvert-max-136-140/136/136_07.bvh
+# Walk Backward on Toes Bent Forward
+BVH_walking_animation/cmuconvert-max-136-140/136/136_08.bvh
+# walk, veer left
+BVH_walking_animation/cmuconvert-max-15-19/16/16_11.bvh
+# walk, veer left
+BVH_walking_animation/cmuconvert-max-15-19/16/16_12.bvh
+# walk, veer right
+BVH_walking_animation/cmuconvert-max-15-19/16/16_13.bvh
+# walk, veer right
+BVH_walking_animation/cmuconvert-max-15-19/16/16_14.bvh
+# walk, 90-degree left turn
+BVH_walking_animation/cmuconvert-max-15-19/16/16_17.bvh
+# walk, 90-degree left turn
+BVH_walking_animation/cmuconvert-max-15-19/16/16_18.bvh
+# walk, 90-degree right turn
+BVH_walking_animation/cmuconvert-max-15-19/16/16_19.bvh
+# walk, 90-degree right turn
+BVH_walking_animation/cmuconvert-max-15-19/16/16_20.bvh
+# walk, veer left
+BVH_walking_animation/cmuconvert-max-15-19/16/16_23.bvh
+# walk, veer left
+BVH_walking_animation/cmuconvert-max-15-19/16/16_24.bvh
+# walk, veer right
+BVH_walking_animation/cmuconvert-max-15-19/16/16_25.bvh
+# walk, veer right
+BVH_walking_animation/cmuconvert-max-15-19/16/16_26.bvh
+# walk, 90-degree left turn
+BVH_walking_animation/cmuconvert-max-15-19/16/16_27.bvh
+# walk, 90-degree left turn
+BVH_walking_animation/cmuconvert-max-15-19/16/16_28.bvh
+# walk, 90-degree right turn
+BVH_walking_animation/cmuconvert-max-15-19/16/16_29.bvh
+# walk, 90-degree right turn
+BVH_walking_animation/cmuconvert-max-15-19/16/16_30.bvh
+# slow walk, stop
+BVH_walking_animation/cmuconvert-max-15-19/16/16_33.bvh
+# slow walk, stop
+BVH_walking_animation/cmuconvert-max-15-19/16/16_34.bvh
+# walk forward, turn around, walk back
+BVH_walking_animation/cmuconvert-max-35-39/36/36_02.bvh
+# walk forward, turn around, walk back
+BVH_walking_animation/cmuconvert-max-35-39/36/36_03.bvh
+# walk forward, turn around, walk back
+BVH_walking_animation/cmuconvert-max-35-39/36/36_09.bvh
+# slow walk
+BVH_walking_animation/cmuconvert-max-35-39/37/37_01.bvh
+# walk forward, turn around, walk back
+BVH_walking_animation/cmuconvert-max-35-39/39/39_11.bvh
+# navigate - walk forward, backward, on a diagonal
+BVH_walking_animation/cmuconvert-max-40-45/40/40_02.bvh
+# navigate - walk forward, backward, on a diagonal
+BVH_walking_animation/cmuconvert-max-40-45/40/40_03.bvh
+# navigate - walk forward, backward, on a diagonal
+BVH_walking_animation/cmuconvert-max-40-45/40/40_04.bvh
+# navigate - walk forward, backward, on a diagonal
+BVH_walking_animation/cmuconvert-max-40-45/40/40_05.bvh
+# navigate - walk forward, backward, sideways, on a diagonal
+BVH_walking_animation/cmuconvert-max-40-45/41/41_02.bvh
+# navigate - walk forward, backward, sideways, on a diagonal
+BVH_walking_animation/cmuconvert-max-40-45/41/41_03.bvh
+# navigate - walk forward, backward, on a diagonal
+BVH_walking_animation/cmuconvert-max-40-45/41/41_04.bvh
+# navigate - walk forward, backward, on a diagonal
+BVH_walking_animation/cmuconvert-max-40-45/41/41_05.bvh
+# navigate - walk forward, backward, on a diagonal
+BVH_walking_animation/cmuconvert-max-40-45/41/41_06.bvh
+# walk forward, turn around, walk back
+BVH_walking_animation/cmuconvert-max-46-56/47/47_01.bvh
+# vignettes - walk, drink water, run/jog, jump, wipe window, lift open window, throw punches, yawn, stretch
+BVH_walking_animation/cmuconvert-max-46-56/56/56_05.bvh
+# vignettes - yawn, stretch, walk, run/jog, angrily grab, jump, skip, halt
+BVH_walking_animation/cmuconvert-max-46-56/56/56_07.bvh
+# vignettes - lift open window, smash against wall, hop, walk, run/jog, yawn, stretch
+BVH_walking_animation/cmuconvert-max-46-56/56/56_08.bvh
+# walk forward
+BVH_walking_animation/cmuconvert-max-60-75/69/69_01.bvh
+# walk forward
+BVH_walking_animation/cmuconvert-max-60-75/69/69_02.bvh
+# walk forward
+BVH_walking_animation/cmuconvert-max-60-75/69/69_03.bvh
+# walk forward
+BVH_walking_animation/cmuconvert-max-60-75/69/69_04.bvh
+# walk forward
+BVH_walking_animation/cmuconvert-max-60-75/69/69_05.bvh
+# walk and turn (repeated)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_06.bvh
+# walk and turn (repeated)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_07.bvh
+# walk and turn (repeated)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_08.bvh
+# walk and turn (repeated)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_09.bvh
+# walk and turn (repeated)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_10.bvh
+# walk and turn (repeated)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_11.bvh
+# walk and turn both directions (repeated)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_12.bvh
+# walk, turn in place (repeated)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_13.bvh
+# walk, turn in place (repeated)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_14.bvh
+# walk, turn in place (repeated)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_15.bvh
+# walk forward 90 degree right turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_20.bvh
+# walk forward 90 degree right turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_21.bvh
+# walk forward 90 degree right turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_22.bvh
+# walk forward 90 degree right turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_23.bvh
+# walk forward 90 degree left turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_24.bvh
+# walk forward 90 degree left turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_25.bvh
+# walk forward 90 degree left turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_26.bvh
+# walk forward 90 degree left turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_27.bvh
+# walk forward 90 degree smooth right turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_28.bvh
+# walk forward 90 degree smooth right turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_29.bvh
+# walk forward 90 degree smooth right turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_30.bvh
+# walk forward 90 degree smooth left turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_31.bvh
+# walk forward 90 degree smooth left turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_32.bvh
+# walk forward 90 degree smooth left turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_33.bvh
+# walk backwards and turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_34.bvh
+# walk backwards and turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_35.bvh
+# walk backwards and turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_36.bvh
+# walk backwards and turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_37.bvh
+# walk backwards and turn (repeated)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_38.bvh
+# walk backward, turn in place
+BVH_walking_animation/cmuconvert-max-60-75/69/69_39.bvh
+# walk backward, turn in place
+BVH_walking_animation/cmuconvert-max-60-75/69/69_40.bvh
+# walk backward, turn in place
+BVH_walking_animation/cmuconvert-max-60-75/69/69_41.bvh
+# walk sideways and turn (repeated)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_42.bvh
+# walk sideways and turn (repeated)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_43.bvh
+# walk sideways and turn (repeated)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_44.bvh
+# walk sideways and turn (repeated)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_45.bvh
+# walk sideways and turn (repeated)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_46.bvh
+# walk sideways and turn (repeated)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_47.bvh
+# walk sideways and turn (opposite direction)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_48.bvh
+# walk sideways and turn (opposite direction)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_49.bvh
+# walk backwards and turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_51.bvh
+# walk backwards and turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_52.bvh
+# walk backwards and turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_53.bvh
+# walk backwards and turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_54.bvh
+# walk backwards and turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_55.bvh
+# walk sideways and turn (opposite direction)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_56.bvh
+# walk sideways and turn (opposite direction)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_57.bvh
+# walk sideways and turn (opposite direction)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_58.bvh
+# walk sideways and turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_59.bvh
+# walk sideways and turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_60.bvh
+# walk sideways and turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_61.bvh
+# walk sideways and turn (opposite direction)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_62.bvh
+# walk sideways and turn (opposite direction)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_63.bvh
+# walk sideways and turn (opposite direction)
+BVH_walking_animation/cmuconvert-max-60-75/69/69_64.bvh
+# walk sideways and turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_65.bvh
+# walk sideways and turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_66.bvh
+# walk sideways and turn
+BVH_walking_animation/cmuconvert-max-60-75/69/69_67.bvh
+# walk forward and pick up object, set down object
+BVH_walking_animation/cmuconvert-max-60-75/69/69_68.bvh
+# walk forward and pick up object, carry back object
+BVH_walking_animation/cmuconvert-max-60-75/69/69_69.bvh
+# fix hair and walk forward
+BVH_walking_animation/cmuconvert-max-81-85/81/81_01.bvh
+# walk forward
+BVH_walking_animation/cmuconvert-max-81-85/81/81_02.bvh
+# walk at a brisk pace
+BVH_walking_animation/cmuconvert-max-81-85/81/81_04.bvh
+# walk forward
+BVH_walking_animation/cmuconvert-max-81-85/81/81_17.bvh
+# adjust hair walk forward
+BVH_walking_animation/cmuconvert-max-81-85/81/81_18.bvh
+# stand still; casual walk forward
+BVH_walking_animation/cmuconvert-max-81-85/82/82_08.bvh
+# confident walk forward
+BVH_walking_animation/cmuconvert-max-81-85/82/82_09.bvh
+# sad walk forward
+BVH_walking_animation/cmuconvert-max-81-85/82/82_10.bvh
+# happy or fast walk forward
+BVH_walking_animation/cmuconvert-max-81-85/82/82_12.bvh
+# walk forward and slow down
+BVH_walking_animation/cmuconvert-max-81-85/82/82_14.bvh
+# walk forward and turn sideways
+BVH_walking_animation/cmuconvert-max-81-85/82/82_15.bvh
+# walk forward turn 90 degrees left walk forward
+BVH_walking_animation/cmuconvert-max-81-85/83/83_36.bvh
+# walk forward turn 90 degrees right walk forward
+BVH_walking_animation/cmuconvert-max-81-85/83/83_37.bvh
+# walk forward turn 90 degrees left walk forward
+BVH_walking_animation/cmuconvert-max-81-85/83/83_38.bvh
+# walk forward turn 90 degrees right walk forward
+BVH_walking_animation/cmuconvert-max-81-85/83/83_39.bvh
+# walk, squats, run, stretch, jumps, punches, and drinking
+BVH_walking_animation/cmuconvert-max-86-94/86/86_02.bvh
