@@ -554,6 +554,8 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         reference_gait="none",
         reference_gait_file=None,
         reference_target_observation=False,
+        policy_observation_size=None,
+        policy_observation_dict=True,
         xml_path=None,
         legacy_action_prior=False,
         command_resample_steps=500,
@@ -640,6 +642,11 @@ class EnvConfig:
     reference_gait: str = "none"
     reference_gait_file: str | list[str] | None = None
     reference_target_observation: bool = False
+
+    # Evaluator postavlja ovu vrednost iz checkpoint metadata-e. Env zatim
+    # automatski rekonstruiše stari/novi policy observation layout.
+    policy_observation_size: int | None = None
+    policy_observation_dict: bool = True
 
     # Opcioni konkretan XML model. Korisno za nastavak starog checkpoint-a kada
     # je globalni generated XML version u kodu vec promenjen.

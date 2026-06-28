@@ -209,8 +209,11 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             )
             for joint_id in self._mj_model.actuator_trnid[:, 0]
         )
-        expected_joint_names = TRUNK_ACTUATED_JOINTS + LEG_ACTUATED_JOINTS
-        if actuator_joint_names != expected_joint_names:
+        supported_joint_orders = (
+            TRUNK_ACTUATED_JOINTS + LEG_ACTUATED_JOINTS,
+            LEG_ACTUATED_JOINTS,
+        )
+        if actuator_joint_names not in supported_joint_orders:
             raise RuntimeError(
                 "Neocekivan redosled aktuatora u generated XML-u: "
                 f"{actuator_joint_names}"
@@ -315,6 +318,43 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             self._left_foot_sole_geom_id,
             self._right_foot_sole_geom_id,
         ])
+        self._configure_policy_observation_layout()
+
+    def _configure_policy_observation_layout(self) -> None:
+        """Reconstruct the policy observation layout saved in a checkpoint."""
+        self._include_gait_phase_observation = True
+        self._include_reference_target_observation = bool(
+            self._config.get("reference_target_observation", False)
+        )
+
+        expected_size = self._config.get("policy_observation_size", None)
+        if expected_size is None:
+            return
+
+        base_size = (
+            12
+            + (self._mj_model.nq - 7)
+            + (self._mj_model.nv - 6)
+            + self.action_size
+        )
+        optional_size = int(expected_size) - base_size
+        layouts = {
+            0: (False, False),
+            2: (True, False),
+            self.action_size: (False, True),
+            self.action_size + 2: (True, True),
+        }
+        if optional_size not in layouts:
+            raise ValueError(
+                "Checkpoint observation layout ne odgovara izabranom XML-u: "
+                f"checkpoint={expected_size}, osnovni_env={base_size}, "
+                f"action_size={self.action_size}."
+            )
+
+        (
+            self._include_gait_phase_observation,
+            self._include_reference_target_observation,
+        ) = layouts[optional_size]
 
     def _joint_action_scale(self, joint_name: str) -> float:
         """Unitree-style action prior: stride joints move more than twist joints."""
@@ -788,7 +828,11 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
 
         return jax.lax.scan(single_step, data, substep_keys)[0]
 
-    def _get_obs(self, data: mjx.Data, info: dict) -> dict[str, jax.Array]:
+    def _get_obs(
+        self,
+        data: mjx.Data,
+        info: dict,
+    ) -> dict[str, jax.Array] | jax.Array:
         """Sastavi policy i privileged critic observation."""
         local_linvel = self._local_root_linvel(data)
         local_angvel = self._local_root_angvel(data)
@@ -800,15 +844,21 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             local_angvel,
             projected_gravity,
             info["command"],
-            self._get_gait_phase_obs(info),
             joint_pos,
             joint_vel,
             info["last_action"],
         ]
-        if self._config.get("reference_target_observation", False):
-            state_parts.insert(5, self._get_reference_target_delta(info))
+        optional_parts = []
+        if self._include_gait_phase_observation:
+            optional_parts.append(self._get_gait_phase_obs(info))
+        if self._include_reference_target_observation:
+            optional_parts.append(self._get_reference_target_delta(info))
+        state_parts[4:4] = optional_parts
         state_obs = jp.concatenate(state_parts)
         state_obs = jp.nan_to_num(state_obs, nan=0.0, posinf=10.0, neginf=-10.0)
+        if not self._config.get("policy_observation_dict", True):
+            return state_obs
+
         privileged_obs = jp.concatenate([
             state_obs,
             data.qpos[:3],
