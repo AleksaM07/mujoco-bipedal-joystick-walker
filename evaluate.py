@@ -1,6 +1,7 @@
 import argparse
 import functools
 import json
+import re
 import time
 from pathlib import Path
 
@@ -21,6 +22,7 @@ from config import (
     COMMAND_OBS_START,
     DEBUG_PRINT_INTERVAL,
     DEFAULT_WALK_COMMAND_X,
+    GENERATED_MODEL_DIR,
     EnvConfig,
     KEY_A,
     KEY_D,
@@ -147,26 +149,107 @@ def find_run_config(checkpoint_path: Path) -> dict | None:
         if not config_path.exists():
             continue
         with config_path.open("r", encoding="utf-8") as config_file:
-            return json.load(config_file)
+            config = json.load(config_file)
+        if "env" in config:
+            return config
+    return None
+
+
+def resolve_saved_xml_path(raw_path: str) -> str | None:
+    """Resolve a saved Windows/WSL XML path against this checkout."""
+    direct_path = Path(raw_path).expanduser()
+    if direct_path.exists():
+        return str(direct_path)
+
+    local_path = GENERATED_MODEL_DIR / direct_path.name
+    if local_path.exists():
+        return str(local_path)
+    return None
+
+
+def infer_xml_path(checkpoint_path: Path, run_config: dict | None) -> str | None:
+    """Infer the exact generated XML used by a run."""
+    configured_path = run_env_value(run_config, "xml_path")
+    if configured_path:
+        resolved_path = resolve_saved_xml_path(str(configured_path))
+        if resolved_path is not None:
+            return resolved_path
+
+    for path in (checkpoint_path, *checkpoint_path.parents):
+        log_path = path / "train.log"
+        if not log_path.exists():
+            continue
+        log_text = log_path.read_text(encoding="utf-8", errors="replace")
+        logged_paths = re.findall(
+            r"\bxml=(.+?\.xml)(?=\s*(?:\||$))",
+            log_text,
+            flags=re.MULTILINE,
+        )
+        for logged_path in reversed(logged_paths):
+            resolved_path = resolve_saved_xml_path(logged_path)
+            if resolved_path is not None:
+                return resolved_path
     return None
 
 
 def read_checkpoint_observation_size(checkpoint_path: Path) -> int | None:
     """Procitaj observation_size iz Brax checkpoint metadata fajla."""
-    network_config_path = checkpoint_path / "ppo_network_config.json"
-    if not network_config_path.exists():
+    network_config = read_checkpoint_network_config(checkpoint_path)
+    if network_config is None:
         return None
-    with network_config_path.open("r", encoding="utf-8") as config_file:
-        network_config = json.load(config_file)
 
     observation_size = network_config.get("observation_size", {})
-    if "state" in observation_size:
+    if isinstance(observation_size, list):
+        shape = observation_size
+    elif "state" in observation_size:
         shape = observation_size["state"].get("shape")
     else:
         shape = observation_size.get("shape")
     if not shape:
         return None
     return int(shape[0])
+
+
+def read_checkpoint_network_config(checkpoint_path: Path) -> dict | None:
+    """Read Brax network metadata across old and current file names."""
+    for file_name in ("ppo_network_config.json", "config.json"):
+        config_path = checkpoint_path / file_name
+        if not config_path.exists():
+            continue
+        with config_path.open("r", encoding="utf-8") as config_file:
+            config = json.load(config_file)
+        if "observation_size" in config and "action_size" in config:
+            return config
+    return None
+
+
+def read_checkpoint_action_size(checkpoint_path: Path) -> int | None:
+    """Read the policy action size from Brax checkpoint metadata."""
+    network_config = read_checkpoint_network_config(checkpoint_path)
+    if network_config is None:
+        return None
+    action_size = network_config.get("action_size")
+    return int(action_size) if action_size is not None else None
+
+
+def checkpoint_uses_dict_observation(checkpoint_path: Path) -> bool:
+    """Return whether checkpoint normalizer/network expects keyed observations."""
+    network_config = read_checkpoint_network_config(checkpoint_path)
+    if network_config is None:
+        return True
+    observation_size = network_config.get("observation_size", {})
+    return isinstance(observation_size, dict) and "shape" not in observation_size
+
+
+def validate_action_compatibility(checkpoint_path: Path, action_size: int) -> None:
+    """Catch a checkpoint/XML action mismatch before JAX compilation."""
+    expected_size = read_checkpoint_action_size(checkpoint_path)
+    if expected_size is None or expected_size == action_size:
+        return
+    raise ValueError(
+        "Checkpoint i XML nisu kompatibilni: "
+        f"checkpoint ocekuje {expected_size} akcija, a XML daje {action_size}."
+    )
 
 
 def load_ppo_policy(checkpoint_path: Path, deterministic: bool):
@@ -425,12 +508,12 @@ def main():
     parser.add_argument(
         "--env-version",
         choices=["standard", "hardcore"],
-        default="standard",
+        default=None,
     )
     parser.add_argument(
         "--playground-impl",
         choices=["jax", "warp"],
-        default="jax",
+        default=None,
     )
     parser.add_argument(
         "--command-profile",
@@ -462,7 +545,7 @@ def main():
         action="append",
         default=None,
     )
-    parser.add_argument("--action-smoothing", type=float, default=0.5)
+    parser.add_argument("--action-smoothing", type=float, default=None)
     parser.add_argument("--init-qpos-file", type=Path, default=None)
     parser.add_argument("--xml-path", type=Path, default=None)
     parser.add_argument(
@@ -489,6 +572,27 @@ def main():
     device = choose_device(args.device)
     jax.config.update("jax_default_device", device)
     run_config = find_run_config(args.checkpoint)
+    checkpoint_observation_size = read_checkpoint_observation_size(args.checkpoint)
+    checkpoint_action_size = read_checkpoint_action_size(args.checkpoint)
+    policy_observation_dict = checkpoint_uses_dict_observation(args.checkpoint)
+    env_version = args.env_version or run_env_value(
+        run_config,
+        "env_version",
+        "standard",
+    )
+    playground_impl = args.playground_impl or run_env_value(
+        run_config,
+        "playground_impl",
+        "jax",
+    )
+    action_smoothing = (
+        args.action_smoothing
+        if args.action_smoothing is not None
+        else float(run_env_value(run_config, "action_smoothing", 0.5))
+    )
+    accurate_physics = bool(
+        run_env_value(run_config, "accurate_physics", True)
+    ) and not args.fast_physics
 
     command_profile = (
         infer_command_profile(args.checkpoint, run_config)
@@ -503,10 +607,9 @@ def main():
         if args.init_qpos_file is not None
         else run_env_value(run_config, "init_qpos_file")
     )
-    xml_path = (
-        str(args.xml_path)
-        if args.xml_path is not None
-        else run_env_value(run_config, "xml_path")
+    xml_path = str(args.xml_path) if args.xml_path is not None else infer_xml_path(
+        args.checkpoint,
+        run_config,
     )
     reference_gait = (
         infer_reference_gait(run_config)
@@ -524,13 +627,23 @@ def main():
         reference_target_observation = bool(
             run_env_value(run_config, "reference_target_observation", False)
         )
-    legacy_action_prior = (
-        bool(run_env_value(run_config, "legacy_action_prior", False))
-        if args.legacy_action_prior is None
-        else args.legacy_action_prior
+    saved_legacy_action_prior = run_env_value(
+        run_config,
+        "legacy_action_prior",
+        None,
     )
+    if args.legacy_action_prior is not None:
+        legacy_action_prior = args.legacy_action_prior
+    elif saved_legacy_action_prior is not None:
+        legacy_action_prior = bool(saved_legacy_action_prior)
+    else:
+        # Configs without this field predate the Unitree-style leg scales.
+        # Their trunk used per-joint scales, but every leg action used 0.5.
+        legacy_action_prior = True
     print(
         "eval config | "
+        f"env_version={env_version} | "
+        f"playground_impl={playground_impl} | "
         f"command_profile={command_profile} | "
         f"command_x={command_x} | "
         f"init_qpos_file={init_qpos_file} | "
@@ -538,24 +651,32 @@ def main():
         f"legacy_action_prior={legacy_action_prior} | "
         f"reference_gait={reference_gait} | "
         f"reference_gait_file={reference_gait_file} | "
-        f"reference_target_observation={reference_target_observation}",
+        f"reference_target_observation={reference_target_observation} | "
+        f"checkpoint_obs={checkpoint_observation_size} | "
+        f"checkpoint_actions={checkpoint_action_size} | "
+        f"dict_observation={policy_observation_dict} | "
+        f"action_smoothing={action_smoothing} | "
+        f"accurate_physics={accurate_physics}",
         flush=True,
     )
 
     env_config = EnvConfig(
-        env_version=args.env_version,
-        playground_impl=args.playground_impl,
+        env_version=env_version,
+        playground_impl=playground_impl,
         command_profile=command_profile,
         reference_gait=reference_gait,
         reference_gait_file=reference_gait_file,
         reference_target_observation=reference_target_observation,
+        policy_observation_size=checkpoint_observation_size,
+        policy_observation_dict=policy_observation_dict,
         xml_path=xml_path,
         legacy_action_prior=legacy_action_prior,
-        action_smoothing=args.action_smoothing,
+        action_smoothing=action_smoothing,
         init_qpos_file=init_qpos_file,
-        accurate_physics=not args.fast_physics,
+        accurate_physics=accurate_physics,
     )
     env = make_environment(env_config)
+    validate_action_compatibility(args.checkpoint, env.action_size)
     policy = load_ppo_policy(args.checkpoint, deterministic=not args.stochastic)
 
     rng = jax.random.PRNGKey(args.seed)
@@ -623,6 +744,8 @@ def make_environment(env_config: EnvConfig):
         "command_profile": env_config.command_profile,
         "reference_gait": env_config.reference_gait,
         "reference_target_observation": env_config.reference_target_observation,
+        "policy_observation_size": env_config.policy_observation_size,
+        "policy_observation_dict": env_config.policy_observation_dict,
         "action_smoothing": env_config.action_smoothing,
         "legacy_action_prior": env_config.legacy_action_prior,
     }
