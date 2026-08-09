@@ -1,0 +1,357 @@
+DEEPMIMIC2018-CODE-IMITATION-REWARD:
+  type: REFERENCE_CODE_DERIVED
+  source:
+    repository: "https://github.com/xbpeng/DeepMimic"
+    commit: "1f915c52fcd4b95b5f5f15b759ae91bd81e9a801"
+    file: "DeepMimicCore/scenes/SceneImitate.cpp"
+    lines: "7-124"
+    url: "https://github.com/xbpeng/DeepMimic/blob/master/DeepMimicCore/scenes/SceneImitate.cpp"
+    related_paper:
+      title: "DeepMimic: Example-Guided Deep Reinforcement Learning of Physics-Based Character Skills"
+      authors: "Peng, Abbeel, Levine, van de Panne"
+      year: 2018
+      section: null
+      equation: null
+      url: "https://xbpeng.github.io/projects/DeepMimic/index.html"
+  used_in:
+    - "biomechanics_env.py"
+  adaptation:
+    original: >
+      DeepMimic implementation computes a weighted sum of exponential pose,
+      velocity, end-effector, root, and COM rewards.
+    project: >
+      The project computes the same reward-group shape over MuJoCo/MJX body
+      quaternions, body velocities, foot end-effectors, root state, and COM
+      targets precomputed from BVH-retargeted actuator poses.
+    reason: >
+      The original Bullet character and motion representation are not the same
+      as this MuJoCo humanoid XML, so the reward is adapted to available MJX
+      state tensors.
+    verified_paper_section: false
+    verified_paper_equation: false
+
+BULLET-WARP-BACKEND:
+  type: REFERENCE_CODE_DERIVED
+  source:
+    repository: "https://github.com/AleksaM07/bipedal-humanoid-bullet-avoidance"
+    commit: "0cd3da8135a7380dfb09c81ff29cba774cb5fdcf"
+    file: "phase1_backends.py"
+    lines: "1-260"
+    url: "https://github.com/AleksaM07/bipedal-humanoid-bullet-avoidance"
+  used_in:
+    - "phase1_backends.py"
+    - "biomechanics_env.py"
+    - "config.py"
+    - "train.py"
+    - "evaluate.py"
+  adaptation:
+    original: >
+      Reference repository wraps MJX-JAX/MJX-Warp backend selection, validates
+      Warp dependencies, resolves GraphMode, and converts host MuJoCo models
+      through mjx.put_model(..., impl='warp', graph_mode=...).
+    project: >
+      This repository makes MJX-Warp the default backend and keeps only the
+      small helper surface needed by the current training/evaluation scripts.
+    reason: >
+      The user requested replacing the current backend path with the MJX-Warp
+      approach from the reference repository, without adding a new parallel
+      training script.
+
+BULLET-WARP-CONTACT-BUFFERS:
+  type: REFERENCE_CODE_DERIVED
+  source:
+    repository: "https://github.com/AleksaM07/bipedal-humanoid-bullet-avoidance"
+    commit: "0cd3da8135a7380dfb09c81ff29cba774cb5fdcf"
+    file: "biomechanics_env.py"
+    lines: "2380-2399"
+    url: "https://github.com/AleksaM07/bipedal-humanoid-bullet-avoidance"
+  used_in:
+    - "biomechanics_env.py"
+    - "train.py"
+  adaptation:
+    original: >
+      Integrated MJX-Warp stores contact arrays on data._impl with world-id
+      fields because contact capacity spans all worlds in a batched run.
+    project: >
+      Foot contact checks read data._impl.contact__geom, contact__dist, and
+      contact__worldid when physics_backend is mjx_warp.
+    reason: >
+      The old MJX-JAX contact API is not the correct data path for batched
+      MJX-Warp contact buffers.
+
+MJX-WARP-CAPACITY-DEFAULTS:
+  type: REFERENCE_CODE_DERIVED
+  source:
+    repository: "https://github.com/AleksaM07/bipedal-humanoid-bullet-avoidance"
+    commit: "0cd3da8135a7380dfb09c81ff29cba774cb5fdcf"
+    file: "phase1_backends.py"
+    lines: "27-73"
+    url: "https://github.com/AleksaM07/bipedal-humanoid-bullet-avoidance"
+  used_in:
+    - "phase1_backends.py"
+  adaptation:
+    original: >
+      Reference code uses eight contacts per world and 64 constraints per world
+      as engineering defaults for the humanoid Warp allocation.
+    project: >
+      Same capacity rule is used when resolving this repository's default
+      MJX-Warp data allocation.
+    reason: >
+      Keeps the Warp data shape large enough for this humanoid while avoiding
+      per-run manual capacity settings.
+
+PROJECT-WARP-PACKAGE-PINS:
+  type: ENGINEERING_DEFAULT
+  source:
+    title: "Local MJX-Warp package compatibility pin"
+    authors: null
+    year: 2026
+    section: null
+    equation: null
+    url: null
+  used_in:
+    - "phase1_backends.py"
+    - "pyproject.toml"
+  adaptation:
+    original: "No paper source; package versions were pinned for reproducible local MJX-Warp behavior."
+    project: "mujoco==3.10.0, mujoco-mjx[warp]==3.10.0, warp-lang==1.13.0."
+    reason: "The environment had previously been validated with this MJX-Warp package set."
+
+PROJECT-DEFAULT-WARP-12288:
+  type: EXPERIMENTALLY_SELECTED
+  source:
+    title: "Local MJX-Warp throughput/default parallelism"
+    authors: null
+    year: 2026
+    section: null
+    equation: null
+    url: null
+  used_in:
+    - "config.py"
+    - "train.py"
+  adaptation:
+    original: "No paper source; selected from local project GPU run attempts and user-requested default."
+    project: "Default PPO num_envs and batch_size are 12288 for MJX-Warp runs."
+    reason: "The project is optimized for the user's GPU-oriented MJX-Warp training workflow."
+
+PROJECT-COMMAND-TRACKING-SPLIT:
+  type: ENGINEERING_DEFAULT
+  source:
+    title: "Unit-consistent joystick tracking decomposition"
+    authors: null
+    year: 2026
+    section: null
+    equation: null
+    url: null
+  used_in:
+    - "biomechanics_env.py"
+    - "config.py"
+  adaptation:
+    original: >
+      Previous project code measured [forward velocity, lateral velocity, yaw
+      rate] in a single norm.
+    project: >
+      Linear velocity tracking and yaw-rate tracking are computed separately
+      and then combined with fixed engineering weights.
+    reason: >
+      m/s and rad/s are different physical units and should not be treated as
+      directly interchangeable in one Euclidean error.
+
+BIOHUMANOID-HEADING-FRAME-COMMAND:
+  type: MODEL_CALIBRATED
+  source:
+    title: "MuJoCo humanoid heading-frame command measurement"
+    authors: null
+    year: 2026
+    section: null
+    equation: null
+    url: null
+  used_in:
+    - "biomechanics_env.py"
+  adaptation:
+    original: >
+      Previous project code measured command velocity in the full torso local
+      frame, including pitch and roll.
+    project: >
+      Command velocity is measured in a yaw-only horizontal frame derived from
+      the torso heading projection.
+    reason: >
+      Joystick tracking should respond to robot heading, not to transient torso
+      pitch/roll tilt.
+
+PROJECT-BVH-FK-RETARGETING:
+  type: MODEL_CALIBRATED
+  source:
+    title: "BVH actuator-target to MuJoCo FK feature adaptation"
+    authors: null
+    year: 2026
+    section: null
+    equation: null
+    url: null
+  used_in:
+    - "bvh_reference.py"
+    - "biomechanics_env.py"
+  adaptation:
+    original: >
+      The old BVH code returned actuator-space qpos/qvel targets and used them
+      directly for imitation-style reward terms.
+    project: >
+      BVH actuator targets are now treated as an intermediate retargeting
+      source. MuJoCo forward kinematics builds body orientation, velocity,
+      end-effector, root, and COM targets.
+    reason: >
+      The project is moving toward DeepMimic-style state features while retaining
+      the currently available BVH parser/retargeter.
+
+PROJECT-BVH-MULTIFRAME-BESTMATCH:
+  type: ENGINEERING_DEFAULT
+  source:
+    title: "Local temporal best-match window for BVH imitation"
+    authors: null
+    year: 2026
+    section: null
+    equation: null
+    url: null
+  used_in:
+    - "biomechanics_env.py"
+    - "config.py"
+  adaptation:
+    original: "No verified DeepMimic equation or code path for this exact project implementation."
+    project: "For BVH imitation, score a local window of frames and use the best reward."
+    reason: "Reduces sensitivity to imperfect phase alignment in the current BVH retargeting path."
+
+BIOHUMANOID-FALL-HEIGHT:
+  type: MODEL_CALIBRATED
+  source:
+    title: "MuJoCo humanoid fall-height threshold"
+    authors: null
+    year: 2026
+    section: null
+    equation: null
+    url: null
+  used_in:
+    - "biomechanics_env.py"
+  adaptation:
+    original: "No external source verified."
+    project: "Episode terminates when root height falls below a fraction of standing model height."
+    reason: "Threshold is tied to this generated humanoid XML geometry and standing pose."
+
+BIOHUMANOID-CONTACT-THRESHOLDS:
+  type: MODEL_CALIBRATED
+  source:
+    title: "MuJoCo humanoid foot-contact thresholds"
+    authors: null
+    year: 2026
+    section: null
+    equation: null
+    url: null
+  used_in:
+    - "biomechanics_env.py"
+  adaptation:
+    original: "No external source verified."
+    project: "Foot contact uses the model's foot sole geoms and small contact-distance/preload thresholds."
+    reason: "The thresholds depend on this XML's foot geometry and MuJoCo contact representation."
+
+PROJECT-LEGACY-REWARD-CONSTANTS:
+  type: ENGINEERING_DEFAULT
+  source:
+    title: "Unverified legacy project reward constants"
+    authors: null
+    year: 2026
+    section: null
+    equation: null
+    url: null
+  used_in:
+    - "biomechanics_env.py"
+  adaptation:
+    original: >
+      Existing constants predate the traceability registry and do not have a
+      verified paper, reference-code, calibration, or sweep record.
+    project: "Kept as current project defaults until replaced or recalibrated."
+    reason: >
+      Avoids inventing false provenance while making the remaining unknown
+      lineage explicit.
+
+PROJECT-TERMINATED-TRUNCATED-SPLIT:
+  type: ENGINEERING_DEFAULT
+  source:
+    title: "Training metric split for terminal fall vs timeout truncation"
+    authors: null
+    year: 2026
+    section: null
+    equation: null
+    url: null
+  used_in:
+    - "train.py"
+    - "biomechanics_env.py"
+    - "config.py"
+  adaptation:
+    original: "No paper source verified for this implementation detail."
+    project: "Wrapper records separate terminated and truncated metrics from done/truncation signals."
+    reason: "Evaluation and bootstrap diagnostics need to distinguish falls from episode timeouts."
+
+PROJECT-XML-HASH-GUARD:
+  type: ENGINEERING_DEFAULT
+  source:
+    title: "Checkpoint/XML compatibility hash guard"
+    authors: null
+    year: 2026
+    section: null
+    equation: null
+    url: null
+  used_in:
+    - "train.py"
+    - "evaluate.py"
+  adaptation:
+    original: "No external source verified."
+    project: "Training writes xml_manifest.json and resume/evaluate compare XML SHA-256 hashes."
+    reason: "Prevents silently pairing a checkpoint with an incompatible generated XML."
+
+PROJECT-XLA-PREALLOCATE-DEFAULT:
+  type: ENGINEERING_DEFAULT
+  source:
+    title: "Local JAX/XLA GPU memory allocation default"
+    authors: null
+    year: 2026
+    section: null
+    equation: null
+    url: null
+  used_in:
+    - "train.py"
+    - "evaluate.py"
+  adaptation:
+    original: "No paper source; local runtime default for JAX GPU memory behavior."
+    project: "Set XLA_PYTHON_CLIENT_PREALLOCATE=false unless the user explicitly overrides it."
+    reason: "Avoids repeating the environment variable on every WSL/GPU train or evaluate command."
+
+PROJECT-RUN-NAMING-V1:
+  type: ENGINEERING_DEFAULT
+  source:
+    title: "Project run folder naming convention V1"
+    authors: null
+    year: 2026
+    section: null
+    equation: null
+    url: null
+  used_in:
+    - "train.py"
+  adaptation:
+    original: "Previous names mixed implementation flags and reward suffixes inconsistently."
+    project: "Use timestamp_profile_V1_steps-N_reward-pending_running, then replace reward-pending with the best reward on completion."
+    reason: "Keeps run folders readable while preserving the best reward in the final folder name."
+
+PROJECT-EVAL-CPU-DEFAULT:
+  type: ENGINEERING_DEFAULT
+  source:
+    title: "Evaluation device default"
+    authors: null
+    year: 2026
+    section: null
+    equation: null
+    url: null
+  used_in:
+    - "evaluate.py"
+  adaptation:
+    original: "Training defaults to GPU because MJX-Warp production runs are GPU-oriented."
+    project: "Evaluation defaults to CPU unless --device gpu is explicitly requested."
+    reason: "Avoids unnecessary GPU memory pressure during viewer/evaluation setup."

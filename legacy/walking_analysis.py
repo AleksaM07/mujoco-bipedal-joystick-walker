@@ -1,7 +1,11 @@
-"""Compare the best policies stored under ``runs/successful``.
+"""DEPRECATED: compare old policies stored under ``runs/successful``.
 
 The module is intentionally notebook-friendly: ``run_analysis`` performs the
 rollouts, exports tidy CSV files, and returns the resulting DataFrames.
+
+This script belongs to the archived Berkeley-vs-biomechanics report path. The
+active project direction is MJX-Warp plus DeepMimic-style reference tracking, so
+new training/evaluation work should use the root `train.py` and `evaluate.py`.
 """
 
 from __future__ import annotations
@@ -9,6 +13,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -19,12 +24,15 @@ import numpy as np
 import pandas as pd
 from mujoco_playground import locomotion
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 import barkley_legacy_walking as berkeley_eval
 import evaluate as biomechanics_eval
 from config import EnvConfig
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent
 DEFAULT_RUNS_DIR = PROJECT_ROOT / "runs" / "successful"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "analysis_outputs"
 

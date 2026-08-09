@@ -17,9 +17,25 @@ from config import (
 )
 
 
+# REF: PROJECT-BVH-FK-RETARGETING
+# TYPE: MODEL_CALIBRATED
+"""BVH retargeting helpers.
+
+Deprecated runtime behavior: older versions used the returned actuator qpos/qvel
+targets directly as the imitation reward.  That is intentionally no longer the
+end state.  `biomechanics_env.py` now treats these arrays as a simple retargeted
+pose source, then runs MuJoCo forward kinematics to build DeepMimic-style
+orientation, body-velocity, end-effector, root, and COM targets.
+
+The parser stays here because it is still the shortest path from bundled CMU BVH
+files into this model.  A fuller GMR/MimicKit retargeter can replace
+`load_bvh_reference()` later without changing the env reward API.
+"""
+
+
 @dataclass(frozen=True)
 class BvhReference:
-    """Retargetovana BVH referenca u redosledu MuJoCo aktuatora."""
+    """Legacy actuator-space retargeting used as FK input, not final reward."""
 
     qpos_targets: np.ndarray
     qvel_targets: np.ndarray

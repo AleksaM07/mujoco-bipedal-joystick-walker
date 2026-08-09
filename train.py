@@ -1,13 +1,19 @@
 import argparse
 import contextlib
 import functools
+import hashlib
 import json
+import os
 import sys
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
+
+# REF: PROJECT-XLA-PREALLOCATE-DEFAULT
+# TYPE: ENGINEERING_DEFAULT
+os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
 
 import jax
 import jax.numpy as jnp
@@ -32,6 +38,7 @@ from config import (
     default_biomechanics_ppo_config,
     expand_reference_gait_files,
 )
+from phase1_backends import resolve_warp_capacities
 
 
 @contextmanager
@@ -204,10 +211,13 @@ def make_run_dir(
 ) -> Path:
     """Create a compact, readable run folder name."""
     stamp = datetime.now().strftime("%Y%m%d_%H%M")
+    # REF: PROJECT-RUN-NAMING-V1
+    # TYPE: ENGINEERING_DEFAULT
     return (
         base_dir
         / (
-            f"{stamp}_{run_label}_{format_steps(timesteps)}_running"
+            f"{stamp}_{run_label}_steps-{format_steps(timesteps)}"
+            "_reward-pending_running"
         )
     )
 
@@ -223,18 +233,23 @@ def mark_run_status(
         raise ValueError("status mora biti 's' ili 'f'.")
 
     name = run_dir.name
-    reward_suffix = ""
-    if status == "s" and final_reward is not None:
-        reward_suffix = f"_rew_{format_reward_for_path(final_reward)}"
-    if status == "s" and best_reward is not None:
-        reward_suffix += f"_best_{format_reward_for_path(best_reward)}"
+    reward_value = best_reward if best_reward is not None else final_reward
+    reward_label = (
+        format_reward_for_path(reward_value)
+        if reward_value is not None
+        else "unknown"
+    )
 
     if name.endswith("_running"):
-        new_name = name.removesuffix("_running") + f"{reward_suffix}_{status}"
+        new_name = name.removesuffix("_running")
+        new_name = new_name.replace("reward-pending", f"reward-{reward_label}")
+        new_name = f"{new_name}_{status}"
     elif name.endswith("_s") or name.endswith("_f"):
-        new_name = name[:-2] + f"{reward_suffix}_{status}"
+        new_name = name[:-2]
+        new_name = new_name.replace("reward-pending", f"reward-{reward_label}")
+        new_name = f"{new_name}_{status}"
     else:
-        new_name = f"{name}{reward_suffix}_{status}"
+        new_name = f"{name}_reward-{reward_label}_{status}"
 
     target = run_dir.with_name(new_name)
     if target.exists():
@@ -307,6 +322,12 @@ def infer_xml_path_from_resume(checkpoint_path: Path | None) -> str | None:
     if config_path.exists():
         run_config = json.loads(config_path.read_text(encoding="utf-8"))
         xml_path = run_config.get("env", {}).get("xml_path")
+        if xml_path:
+            return str(xml_path)
+    manifest_path = run_dir / "xml_manifest.json"
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        xml_path = manifest.get("xml_path")
         if xml_path:
             return str(xml_path)
 
@@ -392,6 +413,66 @@ def save_run_config(
     (run_dir / "config.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+def file_sha256(path: str | Path | None) -> str | None:
+    """Return a SHA-256 hash for compatibility-critical files."""
+    if path is None:
+        return None
+    file_path = Path(path)
+    if not file_path.is_absolute():
+        file_path = PROJECT_ROOT / file_path
+    if not file_path.exists():
+        return None
+    digest = hashlib.sha256()
+    with file_path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def write_xml_manifest(run_dir: Path, env: BiomechanicsJoystickEnv) -> None:
+    """Persist the exact XML identity used by a run."""
+    # REF: PROJECT-XML-HASH-GUARD
+    # TYPE: ENGINEERING_DEFAULT
+    manifest = {
+        "xml_path": env.xml_path,
+        "xml_sha256": file_sha256(env.xml_path),
+        "action_size": env.action_size,
+    }
+    (run_dir / "xml_manifest.json").write_text(
+        json.dumps(manifest, indent=2),
+        encoding="utf-8",
+    )
+
+
+def validate_resume_xml_guard(
+    checkpoint_path: Path | None,
+    env: BiomechanicsJoystickEnv,
+) -> None:
+    """Stop resume when checkpoint XML and runtime XML differ."""
+    # REF: PROJECT-XML-HASH-GUARD
+    # TYPE: ENGINEERING_DEFAULT
+    if checkpoint_path is None:
+        return
+    run_dir = find_run_dir_for_checkpoint(checkpoint_path)
+    if run_dir is None:
+        return
+    manifest_path = run_dir / "xml_manifest.json"
+    if not manifest_path.exists():
+        logger.warning(
+            "resume XML guard missing | checkpoint run has no xml_manifest.json"
+        )
+        return
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    saved_hash = manifest.get("xml_sha256")
+    current_hash = file_sha256(env.xml_path)
+    if saved_hash and current_hash and saved_hash != current_hash:
+        raise ValueError(
+            "Checkpoint/XML mismatch: saved checkpoint XML hash "
+            f"{saved_hash[:12]} != runtime XML hash {current_hash[:12]}. "
+            "Pass the original --xml-path or retrain for this XML."
+        )
+
+
 def make_json_safe(value):
     """Pretvori config vrednosti u JSON-safe oblik za run/config.json."""
     if isinstance(value, dict):
@@ -413,6 +494,16 @@ def run_training(
 
     env_name = env_display_name(env_config)
     rl_config = make_ppo_config(train_config)
+    if env_config.physics_backend == "mjx_warp":
+        env_config.playground_impl = "warp"
+        env_config.warp_num_worlds = int(rl_config.num_envs)
+        capacity_plan = resolve_warp_capacities(
+            env_config.warp_num_worlds,
+            env_config.warp_naconmax,
+            env_config.warp_njmax,
+        )
+        env_config.warp_naconmax = capacity_plan.naconmax
+        env_config.warp_njmax = capacity_plan.njmax
     run_dir = make_run_dir(
         out_dir,
         run_source_name(env_config, train_config),
@@ -443,6 +534,8 @@ def run_training(
     with logged_stage("make_environment"):
         env = make_environment(env_config, enable_erfi=enable_erfi)
         eval_env = make_environment(env_config, enable_erfi=False)
+    validate_resume_xml_guard(restore_checkpoint, env)
+    write_xml_manifest(run_dir, env)
     log_environment_summary(env, label="train env")
     log_eval_environment_summary(eval_env)
     logger.info(
@@ -496,7 +589,7 @@ def run_training(
     if rl_config.num_envs < 512:
         logger.warning(
             "biomechanics run uses only {} envs; GPU throughput is usually "
-            "better with --num-envs 512 or 1024",
+            "better with --num-envs 12288 on the MJX-Warp path",
             rl_config.num_envs,
         )
 
@@ -602,6 +695,8 @@ class BiomechanicsVmapWrapper(playground_wrapper.Wrapper):
 
     def reset(self, rng: jax.Array) -> mjx_env.State:
         state = jax.vmap(self.env.reset)(rng)
+        if "warp_world_id" in state.info:
+            state.info["warp_world_id"] = jnp.arange(rng.shape[0], dtype=jnp.int32)
         return _with_erfi50_split(state)
 
     def step(self, state: mjx_env.State, action: jax.Array) -> mjx_env.State:
@@ -677,6 +772,8 @@ class PerEpisodeDomainRandomizationVmapWrapper(playground_wrapper.Wrapper):
             return state
 
         state = jax.vmap(reset_one)(rng)
+        if "warp_world_id" in state.info:
+            state.info["warp_world_id"] = jnp.arange(rng.shape[0], dtype=jnp.int32)
         return _with_erfi50_split(state)
 
     def step(self, state: mjx_env.State, action: jax.Array) -> mjx_env.State:
@@ -764,8 +861,22 @@ class ConditionalAutoResetWrapper(playground_wrapper.Wrapper):
 
         next_info[done_count_key] += stepped_state.done.astype(int)
         next_info[self._key("rng")] = reset_rng
+        truncation = stepped_state.info.get(
+            "truncation",
+            jnp.zeros_like(stepped_state.done),
+        )
+        # REF: PROJECT-TERMINATED-TRUNCATED-SPLIT
+        # TYPE: ENGINEERING_DEFAULT
+        metrics = dict(stepped_state.metrics)
+        metrics["terminated"] = stepped_state.done * (1.0 - truncation)
+        metrics["truncated"] = stepped_state.done * truncation
 
-        return stepped_state.replace(data=data, obs=obs, info=next_info)
+        return stepped_state.replace(
+            data=data,
+            obs=obs,
+            info=next_info,
+            metrics=metrics,
+        )
 
 
 def wrap_biomechanics_training(
@@ -800,6 +911,7 @@ def log_environment_summary(env, label: str = "env") -> None:
     logger.info(
         "{} summary | nq={} | nv={} | nu={} | nbody={} | ngeom={} | "
         "nsite={} | action_size={} | substeps={} | erfi_enabled={} | "
+        "physics_backend={} | warp_naconmax={} | warp_njmax={} | "
         "command_profile={} | action_smoothing={} | rfi_limit={} | "
         "rao_limit={} | reference_target_observation={} | "
         "legacy_action_prior={} | init_qpos_file={} | xml={}",
@@ -813,6 +925,9 @@ def log_environment_summary(env, label: str = "env") -> None:
         env.action_size,
         getattr(env, "n_substeps", None),
         getattr(env._config, "enable_erfi", None),
+        getattr(env._config, "physics_backend", None),
+        getattr(env._config, "warp_naconmax", None),
+        getattr(env._config, "warp_njmax", None),
         getattr(env._config, "command_profile", None),
         getattr(env._config, "action_smoothing", None),
         getattr(env._config, "rfi_torque_limit", None),
@@ -888,27 +1003,12 @@ def env_display_name(env_config: EnvConfig) -> str:
 
 def run_source_name(env_config: EnvConfig, train_config: TrainConfig) -> str:
     """Build a compact run mode label for the folder name."""
+    # REF: PROJECT-RUN-NAMING-V1
+    # TYPE: ENGINEERING_DEFAULT
     if train_config.run_tag:
-        return f"bio_{sanitize_run_tag(train_config.run_tag)}"
+        return f"{sanitize_run_tag(train_config.run_tag)}_V1"
 
-    run_mode = "bio"
-    if env_config.env_version != "standard":
-        run_mode = f"{run_mode}_{sanitize_run_tag(env_config.env_version)}"
-    if train_config.bare:
-        run_mode = f"{run_mode}_bare"
-    elif train_config.no_erfi:
-        run_mode = f"{run_mode}_noerfi"
-    if train_config.no_domain_randomization and not train_config.bare:
-        run_mode = f"{run_mode}_nodr"
-    if env_config.command_profile != "standard":
-        run_mode = f"{run_mode}_{env_config.command_profile}"
-    if env_config.reference_gait != "none":
-        run_mode = f"{run_mode}_{sanitize_run_tag(env_config.reference_gait)}"
-    if env_config.init_qpos_file:
-        run_mode = f"{run_mode}_init"
-    if not env_config.accurate_physics:
-        run_mode = f"{run_mode}_fast"
-    return run_mode
+    return f"{sanitize_run_tag(env_config.command_profile)}_V1"
 
 
 def sanitize_run_tag(run_tag: str) -> str:
@@ -933,6 +1033,11 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = True):
     """Napravi biomehanicki joystick env."""
     config_overrides = {
         "impl": env_config.playground_impl,
+        "physics_backend": env_config.physics_backend,
+        "warp_num_worlds": env_config.warp_num_worlds,
+        "warp_naconmax": env_config.warp_naconmax,
+        "warp_njmax": env_config.warp_njmax,
+        "warp_graph_mode": env_config.warp_graph_mode,
         "enable_erfi": enable_erfi,
         "command_profile": env_config.command_profile,
         "reference_gait": env_config.reference_gait,
@@ -970,7 +1075,7 @@ def main() -> None:
     parser.add_argument(
         "--playground-impl",
         choices=["jax", "warp"],
-        default="jax",
+        default="warp",
     )
     parser.add_argument(
         "--command-profile",
@@ -1055,7 +1160,10 @@ def main() -> None:
     parser.add_argument("--num-eval-envs", type=int, default=None)
     parser.add_argument("--num-evals", type=int, default=None)
     parser.add_argument("--episode-length", type=int, default=None)
+    parser.add_argument("--unroll-length", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=None)
+    parser.add_argument("--num-minibatches", type=int, default=None)
+    parser.add_argument("--updates-per-batch", type=int, default=None)
     parser.add_argument("--learning-rate", type=float, default=None)
     parser.add_argument(
         "--debug-run",
@@ -1149,10 +1257,22 @@ def main() -> None:
         num_envs=args.num_envs or debug_defaults.get("num_envs"),
         num_eval_envs=args.num_eval_envs,
         episode_length=args.episode_length or debug_defaults.get("episode_length"),
-        unroll_length=debug_defaults.get("unroll_length"),
+        unroll_length=(
+            args.unroll_length
+            if args.unroll_length is not None
+            else debug_defaults.get("unroll_length")
+        ),
         batch_size=args.batch_size or debug_defaults.get("batch_size"),
-        num_minibatches=debug_defaults.get("num_minibatches"),
-        num_updates_per_batch=debug_defaults.get("num_updates_per_batch"),
+        num_minibatches=(
+            args.num_minibatches
+            if args.num_minibatches is not None
+            else debug_defaults.get("num_minibatches")
+        ),
+        num_updates_per_batch=(
+            args.updates_per_batch
+            if args.updates_per_batch is not None
+            else debug_defaults.get("num_updates_per_batch")
+        ),
         learning_rate=args.learning_rate,
         no_erfi=args.no_erfi,
         no_domain_randomization=(

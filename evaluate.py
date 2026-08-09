@@ -1,9 +1,15 @@
 import argparse
 import functools
+import hashlib
 import json
+import os
 import re
 import time
 from pathlib import Path
+
+# REF: PROJECT-XLA-PREALLOCATE-DEFAULT
+# TYPE: ENGINEERING_DEFAULT
+os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
 
 import jax
 import jax.numpy as jnp
@@ -43,6 +49,7 @@ from config import (
     KEY_W,
     expand_reference_gait_files,
 )
+from phase1_backends import resolve_warp_capacities
 
 
 class JoystickController:
@@ -155,6 +162,48 @@ def find_run_config(checkpoint_path: Path) -> dict | None:
     return None
 
 
+def find_run_dir(checkpoint_path: Path) -> Path | None:
+    """Find the run directory that owns a checkpoint."""
+    for path in (checkpoint_path, *checkpoint_path.parents):
+        if (path / "config.json").exists() or (path / "xml_manifest.json").exists():
+            return path
+    return None
+
+
+def file_sha256(path: str | Path | None) -> str | None:
+    """Return a SHA-256 hash for compatibility-critical files."""
+    if path is None:
+        return None
+    file_path = Path(path)
+    if not file_path.exists():
+        return None
+    digest = hashlib.sha256()
+    with file_path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def validate_xml_manifest(checkpoint_path: Path, env: BiomechanicsJoystickEnv) -> None:
+    """Catch checkpoint/XML mismatch before policy compilation."""
+    # REF: PROJECT-XML-HASH-GUARD
+    # TYPE: ENGINEERING_DEFAULT
+    run_dir = find_run_dir(checkpoint_path)
+    if run_dir is None:
+        return
+    manifest_path = run_dir / "xml_manifest.json"
+    if not manifest_path.exists():
+        return
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    saved_hash = manifest.get("xml_sha256")
+    current_hash = file_sha256(env.xml_path)
+    if saved_hash and current_hash and saved_hash != current_hash:
+        raise ValueError(
+            "Checkpoint/XML mismatch: saved XML hash "
+            f"{saved_hash[:12]} != runtime XML hash {current_hash[:12]}."
+        )
+
+
 def resolve_saved_xml_path(raw_path: str) -> str | None:
     """Resolve a saved Windows/WSL XML path against this checkout."""
     direct_path = Path(raw_path).expanduser()
@@ -176,6 +225,14 @@ def infer_xml_path(checkpoint_path: Path, run_config: dict | None) -> str | None
             return resolved_path
 
     for path in (checkpoint_path, *checkpoint_path.parents):
+        manifest_path = path / "xml_manifest.json"
+        if manifest_path.exists():
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            xml_path = manifest.get("xml_path")
+            if xml_path:
+                resolved_path = resolve_saved_xml_path(str(xml_path))
+                if resolved_path is not None:
+                    return resolved_path
         log_path = path / "train.log"
         if not log_path.exists():
             continue
@@ -504,7 +561,9 @@ def main():
         description="Gledanje Brax PPO politike u MuJoCo viewer-u."
     )
     parser.add_argument("--checkpoint", required=True, type=Path)
-    parser.add_argument("--device", choices=["gpu", "cpu"], default="gpu")
+    # REF: PROJECT-EVAL-CPU-DEFAULT
+    # TYPE: ENGINEERING_DEFAULT
+    parser.add_argument("--device", choices=["gpu", "cpu"], default="cpu")
     parser.add_argument(
         "--env-version",
         choices=["standard", "hardcore"],
@@ -583,8 +642,16 @@ def main():
     playground_impl = args.playground_impl or run_env_value(
         run_config,
         "playground_impl",
-        "jax",
+        "warp",
     )
+    physics_backend = run_env_value(
+        run_config,
+        "physics_backend",
+        "mjx_warp" if playground_impl == "warp" else "mjx_jax",
+    )
+    if args.device == "cpu" and physics_backend == "mjx_warp":
+        physics_backend = "mjx_jax"
+        playground_impl = "jax"
     action_smoothing = (
         args.action_smoothing
         if args.action_smoothing is not None
@@ -644,6 +711,7 @@ def main():
         "eval config | "
         f"env_version={env_version} | "
         f"playground_impl={playground_impl} | "
+        f"physics_backend={physics_backend} | "
         f"command_profile={command_profile} | "
         f"command_x={command_x} | "
         f"init_qpos_file={init_qpos_file} | "
@@ -663,6 +731,11 @@ def main():
     env_config = EnvConfig(
         env_version=env_version,
         playground_impl=playground_impl,
+        physics_backend=physics_backend,
+        warp_num_worlds=1,
+        warp_naconmax=resolve_warp_capacities(1).naconmax,
+        warp_njmax=resolve_warp_capacities(1).njmax,
+        warp_graph_mode=str(run_env_value(run_config, "warp_graph_mode", "warp")),
         command_profile=command_profile,
         reference_gait=reference_gait,
         reference_gait_file=reference_gait_file,
@@ -676,6 +749,7 @@ def main():
         accurate_physics=accurate_physics,
     )
     env = make_environment(env_config)
+    validate_xml_manifest(args.checkpoint, env)
     validate_action_compatibility(args.checkpoint, env.action_size)
     policy = load_ppo_policy(args.checkpoint, deterministic=not args.stochastic)
 
@@ -740,6 +814,11 @@ def make_environment(env_config: EnvConfig):
     """Napravi env za viewer."""
     config_overrides = {
         "impl": env_config.playground_impl,
+        "physics_backend": env_config.physics_backend,
+        "warp_num_worlds": env_config.warp_num_worlds,
+        "warp_naconmax": env_config.warp_naconmax,
+        "warp_njmax": env_config.warp_njmax,
+        "warp_graph_mode": env_config.warp_graph_mode,
         "enable_erfi": False,
         "command_profile": env_config.command_profile,
         "reference_gait": env_config.reference_gait,

@@ -1,8 +1,11 @@
-"""Legacy Berkeley humanoid joystick training from commit 0168f50.
+"""DEPRECATED: Legacy Berkeley humanoid joystick training from commit 0168f50.
 
 This is the old MuJoCo Playground Berkeley PPO path isolated from the active
 biomechanics training code. Keep this runner intentionally boring: it should
 match the working Berkeley setup from the old commit as closely as possible.
+
+Do not use this for new Phase 1 / DeepMimic-style training. It is kept only for
+historical comparison and for reproducing old Berkeley-baseline reports.
 """
 
 import argparse

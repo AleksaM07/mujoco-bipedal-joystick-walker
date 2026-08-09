@@ -3,15 +3,14 @@
 Reinforcement-learning pipeline for joystick-controlled walking on a generated
 MuJoCo human biomechanics model.
 
-The project trains PPO policies, evaluates the best checkpoints, compares them
-with a Berkeley/MuJoCo Playground humanoid baseline, and exports analysis tables
-and plots.
+The project trains PPO policies on a generated MuJoCo human biomechanics model
+and evaluates checkpoints with the active MJX-Warp / DeepMimic-style pipeline.
+Old Berkeley comparison tooling is archived under `legacy/`.
 
 ## What This Project Shows
 
 - PPO training works on the generated humanoid model.
 - Checkpoints can be resumed, evaluated, and compared.
-- Berkeley humanoid is a useful tuned baseline.
 - The generated biomechanics model is harder: reward, contacts, actuators, joint
   limits, and XML variants matter a lot.
 - High reward alone is not trusted; the analysis also checks falls, command
@@ -26,9 +25,7 @@ and plots.
 | `biomechanics_env.py` | RL environment, observations, rewards, contacts. |
 | `biomechanics_model.py` | Generated MuJoCo model/XML construction. |
 | `bvh_reference.py` | BVH walking reference support. |
-| `walking_analysis.py` | Reusable checkpoint and rollout analysis code. |
-| `walking_analysis.ipynb` | Report notebook with plots and conclusions. |
-| `analysis_outputs/` | Generated CSV analysis outputs. |
+| `legacy/` | Archived Berkeley baseline and old analysis notebook/scripts. |
 | `generated_models/` | Classic and training XML variants. |
 
 ## Setup
@@ -44,22 +41,16 @@ python -m uv run python train.py --help
 python -m uv run python evaluate.py --help
 ```
 
-Run the analysis notebook:
-
-```powershell
-python -m uv run jupyter nbconvert --to notebook --execute walking_analysis.ipynb --inplace
-```
-
 Quick CPU smoke test:
 
 ```powershell
 python -m uv run python train.py --debug-run --device cpu --allow-cpu --bare --no-checkpoints --timesteps 1000 --num-envs 4 --num-evals 0 --episode-length 20 --batch-size 4
 ```
 
-## Current Best-Checkpoint Analysis
+## Legacy Best-Checkpoint Analysis
 
-The notebook selects the best logged checkpoint from each run under
-`runs/successful`, runs fixed command scenarios, and exports:
+The old notebook under `legacy/` selected the best logged checkpoint from each
+run under `runs/successful`, ran fixed command scenarios, and exported:
 
 - `selected_checkpoints.csv`
 - `training_history.csv`
@@ -69,7 +60,7 @@ The notebook selects the best logged checkpoint from each run under
 - `policy_metrics.csv`
 - `actuator_metrics.csv`
 
-Current top in-distribution policies:
+Archived top in-distribution policies:
 
 | Rank | Policy | Type | Composite | Survival | Tracking RMSE | Torso Up |
 | ---: | --- | --- | ---: | ---: | ---: | ---: |
@@ -142,7 +133,7 @@ is fully solved.
 
 Best framing:
 
-- Berkeley baseline: cleaner tuned locomotion benchmark.
+- Legacy Berkeley baseline: archived tuned locomotion benchmark.
 - Generated biomechanics model: harder custom model successfully trained, but
   still limited by gait/contact quality.
 - Next research step: stronger contact-aware imitation or full-body retargeted

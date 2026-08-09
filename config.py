@@ -65,8 +65,12 @@ DEFAULT_COMMAND_STEP: Final = 0.1
 # name shown in `train.log`.
 TRAIN_DIAGNOSTIC_METRICS: Final[tuple[tuple[str, str], ...]] = (
     ("eval/episode_tracking_lin_vel", "tracking"),
+    ("eval/episode_tracking_lin", "track_lin"),
+    ("eval/episode_tracking_yaw", "track_yaw"),
     ("eval/episode_command_progress", "progress"),
     ("eval/episode_command_norm", "cmd_norm"),
+    ("eval/episode_command_lin_norm", "cmd_lin"),
+    ("eval/episode_command_yaw_abs", "cmd_yaw"),
     ("eval/episode_torso_up", "torso_up"),
     ("eval/episode_head_up", "head_up"),
     ("eval/episode_height", "height"),
@@ -78,11 +82,18 @@ TRAIN_DIAGNOSTIC_METRICS: Final[tuple[tuple[str, str], ...]] = (
     ("eval/episode_gait_reward", "gait"),
     ("eval/episode_reference_gait", "ref_gait"),
     ("eval/episode_reference_velocity", "ref_vel"),
+    ("eval/episode_deepmimic_pose", "dm_pose"),
+    ("eval/episode_deepmimic_velocity", "dm_vel"),
+    ("eval/episode_deepmimic_end_effector", "dm_ee"),
+    ("eval/episode_deepmimic_root", "dm_root"),
+    ("eval/episode_deepmimic_com", "dm_com"),
     ("eval/episode_contact_force", "contact_force"),
     ("eval/episode_done_low_height", "done_low"),
     ("eval/episode_done_tipped", "done_tip"),
     ("eval/episode_done_invalid", "done_nan"),
     ("eval/episode_done", "done"),
+    ("eval/episode_terminated", "terminated"),
+    ("eval/episode_truncated", "truncated"),
 )
 
 # BVH curriculum list generation. These values are deliberately simple
@@ -559,14 +570,29 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         xml_path=None,
         legacy_action_prior=False,
         command_resample_steps=500,
+        # REF: PROJECT-COMMAND-TRACKING-SPLIT
+        # TYPE: ENGINEERING_DEFAULT
         tracking_sigma=0.25,
+        tracking_yaw_sigma=0.35,
+        # REF: PROJECT-BVH-MULTIFRAME-BESTMATCH
+        # TYPE: ENGINEERING_DEFAULT
+        bvh_multiclip_window=30,
         action_noise_std=0.03,
         episode_bias_std=0.02,
         rfi_torque_limit=2.0,
         rao_torque_limit=2.0,
         enable_erfi=True,
         init_qpos_file=None,
-        impl="jax",
+        # REF: BULLET-WARP-BACKEND
+        # TYPE: REFERENCE_CODE_DERIVED
+        impl="warp",
+        physics_backend="mjx_warp",
+        # REF: PROJECT-DEFAULT-WARP-12288
+        # TYPE: EXPERIMENTALLY_SELECTED
+        warp_num_worlds=12288,
+        warp_naconmax=None,
+        warp_njmax=None,
+        warp_graph_mode="warp",
     )
 
 
@@ -584,7 +610,9 @@ def default_biomechanics_ppo_config() -> config_dict.ConfigDict:
     return config_dict.create(
         num_timesteps=50_000_000,
         num_evals=10,
-        num_envs=1024,
+        # REF: PROJECT-DEFAULT-WARP-12288
+        # TYPE: EXPERIMENTALLY_SELECTED
+        num_envs=12288,
         num_eval_envs=32,
         episode_length=500,
         action_repeat=1,
@@ -592,7 +620,9 @@ def default_biomechanics_ppo_config() -> config_dict.ConfigDict:
         entropy_cost=3e-3,
         discounting=0.97,
         unroll_length=20,
-        batch_size=512,
+        # REF: PROJECT-DEFAULT-WARP-12288
+        # TYPE: EXPERIMENTALLY_SELECTED
+        batch_size=12288,
         num_minibatches=8,
         num_updates_per_batch=4,
         normalize_observations=True,
@@ -628,9 +658,15 @@ class EnvConfig:
     # standard -> flat terrain, hardcore -> rough terrain.
     env_version: str = "standard"
 
-    # "jax" je default jer lokalni "warp" backend trenutno puca na verzijskom
-    # konfliktu warp/mujoco-mjx. Kad se verzije srede, warp moze biti brzi.
-    playground_impl: str = "jax"
+    # MJX-Warp je primarni backend. MJX-JAX ostaje samo za stare checkpoint-e
+    # i male CPU dijagnostike.
+    playground_impl: str = "warp"
+
+    physics_backend: str = "mjx_warp"
+    warp_num_worlds: int = 12288
+    warp_naconmax: int | None = None
+    warp_njmax: int | None = None
+    warp_graph_mode: str = "warp"
 
     # "standard" je pun joystick zadatak: napred/nazad, lateralno i yaw.
     # "forward" ostaje dostupan samo kao bootstrap curriculum.

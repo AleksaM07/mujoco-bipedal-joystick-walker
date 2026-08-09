@@ -11,7 +11,11 @@ dependencies = [
     "ipykernel>=6.30",
     "matplotlib>=3.10",
     "ml-collections>=1.1",
-    "mujoco>=3.6.0",
+    # REF: PROJECT-WARP-PACKAGE-PINS
+    # TYPE: ENGINEERING_DEFAULT
+    "mujoco==3.10.0",
+    "mujoco-mjx[warp]==3.10.0",
+    "warp-lang==1.13.0",
     "nbconvert>=7.16",
     "numpy>=2.0",
     "pandas>=2.3",
