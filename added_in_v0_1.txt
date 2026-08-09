@@ -1,0 +1,239 @@
+Commits
+596c242 feat: align MJX-Warp training defaults and DeepMimic reward
+ed09cf2 feat: align MJX-Warp training defaults and DeepMimic reward
+Ukupno: 27 fajlova, radno stablo čisto.
+1. MJX-Warp Kao Glavni Backend
+Promenjeno:
+Dodan [phase1_backends.py (line 1)](/C:/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/phase1_backends.py:1)
+config.py default backend:playground_impl="warp"
+physics_backend="mjx_warp"
+warp_num_worlds=10240
+warp_graph_mode="warp"
+
+train.py sada automatski računa Warp kapacitete:warp_naconmax
+warp_njmax
+
+evaluate.py dobio --physics-backend.
+Zašto:
+Da MJX-Warp bude production path, ne eksperimentalna opcija.
+Da ne moraš stalno ručno da navodiš backend.
+Da Warp dobije validne kontakt/constraint buffer-e i ne puca na zaključan config.
+2. GPU Memory Defaulti
+Promenjeno u train.py i evaluate.py:
+os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
+os.environ.setdefault("TF_GPU_ALLOCATOR", "cuda_malloc_async")
+Zašto:
+RTX 2060 ima 6GB VRAM.
+JAX/XLA prealokacija i fragmentacija su pravili OOM.
+Ovo smanjuje šansu da trening pukne zbog allocator fragmentacije.
+3. Novi PPO/Network Defaulti Po MimicKit-u
+Promenjeno u [config.py (line 629)](/C:/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/config.py:629):
+learning_rate=1e-4
+discounting=0.99
+gae_lambda=0.95
+clipping_epsilon=0.2
+entropy_cost=0.0
+actor: (1024, 1024)
+critic: (1024, 1024)
+distribution_type="normal"
+init_noise_std=0.05
+state_dependent_std=False
+Zašto:
+Profesor traži DeepMimic/MimicKit-like setup.
+MimicKit humanoid PPO config koristi 2x1024 actor/critic i ove PPO vrednosti.
+SGD nije ubačen jer Brax PPO wrapper hardkoduje Adam; to smo svesno ostavili.
+4. Trening Shape Defaulti
+Promenjeno:
+num_envs=10240
+batch_size=10240
+unroll_length=5
+num_minibatches=1
+num_updates_per_batch=1
+Zašto:
+12288 je ranije prolazio sa manjom mrežom, ali 2x1024 mreža je pravila OOM.
+10240 je kompromis: još uvek veliki Warp batch, ali realniji za 6GB GPU.
+5. BVH/MimicKit Default
+Promenjeno:
+reference_gait="bvh" sada default.
+reference_target_observation=True sada default.
+Default BVH lista:BVH_walking_animation/tier1_debug_10.txt
+
+reference_gait_file koristi field(default_factory=...).
+Zašto:
+Phase 1 treba uvek da ima imitation reference.
+field(default_factory) sprečava mutabilni/list default problem i čuva checkpoint/config kompatibilnost.
+6. DeepMimic Reward Rework
+Promenjeno u [biomechanics_env.py (line 179)](/C:/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/biomechanics_env.py:179):
+Težine:pose 0.5
+velocity 0.1
+root pose 0.15
+root velocity 0.1
+key position 0.15
+
+Scale:pose 0.25
+velocity 0.01
+root pose 5.0
+root velocity 1.0
+key position 10.0
+
+REFERENCE_GAIT_REWARD_SCALE=1.0
+REFERENCE_VELOCITY_REWARD_SCALE=0.0
+Zašto:
+Da reward liči na MimicKit DeepMimic, ne na staru mešavinu imitation + dodatni velocity.
+Ranije je DeepMimic reward bio dodatno skaliran na 0.35, pa se gubio.
+Velocity se duplirao kroz posebnu reward granu; sada je samo unutar DeepMimic decomposition-a.
+7. Key Position Mimic
+Promenjeno:
+Umesto samo stopala, key body reward koristi:head
+right_hand
+left_hand
+right_foot
+left_foot
+
+Zašto:
+MimicKit humanoid koristi key bodies, ne samo feet.
+Ruke su već uključene u reward ako body postoji, ali ih nismo posebno “otključavali” u kontroli.
+8. Quaternion Pose Error
+Promenjeno:
+_quat_distance sada koristi angle-based quaternion distance:
+angle = 2 * arccos(abs(dot(q1, q2)))
+return angle^2
+Zašto:
+DeepMimic/MimicKit porede orijentacije zglobnih/body frame-ova preko quaternion angle razlike.
+Stari 1 - dot^2 nije isti oblik greške kao DeepMimic.
+9. Multi-Frame Best Match
+Promenjeno:
+BVH DeepMimic reward traži najbolji frame u lokalnom prozoru.
+Default:bvh_multiclip_window=30
+
+Zašto:
+To simulira “multi-clip / temporal tolerance” ponašanje: ako je faza malo pomerena, policy ne dobija odmah loš reward.
+Korisno za BVH gde retarget/faza nisu savršeni.
+10. BVH Reference Sistem
+Promenjeno:
+[bvh_reference.py (line 1)](/C:/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/bvh_reference.py:1) je značajno prepravljen.
+Dodata MimicKit-like motion library logika:motion clips
+loop mode
+frame counts
+root pos/quat
+qpos/qvel targets
+padded tensors za JAX/MJX
+BVH list expansion
+step segmentation support
+
+Zašto:
+Da BVH reference budu bliže MimicKit/DeepMimic pristupu.
+Da trening ne zavisi od jedne ručno zadate statične reference.
+Da se motion faze mogu samplingovati i porediti stabilnije.
+11. Marina BVH Parser
+Dodato:
+marina_bvh_parse/0005_Walking001.bvh
+marina_bvh_parse/bvh_parse.py
+marina_bvh_parse/new_bvh.py
+Zašto:
+Sačuvan je koleginicin rad kao lokalna referenca/prototip.
+Njena step/foot-speed ideja je korisna za BVH segmentaciju.
+Registry sada beleži MARINA-BVH-STEP-SEGMENTATION.
+12. Reward/Training Diagnostics
+Promenjeno:
+TRAIN_DIAGNOSTIC_METRICS proširen:track_lin
+track_yaw
+cmd_lin
+cmd_yaw
+dm_pose
+dm_vel
+dm_ee
+dm_root
+dm_root_pose
+dm_root_vel
+dm_key
+terminated
+truncated
+
+Zašto:
+Da se vidi koja reward grupa dominira ili propada.
+Posebno važno jer smo imali reward=-400, terminated=1, dm_key=0.
+13. Command Tracking Split
+Promenjeno:
+Dodati odvojeni tracking signali:linear velocity tracking
+yaw tracking
+
+Dodati command norm metrici:linear command norm
+yaw abs
+
+Zašto:
+Ranije su m/s i rad/s bili pomešani u istoj normi.
+To je konceptualno pogrešno za joystick tracking.
+14. Terminated Vs Truncated
+Promenjeno:
+Auto-reset wrapper sada upisuje:terminated
+truncated
+
+Zašto:
+Timeout epizode i pravi pad/reset ne smeju biti isto.
+Bitno je za evaluaciju i GAE/bootstrap razumevanje.
+15. XML/Checkpoint Guard
+Promenjeno:
+train.py piše xml_manifest.json.
+Manifest sadrži:XML path
+XML SHA256
+action size
+
+Resume proverava XML hash.
+evaluate.py takođe proverava manifest.
+Zašto:
+Imao si problem v16/v17 XML mismatch.
+Checkpoint ne sme tiho da se evaluira/trenira sa pogrešnim XML-om.
+16. Run Naming
+Promenjeno:
+Novi format:
+YYYYMMDD_HHMM_forward_V1_steps-5m_reward-pending_running
+Na kraju se rename-uje sa reward vrednošću i _s/_f.
+Zašto:
+Da run folder odmah kaže:command/profile
+verziju naming-a
+broj steps
+reward status
+
+17. Evaluate Defaults
+Promenjeno:
+evaluate.py default device je sada cpu.
+Ako je CPU eval i checkpoint kaže mjx_warp, prebacuje se na mjx_jax.
+Zašto:
+Evaluacija/viewer je stabilnija i jeftinija na CPU.
+Warp backend nema smisla forsirati za CPU viewer.
+18. Legacy Cleanup
+Promenjeno:
+Prebačeno u legacy/:barkley_legacy_walking.py
+walking_analysis.py
+walking_analysis.ipynb
+
+Dodat legacy/README.md.
+Obrisani stari analysis_outputs/*.csv.
+Zašto:
+Da repo ne meša trenutni Phase 1/MJX-Warp pipeline sa starim analysis/legacy skriptama.
+CSV outputi su generisani artefakti, ne source-of-truth kod.
+19. Reference Traceability
+Dodato/menjano:
+[REFERENCES.md (line 1)](/C:/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/REFERENCES.md:1)
+[references/registry.yaml (line 1)](/C:/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/references/registry.yaml:1)
+Registry entries uključuju:
+DeepMimic imitation reward
+MimicKit motion library
+MimicKit humanoid PPO/reward config
+Marina BVH segmentation
+Bullet/Warp backend reference
+XML hash guard
+command tracking split
+run naming
+default Warp shape
+Zašto:
+Da možeš profesoru ili drugom agentu da pokažeš odakle šta dolazi.
+Da razlikujemo paper/code-derived stvari od naših engineering default-a.
+20. README / pyproject
+Promenjeno:
+README ažuriran za novi workflow.
+pyproject.toml blago dopunjen.
+Zašto:
+Dokumentacija prati novi default: MJX-Warp + BVH imitation + runs/ naming.
+Dependency/tooling metadata usklađena sa novim kodom.
