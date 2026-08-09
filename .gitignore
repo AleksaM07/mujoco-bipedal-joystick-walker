@@ -55,3 +55,4 @@ recovery/
 # Miscellaneous
 .agents/
 runs/failed/*
+master_rad/*
