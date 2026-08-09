@@ -14,6 +14,7 @@ from pathlib import Path
 # REF: PROJECT-XLA-PREALLOCATE-DEFAULT
 # TYPE: ENGINEERING_DEFAULT
 os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
+os.environ.setdefault("TF_GPU_ALLOCATOR", "cuda_malloc_async")
 
 import jax
 import jax.numpy as jnp
@@ -29,6 +30,7 @@ from mujoco_playground._src import wrapper as playground_wrapper
 
 from biomechanics_env import BiomechanicsJoystickEnv, domain_randomize
 from config import (
+    DEFAULT_BVH_REFERENCE_LIST,
     DOMAIN_RANDOMIZATION_ID,
     PROJECT_ROOT,
     RUNS_DIR,
@@ -589,7 +591,7 @@ def run_training(
     if rl_config.num_envs < 512:
         logger.warning(
             "biomechanics run uses only {} envs; GPU throughput is usually "
-            "better with --num-envs 12288 on the MJX-Warp path",
+            "better with --num-envs 10240 on the MJX-Warp path",
             rl_config.num_envs,
         )
 
@@ -1103,10 +1105,10 @@ def main() -> None:
     parser.add_argument(
         "--reference-gait",
         choices=["none", "sine", "bvh"],
-        default="none",
+        default="bvh",
         help=(
-            "Opcioni pose-imitation prior: sine je rucna cyclic putanja, "
-            "bvh koristi jednu ili vise BVH animacija."
+            "BVH/MimicKit-style imitation je default; none/sine su samo "
+            "compatibility/debug modovi."
         ),
     )
     parser.add_argument(
@@ -1229,15 +1231,21 @@ def main() -> None:
     device = choose_device(args.device, args.allow_cpu)
     jax.config.update("jax_default_device", device)
 
+    reference_gait_file = expand_reference_gait_files(
+        args.reference_gait_file,
+        args.reference_gait_list,
+    )
+    if args.reference_gait == "bvh" and reference_gait_file is None:
+        reference_gait_file = expand_reference_gait_files(
+            reference_gait_lists=[DEFAULT_BVH_REFERENCE_LIST],
+        )
+
     env_config = EnvConfig(
         env_version=args.env_version,
         playground_impl=args.playground_impl,
         command_profile=args.command_profile,
         reference_gait=args.reference_gait,
-        reference_gait_file=expand_reference_gait_files(
-            args.reference_gait_file,
-            args.reference_gait_list,
-        ),
+        reference_gait_file=reference_gait_file,
         reference_target_observation=args.reference_gait == "bvh",
         xml_path=str(args.xml_path) if args.xml_path is not None else None,
         legacy_action_prior=args.legacy_action_prior,

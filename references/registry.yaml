@@ -30,6 +30,91 @@ DEEPMIMIC2018-CODE-IMITATION-REWARD:
     verified_paper_section: false
     verified_paper_equation: false
 
+MIMICKIT-MOTION-LIBRARY:
+  type: REFERENCE_CODE_DERIVED
+  source:
+    repository: "https://github.com/xbpeng/MimicKit"
+    commit: "2ed1e6c093bb0829f55d33cb4f7a1731cfe6cb69"
+    files:
+      - "mimickit/anim/motion.py"
+      - "mimickit/anim/motion_lib.py"
+    lines: null
+    url: "https://github.com/xbpeng/MimicKit"
+    license: "Apache-2.0"
+  used_in:
+    - "bvh_reference.py"
+    - "config.py"
+  adaptation:
+    original: >
+      MimicKit stores motion clips with loop mode, fps, frames, motion weights,
+      sampled motion time, frame blending, root state, joint rotations, and
+      derived velocities.
+    project: >
+      This repository ports the small motion-library shape needed by the MJX
+      trainer: BVH files and BVH lists become weighted clips with frame counts,
+      loop modes, root targets, derived velocities, and padded static tensors
+      suitable for JAX/MJX compilation.
+    reason: >
+      Keeps DeepMimic-style imitation always available without adding a separate
+      runtime converter script or a second training entrypoint.
+
+MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG:
+  type: REFERENCE_CODE_DERIVED
+  source:
+    repository: "https://github.com/xbpeng/MimicKit"
+    commit: "2ed1e6c093bb0829f55d33cb4f7a1731cfe6cb69"
+    files:
+      - "data/envs/deepmimic_humanoid_env.yaml"
+      - "data/agents/deepmimic_humanoid_ppo_agent.yaml"
+      - "mimickit/envs/deepmimic_env.py"
+    lines: null
+    url: "https://github.com/xbpeng/MimicKit"
+    license: "Apache-2.0"
+  used_in:
+    - "biomechanics_env.py"
+    - "config.py"
+  adaptation:
+    original: >
+      MimicKit's humanoid DeepMimic environment uses weighted exponential
+      imitation rewards for pose, velocity, root pose, root velocity, and key
+      body positions. Its PPO agent config uses 2x1024 actor/critic networks,
+      lr 1e-4, discount 0.99, lambda 0.95, clip ratio 0.2, fixed action std
+      0.05, SGD, and zero entropy weight.
+    project: >
+      This project mirrors the exposed Brax PPO knobs and the reward weights.
+      Brax PPO's normal policy exposes a scalar action std initialized to 0.05,
+      but keeps it learnable; its public train wrapper also does not expose SGD,
+      so strict fixed-std/SGD parity requires a future custom trainer.
+    reason: >
+      Professor-facing Phase 1 experiments should use the same reward-group
+      semantics and published-code hyperparameter scale as DeepMimic/MimicKit.
+
+MARINA-BVH-STEP-SEGMENTATION:
+  type: PROJECT_COLLABORATOR_DERIVED
+  source:
+    title: "Local BVH foot-speed step segmentation prototype"
+    author: "Marina"
+    year: 2026
+    files:
+      - "marina_bvh_parse/bvh_parse.py"
+      - "marina_bvh_parse/new_bvh.py"
+      - "marina_bvh_parse/steps.csv"
+    url: null
+  used_in:
+    - "bvh_reference.py"
+  adaptation:
+    original: >
+      The prototype computes BVH global foot positions, filters foot speeds,
+      detects contact/heel-strike events, writes step boundaries to CSV, and can
+      split a BVH into per-step files.
+    project: >
+      The runtime loader reads sibling steps.csv files when present, and also
+      embeds the same lightweight foot-speed heel-strike idea as an automatic
+      fallback segmenter before building MimicKit-style clips.
+    reason: >
+      Step-sized walking clips are cleaner imitation targets than treating a
+      long BVH file as one monolithic reference trajectory.
+
 BULLET-WARP-BACKEND:
   type: REFERENCE_CODE_DERIVED
   source:
@@ -117,7 +202,7 @@ PROJECT-WARP-PACKAGE-PINS:
     project: "mujoco==3.10.0, mujoco-mjx[warp]==3.10.0, warp-lang==1.13.0."
     reason: "The environment had previously been validated with this MJX-Warp package set."
 
-PROJECT-DEFAULT-WARP-12288:
+PROJECT-DEFAULT-WARP-10240:
   type: EXPERIMENTALLY_SELECTED
   source:
     title: "Local MJX-Warp throughput/default parallelism"
@@ -131,8 +216,13 @@ PROJECT-DEFAULT-WARP-12288:
     - "train.py"
   adaptation:
     original: "No paper source; selected from local project GPU run attempts and user-requested default."
-    project: "Default PPO num_envs and batch_size are 12288 for MJX-Warp runs."
-    reason: "The project is optimized for the user's GPU-oriented MJX-Warp training workflow."
+    project: >
+      Default MJX-Warp PPO shape uses num_envs=10240, batch_size=10240,
+      unroll_length=5, num_minibatches=1, and num_updates_per_batch=1.
+    reason: >
+      The project is optimized for the user's GPU-oriented MJX-Warp training
+      workflow, and the lean rollout/update shape matches the local benchmark
+      path that fit on the target GPU.
 
 PROJECT-COMMAND-TRACKING-SPLIT:
   type: ENGINEERING_DEFAULT

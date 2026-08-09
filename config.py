@@ -1,5 +1,5 @@
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
 
@@ -87,6 +87,9 @@ TRAIN_DIAGNOSTIC_METRICS: Final[tuple[tuple[str, str], ...]] = (
     ("eval/episode_deepmimic_end_effector", "dm_ee"),
     ("eval/episode_deepmimic_root", "dm_root"),
     ("eval/episode_deepmimic_com", "dm_com"),
+    ("eval/episode_deepmimic_root_pose", "dm_root_pose"),
+    ("eval/episode_deepmimic_root_velocity", "dm_root_vel"),
+    ("eval/episode_deepmimic_key_position", "dm_key"),
     ("eval/episode_contact_force", "contact_force"),
     ("eval/episode_done_low_height", "done_low"),
     ("eval/episode_done_tipped", "done_tip"),
@@ -101,6 +104,7 @@ TRAIN_DIAGNOSTIC_METRICS: Final[tuple[tuple[str, str], ...]] = (
 # training logic. `bvh_reference.py` uses them only when run as a helper script
 # to regenerate tier list files.
 BVH_ROOT: Final = PROJECT_ROOT / "BVH_walking_animation"
+DEFAULT_BVH_REFERENCE_LIST: Final = BVH_ROOT / "tier1_debug_10.txt"
 BVH_INDEX_PATTERN: Final = re.compile(r"^\s*(\d{2,3}_\d{2})\s+(.+?)\s*$")
 BVH_TIER1_EXCLUDE: Final[set[str]] = {
     "back",
@@ -562,9 +566,13 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         action_scale=0.5,
         action_smoothing=0.5,
         command_profile="standard",
-        reference_gait="none",
-        reference_gait_file=None,
-        reference_target_observation=False,
+        # REF: MIMICKIT-MOTION-LIBRARY
+        # TYPE: REFERENCE_CODE_DERIVED
+        reference_gait="bvh",
+        reference_gait_file=[
+            DEFAULT_BVH_REFERENCE_LIST.relative_to(PROJECT_ROOT).as_posix()
+        ],
+        reference_target_observation=True,
         policy_observation_size=None,
         policy_observation_dict=True,
         xml_path=None,
@@ -587,9 +595,9 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # TYPE: REFERENCE_CODE_DERIVED
         impl="warp",
         physics_backend="mjx_warp",
-        # REF: PROJECT-DEFAULT-WARP-12288
+        # REF: PROJECT-DEFAULT-WARP-10240
         # TYPE: EXPERIMENTALLY_SELECTED
-        warp_num_worlds=12288,
+        warp_num_worlds=10240,
         warp_naconmax=None,
         warp_njmax=None,
         warp_graph_mode="warp",
@@ -610,33 +618,56 @@ def default_biomechanics_ppo_config() -> config_dict.ConfigDict:
     return config_dict.create(
         num_timesteps=50_000_000,
         num_evals=10,
-        # REF: PROJECT-DEFAULT-WARP-12288
+        # REF: PROJECT-DEFAULT-WARP-10240
         # TYPE: EXPERIMENTALLY_SELECTED
-        num_envs=12288,
+        num_envs=10240,
         num_eval_envs=32,
         episode_length=500,
         action_repeat=1,
-        learning_rate=3e-4,
-        entropy_cost=3e-3,
-        discounting=0.97,
-        unroll_length=20,
-        # REF: PROJECT-DEFAULT-WARP-12288
+        # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
+        # TYPE: REFERENCE_CODE_DERIVED
+        learning_rate=1e-4,
+        # MimicKit DeepMimic humanoid PPO sets action_entropy_weight: 0.0.
+        entropy_cost=0.0,
+        # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
+        # TYPE: REFERENCE_CODE_DERIVED
+        discounting=0.99,
+        # REF: PROJECT-DEFAULT-WARP-10240
         # TYPE: EXPERIMENTALLY_SELECTED
-        batch_size=12288,
-        num_minibatches=8,
-        num_updates_per_batch=4,
+        unroll_length=5,
+        # REF: PROJECT-DEFAULT-WARP-10240
+        # TYPE: EXPERIMENTALLY_SELECTED
+        batch_size=10240,
+        # REF: PROJECT-DEFAULT-WARP-10240
+        # TYPE: EXPERIMENTALLY_SELECTED
+        num_minibatches=1,
+        # REF: PROJECT-DEFAULT-WARP-10240
+        # TYPE: EXPERIMENTALLY_SELECTED
+        num_updates_per_batch=1,
         normalize_observations=True,
         normalize_observations_std_eps=1e-3,
         reward_scaling=1.0,
+        # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
+        # TYPE: REFERENCE_CODE_DERIVED
         clipping_epsilon=0.2,
         gae_lambda=0.95,
         max_grad_norm=1.0,
         network_factory=config_dict.create(
-            policy_hidden_layer_sizes=(512, 256, 128),
-            value_hidden_layer_sizes=(512, 256, 128),
+            # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
+            # TYPE: REFERENCE_CODE_DERIVED
+            # MimicKit uses fc_2layers_1024units for both actor and critic.
+            policy_hidden_layer_sizes=(1024, 1024),
+            value_hidden_layer_sizes=(1024, 1024),
             activation=jax.nn.silu,
             policy_obs_key="state",
             value_obs_key="privileged_state",
+            distribution_type="normal",
+            # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
+            # TYPE: REFERENCE_CODE_DERIVED
+            # Brax exposes the initial std here. Its PPO wrapper does not expose
+            # MimicKit's fixed-std flag without replacing the policy/trainer.
+            init_noise_std=0.05,
+            state_dependent_std=False,
         ),
     )
 
@@ -663,7 +694,7 @@ class EnvConfig:
     playground_impl: str = "warp"
 
     physics_backend: str = "mjx_warp"
-    warp_num_worlds: int = 12288
+    warp_num_worlds: int = 10240
     warp_naconmax: int | None = None
     warp_njmax: int | None = None
     warp_graph_mode: str = "warp"
@@ -672,12 +703,15 @@ class EnvConfig:
     # "forward" ostaje dostupan samo kao bootstrap curriculum.
     command_profile: str = "standard"
 
-    # "sine" dodaje rucno dizajniranu ciklicnu referentnu putanju za noge.
-    # "bvh" koristi jednu BVH animaciju kao motion-imitation prior.
-    # "none" koristi samo task/style reward bez explicit pose imitation.
-    reference_gait: str = "none"
-    reference_gait_file: str | list[str] | None = None
-    reference_target_observation: bool = False
+    # BVH/MimicKit-style imitation is the production default. "none" and
+    # "sine" remain accepted only for old checkpoint/debug compatibility.
+    reference_gait: str = "bvh"
+    reference_gait_file: str | list[str] | None = field(
+        default_factory=lambda: [
+            DEFAULT_BVH_REFERENCE_LIST.relative_to(PROJECT_ROOT).as_posix()
+        ]
+    )
+    reference_target_observation: bool = True
 
     # Evaluator postavlja ovu vrednost iz checkpoint metadata-e. Env zatim
     # automatski rekonstruiše stari/novi policy observation layout.

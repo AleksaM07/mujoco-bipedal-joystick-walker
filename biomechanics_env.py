@@ -17,7 +17,11 @@ from biomechanics_model import (
     TRUNK_ACTUATED_JOINTS,
     build_trainable_scene_xml,
 )
-from config import default_biomechanics_env_config, resolve_project_path
+from config import (
+    DEFAULT_BVH_REFERENCE_LIST,
+    default_biomechanics_env_config,
+    resolve_project_path,
+)
 from phase1_backends import make_data_kwargs, put_model_for_backend
 
 
@@ -162,24 +166,26 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
     FOOT_SLIP_COST_SCALE = 1.0
     SWING_FOOT_DRAG_COST_SCALE = 2.0
     SWING_CLEARANCE_DEFICIT_COST_SCALE = 1.5
-    # REF: PROJECT-LEGACY-REWARD-CONSTANTS
-    # TYPE: ENGINEERING_DEFAULT
-    REFERENCE_GAIT_REWARD_SCALE = 0.35
-    REFERENCE_GAIT_ERROR_SCALE = 8.0
-    REFERENCE_VELOCITY_REWARD_SCALE = 0.15
-    REFERENCE_VELOCITY_ERROR_SCALE = 0.25
-    # REF: DEEPMIMIC2018-CODE-IMITATION-REWARD
+    # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
     # TYPE: REFERENCE_CODE_DERIVED
+    # The BVH/DeepMimic term is already a complete weighted imitation reward.
+    REFERENCE_GAIT_REWARD_SCALE = 1.0
+    REFERENCE_GAIT_ERROR_SCALE = 8.0
+    REFERENCE_VELOCITY_REWARD_SCALE = 0.0
+    REFERENCE_VELOCITY_ERROR_SCALE = 0.25
+    # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
+    # TYPE: REFERENCE_CODE_DERIVED
+    # Values mirror MimicKit data/envs/deepmimic_humanoid_env.yaml.
     DEEPMIMIC_POSE_WEIGHT = 0.50
-    DEEPMIMIC_VELOCITY_WEIGHT = 0.05
-    DEEPMIMIC_END_EFFECTOR_WEIGHT = 0.15
-    DEEPMIMIC_ROOT_WEIGHT = 0.20
-    DEEPMIMIC_COM_WEIGHT = 0.10
-    DEEPMIMIC_POSE_SCALE = 2.0
-    DEEPMIMIC_VELOCITY_SCALE = 0.1
-    DEEPMIMIC_END_EFFECTOR_SCALE = 10.0
-    DEEPMIMIC_ROOT_SCALE = 5.0
-    DEEPMIMIC_COM_SCALE = 10.0
+    DEEPMIMIC_VELOCITY_WEIGHT = 0.10
+    DEEPMIMIC_ROOT_POSE_WEIGHT = 0.15
+    DEEPMIMIC_ROOT_VELOCITY_WEIGHT = 0.10
+    DEEPMIMIC_KEY_POSITION_WEIGHT = 0.15
+    DEEPMIMIC_POSE_SCALE = 0.25
+    DEEPMIMIC_VELOCITY_SCALE = 0.01
+    DEEPMIMIC_ROOT_POSE_SCALE = 5.0
+    DEEPMIMIC_ROOT_VELOCITY_SCALE = 1.0
+    DEEPMIMIC_KEY_POSITION_SCALE = 10.0
     CONTACT_FORCE_COST_SCALE = 1e-4
     CONTACT_FORCE_COST_CLIP = 1000.0
     STUCK_COMMAND_THRESHOLD = 0.10
@@ -350,6 +356,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         body_mass = np.asarray(self._mj_model.body_mass)[self._deepmimic_body_ids_np]
         self._deepmimic_body_weights_np = body_mass / max(float(body_mass.sum()), 1e-6)
         self._deepmimic_body_weights = jp.array(self._deepmimic_body_weights_np)
+        self._deepmimic_key_body_ids_np = self._resolve_deepmimic_key_body_ids()
+        self._deepmimic_key_body_ids = jp.array(self._deepmimic_key_body_ids_np)
         self._bvh_reference_qpos_targets = jp.expand_dims(
             jp.expand_dims(self._default_ctrl, axis=0),
             axis=0,
@@ -360,6 +368,19 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self._bvh_reference_frame_times = jp.array([self.dt], dtype=jp.float32)
         self._bvh_reference_frame_counts = jp.array([1], dtype=jp.int32)
         self._bvh_reference_clip_count = 1
+        self._bvh_reference_root_pos_targets_np = np.expand_dims(
+            np.expand_dims(np.asarray(self._init_q_np[:3], dtype=np.float32), axis=0),
+            axis=0,
+        )
+        self._bvh_reference_root_quat_targets_np = np.expand_dims(
+            np.expand_dims(np.asarray(self._init_q_np[3:7], dtype=np.float32), axis=0),
+            axis=0,
+        )
+        self._bvh_reference_root_vel_targets_np = np.zeros((1, 1, 3), dtype=np.float32)
+        self._bvh_reference_root_angvel_targets_np = np.zeros(
+            (1, 1, 3),
+            dtype=np.float32,
+        )
         self._configure_default_deepmimic_reference()
         self._configure_bvh_reference()
         self._refresh_reset_data_template()
@@ -450,10 +471,6 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         if self._config.get("reference_gait", "none") != "bvh":
             return
         reference_gait_files = self._reference_gait_files()
-        if not reference_gait_files:
-            raise ValueError(
-                "reference_gait='bvh' trazi bar jedan --reference-gait-file."
-            )
 
         references = load_bvh_references(
             tuple(resolve_project_path(path) for path in reference_gait_files),
@@ -461,15 +478,25 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             np.asarray(self._default_ctrl, dtype=np.float32),
             self._actuator_qpos_lower_limits_np,
             self._actuator_qpos_upper_limits_np,
+            initial_root_pos=np.asarray(self._init_q_np[:3], dtype=np.float32),
+            initial_root_quat=np.asarray(self._init_q_np[3:7], dtype=np.float32),
         )
         self._bvh_reference_qpos_targets = jp.array(references.qpos_targets)
         self._bvh_reference_qvel_targets = jp.array(references.qvel_targets)
         self._bvh_reference_frame_times = jp.array(references.frame_times)
         self._bvh_reference_frame_counts = jp.array(references.frame_counts)
         self._bvh_reference_clip_count = len(references.source_paths)
+        self._bvh_reference_root_pos_targets_np = references.root_pos_targets
+        self._bvh_reference_root_quat_targets_np = references.root_quat_targets
+        self._bvh_reference_root_vel_targets_np = references.root_vel_targets
+        self._bvh_reference_root_angvel_targets_np = references.root_angvel_targets
         self._configure_deepmimic_reference_from_qpos(
             references.qpos_targets,
             references.qvel_targets,
+            references.root_pos_targets,
+            references.root_quat_targets,
+            references.root_vel_targets,
+            references.root_angvel_targets,
         )
 
     def _configure_default_deepmimic_reference(self) -> None:
@@ -482,6 +509,10 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self,
         qpos_targets: np.ndarray,
         qvel_targets: np.ndarray,
+        root_pos_targets: np.ndarray | None = None,
+        root_quat_targets: np.ndarray | None = None,
+        root_vel_targets: np.ndarray | None = None,
+        root_angvel_targets: np.ndarray | None = None,
     ) -> None:
         """Precompute DeepMimic-style FK targets from retargeted joint targets.
 
@@ -493,11 +524,32 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         # REF: PROJECT-BVH-FK-RETARGETING
         # TYPE: MODEL_CALIBRATED
         clip_count, max_frames, _ = qpos_targets.shape
+        root_pos_targets = (
+            root_pos_targets
+            if root_pos_targets is not None
+            else self._bvh_reference_root_pos_targets_np
+        )
+        root_quat_targets = (
+            root_quat_targets
+            if root_quat_targets is not None
+            else self._bvh_reference_root_quat_targets_np
+        )
+        root_vel_targets = (
+            root_vel_targets
+            if root_vel_targets is not None
+            else self._bvh_reference_root_vel_targets_np
+        )
+        root_angvel_targets = (
+            root_angvel_targets
+            if root_angvel_targets is not None
+            else self._bvh_reference_root_angvel_targets_np
+        )
         body_count = len(self._deepmimic_body_ids_np)
         body_pos = np.zeros((clip_count, max_frames, body_count, 3), dtype=np.float32)
         body_quat = np.zeros((clip_count, max_frames, body_count, 4), dtype=np.float32)
         body_cvel = np.zeros((clip_count, max_frames, body_count, 6), dtype=np.float32)
-        foot_pos = np.zeros((clip_count, max_frames, 2, 3), dtype=np.float32)
+        key_body_count = len(self._deepmimic_key_body_ids_np)
+        key_pos = np.zeros((clip_count, max_frames, key_body_count, 3), dtype=np.float32)
         root_pos = np.zeros((clip_count, max_frames, 3), dtype=np.float32)
         root_quat = np.zeros((clip_count, max_frames, 4), dtype=np.float32)
         root_vel = np.zeros((clip_count, max_frames, 3), dtype=np.float32)
@@ -511,6 +563,10 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             for frame_id in range(max_frames):
                 full_qpos = self._init_q_np.copy()
                 full_qvel = np.zeros(self._mj_model.nv, dtype=np.float64)
+                full_qpos[:3] = root_pos_targets[clip_id, frame_id]
+                full_qpos[3:7] = root_quat_targets[clip_id, frame_id]
+                full_qvel[:3] = root_vel_targets[clip_id, frame_id]
+                full_qvel[3:6] = root_angvel_targets[clip_id, frame_id]
                 full_qpos[self._actuator_qpos_indices_np] = qpos_targets[
                     clip_id,
                     frame_id,
@@ -526,11 +582,16 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 body_pos[clip_id, frame_id] = data.xpos[self._deepmimic_body_ids_np]
                 body_quat[clip_id, frame_id] = data.xquat[self._deepmimic_body_ids_np]
                 body_cvel[clip_id, frame_id] = data.cvel[self._deepmimic_body_ids_np]
-                foot_pos[clip_id, frame_id] = data.geom_xpos[self._foot_geom_ids_np]
-                root_pos[clip_id, frame_id] = full_qpos[:3]
-                root_quat[clip_id, frame_id] = full_qpos[3:7]
-                root_vel[clip_id, frame_id] = full_qvel[:3]
-                root_angvel[clip_id, frame_id] = full_qvel[3:6]
+                key_pos[clip_id, frame_id] = data.xpos[
+                    self._deepmimic_key_body_ids_np
+                ]
+                root_pos[clip_id, frame_id] = root_pos_targets[clip_id, frame_id]
+                root_quat[clip_id, frame_id] = root_quat_targets[clip_id, frame_id]
+                root_vel[clip_id, frame_id] = root_vel_targets[clip_id, frame_id]
+                root_angvel[clip_id, frame_id] = root_angvel_targets[
+                    clip_id,
+                    frame_id,
+                ]
                 current_com = np.average(
                     data.xpos[self._deepmimic_body_ids_np],
                     axis=0,
@@ -547,7 +608,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self._bvh_reference_body_pos_targets = jp.array(body_pos)
         self._bvh_reference_body_quat_targets = jp.array(body_quat)
         self._bvh_reference_body_cvel_targets = jp.array(body_cvel)
-        self._bvh_reference_foot_pos_targets = jp.array(foot_pos)
+        self._bvh_reference_key_pos_targets = jp.array(key_pos)
         self._bvh_reference_root_pos_targets = jp.array(root_pos)
         self._bvh_reference_root_quat_targets = jp.array(root_quat)
         self._bvh_reference_root_vel_targets = jp.array(root_vel)
@@ -559,7 +620,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         """Vrati BVH fajlove iz config-a kao tuple stringova."""
         reference_gait_file = self._config.get("reference_gait_file", None)
         if reference_gait_file is None:
-            return ()
+            return (DEFAULT_BVH_REFERENCE_LIST.as_posix(),)
         if isinstance(reference_gait_file, str):
             return tuple(
                 path.strip()
@@ -735,6 +796,9 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "deepmimic_end_effector": jp.array(0.0),
             "deepmimic_root": jp.array(0.0),
             "deepmimic_com": jp.array(0.0),
+            "deepmimic_root_pose": jp.array(0.0),
+            "deepmimic_root_velocity": jp.array(0.0),
+            "deepmimic_key_position": jp.array(0.0),
             "contact_force": jp.array(0.0),
             "done_low_height": jp.array(0.0),
             "done_tipped": jp.array(0.0),
@@ -809,6 +873,9 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 "end_effector": jp.array(0.0),
                 "root": jp.array(0.0),
                 "com": jp.array(0.0),
+                "root_pose": jp.array(0.0),
+                "root_velocity": jp.array(0.0),
+                "key_position": jp.array(0.0),
             }
         contact_force = self._get_contact_force_cost(data)
         metrics = dict(state.metrics)
@@ -838,6 +905,9 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         metrics["deepmimic_end_effector"] = deepmimic["end_effector"]
         metrics["deepmimic_root"] = deepmimic["root"]
         metrics["deepmimic_com"] = deepmimic["com"]
+        metrics["deepmimic_root_pose"] = deepmimic["root_pose"]
+        metrics["deepmimic_root_velocity"] = deepmimic["root_velocity"]
+        metrics["deepmimic_key_position"] = deepmimic["key_position"]
         metrics["contact_force"] = contact_force
         metrics["done_low_height"] = done_low_height.astype(reward.dtype)
         metrics["done_tipped"] = done_tipped.astype(reward.dtype)
@@ -1422,7 +1492,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         ref_body_pos = self._bvh_reference_body_pos_targets[clip_id, frame_index]
         ref_body_quat = self._bvh_reference_body_quat_targets[clip_id, frame_index]
         ref_body_cvel = self._bvh_reference_body_cvel_targets[clip_id, frame_index]
-        ref_foot_pos = self._bvh_reference_foot_pos_targets[clip_id, frame_index]
+        ref_key_pos = self._bvh_reference_key_pos_targets[clip_id, frame_index]
         ref_root_pos = self._bvh_reference_root_pos_targets[clip_id, frame_index]
         ref_root_quat = self._bvh_reference_root_quat_targets[clip_id, frame_index]
         ref_root_vel = self._bvh_reference_root_vel_targets[clip_id, frame_index]
@@ -1430,17 +1500,13 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             clip_id,
             frame_index,
         ]
-        ref_com = self._bvh_reference_com_targets[clip_id, frame_index]
-        ref_com_vel = self._bvh_reference_com_vel_targets[clip_id, frame_index]
-
         body_quat = data.xquat[self._deepmimic_body_ids]
         body_cvel = data.cvel[self._deepmimic_body_ids]
+        key_pos = data.xpos[self._deepmimic_key_body_ids]
         root_pos = data.qpos[:3]
         root_quat = data.qpos[3:7]
         root_vel = data.qvel[:3]
         root_angvel = data.qvel[3:6]
-        com = self._center_of_mass(data)
-        com_vel = self._center_of_mass_velocity(data)
 
         pose_error = jp.sum(
             self._deepmimic_body_weights
@@ -1449,55 +1515,68 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         velocity_error = jp.mean(jp.square(body_cvel - ref_body_cvel))
 
         heading_world_to_local = self._heading_world_to_local(data)
-        foot_rel = (self._foot_positions(data) - root_pos) @ heading_world_to_local.T
-        ref_foot_rel = (ref_foot_pos - ref_root_pos) @ heading_world_to_local.T
-        end_effector_error = jp.mean(jp.square(foot_rel - ref_foot_rel))
+        key_rel = (key_pos - root_pos) @ heading_world_to_local.T
+        ref_key_rel = (ref_key_pos - ref_root_pos) @ heading_world_to_local.T
+        key_position_error = jp.sum(jp.square(key_rel - ref_key_rel))
 
         root_pos_error = jp.sum(jp.square(root_pos - ref_root_pos))
         root_rot_error = self._quat_distance(root_quat, ref_root_quat)
         root_vel_error = jp.sum(jp.square(root_vel - ref_root_vel))
         root_angvel_error = jp.sum(jp.square(root_angvel - ref_root_angvel))
-        root_error = (
-            root_pos_error
-            + 0.1 * root_rot_error
-            + 0.01 * root_vel_error
-            + 0.001 * root_angvel_error
-        )
+        root_pose_error = root_pos_error + 0.1 * root_rot_error
+        root_velocity_error = root_vel_error + 0.1 * root_angvel_error
 
-        com_error = (
-            0.1 * jp.sum(jp.square(com - ref_com))
-            + 0.1 * jp.sum(jp.square(com_vel - ref_com_vel))
-        )
-
-        # REF: DEEPMIMIC2018-CODE-IMITATION-REWARD
+        # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
         # TYPE: REFERENCE_CODE_DERIVED
+        # Matches MimicKit's weighted pose/vel/root_pose/root_vel/key_pos split.
         pose_reward = jp.exp(-self.DEEPMIMIC_POSE_SCALE * pose_error)
         velocity_reward = jp.exp(-self.DEEPMIMIC_VELOCITY_SCALE * velocity_error)
-        end_effector_reward = jp.exp(
-            -self.DEEPMIMIC_END_EFFECTOR_SCALE * end_effector_error
+        root_pose_reward = jp.exp(-self.DEEPMIMIC_ROOT_POSE_SCALE * root_pose_error)
+        root_velocity_reward = jp.exp(
+            -self.DEEPMIMIC_ROOT_VELOCITY_SCALE * root_velocity_error
         )
-        root_reward = jp.exp(-self.DEEPMIMIC_ROOT_SCALE * root_error)
-        com_reward = jp.exp(-self.DEEPMIMIC_COM_SCALE * com_error)
+        key_position_reward = jp.exp(
+            -self.DEEPMIMIC_KEY_POSITION_SCALE * key_position_error
+        )
         total_reward = (
             self.DEEPMIMIC_POSE_WEIGHT * pose_reward
             + self.DEEPMIMIC_VELOCITY_WEIGHT * velocity_reward
-            + self.DEEPMIMIC_END_EFFECTOR_WEIGHT * end_effector_reward
-            + self.DEEPMIMIC_ROOT_WEIGHT * root_reward
-            + self.DEEPMIMIC_COM_WEIGHT * com_reward
+            + self.DEEPMIMIC_ROOT_POSE_WEIGHT * root_pose_reward
+            + self.DEEPMIMIC_ROOT_VELOCITY_WEIGHT * root_velocity_reward
+            + self.DEEPMIMIC_KEY_POSITION_WEIGHT * key_position_reward
         )
         return {
             "total": total_reward,
             "pose": pose_reward,
             "velocity": velocity_reward,
-            "end_effector": end_effector_reward,
-            "root": root_reward,
-            "com": com_reward,
+            "end_effector": key_position_reward,
+            "root": root_pose_reward,
+            "com": root_velocity_reward,
+            "root_pose": root_pose_reward,
+            "root_velocity": root_velocity_reward,
+            "key_position": key_position_reward,
         }
 
     def _quat_distance(self, quat_a: jax.Array, quat_b: jax.Array) -> jax.Array:
         """Quaternion orientation distance, invariant to q and -q."""
-        dot = jp.sum(quat_a * quat_b, axis=-1)
-        return 1.0 - jp.square(jp.clip(dot, -1.0, 1.0))
+        dot = jp.abs(jp.sum(quat_a * quat_b, axis=-1))
+        angle = 2.0 * jp.arccos(jp.clip(dot, -1.0 + 1e-6, 1.0 - 1e-6))
+        return jp.square(angle)
+
+    def _resolve_deepmimic_key_body_ids(self) -> np.ndarray:
+        """Return MimicKit key bodies that exist in this MuJoCo model."""
+        # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
+        # TYPE: REFERENCE_CODE_DERIVED
+        key_body_names = ("head", "right_hand", "left_hand", "right_foot", "left_foot")
+        body_ids: list[int] = []
+        for body_name in key_body_names:
+            try:
+                body_ids.append(self._mj_model.body(body_name).id)
+            except KeyError:
+                continue
+        if not body_ids:
+            body_ids = [self._head_body_id]
+        return np.asarray(body_ids, dtype=np.int32)
 
     def _center_of_mass(self, data: mjx.Data) -> jax.Array:
         """Mass-weighted body center in world coordinates."""

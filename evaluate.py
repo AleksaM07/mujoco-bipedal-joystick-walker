@@ -10,6 +10,7 @@ from pathlib import Path
 # REF: PROJECT-XLA-PREALLOCATE-DEFAULT
 # TYPE: ENGINEERING_DEFAULT
 os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
+os.environ.setdefault("TF_GPU_ALLOCATOR", "cuda_malloc_async")
 
 import jax
 import jax.numpy as jnp
@@ -575,6 +576,11 @@ def main():
         default=None,
     )
     parser.add_argument(
+        "--physics-backend",
+        choices=["mjx_jax", "mjx_warp"],
+        default=None,
+    )
+    parser.add_argument(
         "--command-profile",
         choices=[
             "auto",
@@ -644,7 +650,7 @@ def main():
         "playground_impl",
         "warp",
     )
-    physics_backend = run_env_value(
+    physics_backend = args.physics_backend or run_env_value(
         run_config,
         "physics_backend",
         "mjx_warp" if playground_impl == "warp" else "mjx_jax",
