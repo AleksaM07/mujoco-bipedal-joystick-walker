@@ -879,7 +879,16 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             self._config.action_smoothing * policy_action
             + (1.0 - self._config.action_smoothing) * previous_action
         )
-        motor_targets = self._default_ctrl + (smoothed_action * self._action_scale)
+        if self._config.get("reference_gait", "none") == "bvh":
+            reference_ctrl = self._get_bvh_reference_gait_target(info)
+        else:
+            reference_ctrl = self._default_ctrl
+        motor_targets = reference_ctrl + (smoothed_action * self._action_scale)
+        motor_targets = jp.clip(
+            motor_targets,
+            self._actuator_qpos_lower_limits,
+            self._actuator_qpos_upper_limits,
+        )
         data = self.step_with_joint_torque_injection(
             state.data,
             motor_targets,
@@ -1818,12 +1827,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             self._bvh_reference_root_angvel_targets[clip_id, frame_index]
         )
         qvel = qvel.at[self._actuator_dof_indices].set(target_qvel)
-        last_action = jp.clip(
-            (target_qpos - self._default_ctrl) / self._action_scale,
-            -1.0,
-            1.0,
-        )
-        return qpos, qvel, target_qpos, last_action
+        return qpos, qvel, target_qpos, jp.zeros(self.action_size)
 
     def _get_variable_posture_reward(
         self,

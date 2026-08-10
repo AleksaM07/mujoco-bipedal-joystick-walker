@@ -590,7 +590,7 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         episode_bias_std=0.02,
         rfi_torque_limit=2.0,
         rao_torque_limit=2.0,
-        enable_erfi=True,
+        enable_erfi=False,
         init_qpos_file=None,
         # REF: BULLET-WARP-BACKEND
         # TYPE: REFERENCE_CODE_DERIVED
@@ -758,6 +758,8 @@ class TrainConfig:
     num_minibatches: int | None = None
     num_updates_per_batch: int | None = None
     learning_rate: float | None = None
+    enable_erfi: bool = False
+    enable_domain_randomization: bool = False
     no_erfi: bool = False
     no_domain_randomization: bool = False
     save_checkpoints: bool = True

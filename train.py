@@ -532,7 +532,11 @@ def run_training(
     logger.add(run_dir / "train.log", level="INFO", encoding="utf-8", mode="w")
     save_run_config(run_dir, env_config, train_config, rl_config)
 
-    enable_erfi = not train_config.bare and not train_config.no_erfi
+    enable_erfi = (
+        train_config.enable_erfi
+        and not train_config.bare
+        and not train_config.no_erfi
+    )
     with logged_stage("make_environment"):
         env = make_environment(env_config, enable_erfi=enable_erfi)
         eval_env = make_environment(env_config, enable_erfi=False)
@@ -601,7 +605,12 @@ def run_training(
         train_kwargs["run_evals"] = False
         train_kwargs["num_evals"] = 11
     train_kwargs_extra = {}
-    if not train_config.bare and not train_config.no_domain_randomization:
+    enable_domain_randomization = (
+        train_config.enable_domain_randomization
+        and not train_config.bare
+        and not train_config.no_domain_randomization
+    )
+    if enable_domain_randomization:
         randomization_rng = jax.random.split(
             jax.random.PRNGKey(train_config.seed + 10_000),
             rl_config.num_envs,
@@ -617,9 +626,9 @@ def run_training(
         )
     if train_config.bare:
         logger.info("bare mode | ERFI disabled | domain randomization disabled")
-    if train_config.no_erfi:
+    if not enable_erfi:
         logger.info("ERFI disabled for this run")
-    if train_config.no_domain_randomization:
+    if not enable_domain_randomization:
         logger.info("domain randomization disabled for this run")
 
     if train_config.debug_run:
@@ -1031,7 +1040,7 @@ def sanitize_run_tag(run_tag: str) -> str:
     return cleaned[:40]
 
 
-def make_environment(env_config: EnvConfig, enable_erfi: bool = True):
+def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
     """Napravi biomehanicki joystick env."""
     config_overrides = {
         "impl": env_config.playground_impl,
@@ -1178,14 +1187,27 @@ def main() -> None:
         help="Baseline: bez ERFI i bez domain randomization.",
     )
     parser.add_argument(
+        "--erfi",
+        action="store_true",
+        help="Enable ERFI/RFI torque perturbations. Disabled by default.",
+    )
+    parser.add_argument(
+        "--domain-randomization",
+        action="store_true",
+        help="Enable model size/mass/friction randomization. Disabled by default.",
+    )
+    parser.add_argument(
         "--no-erfi",
         action="store_true",
-        help="Iskljuci random force injection, ali ostavi domain randomization.",
+        help="Deprecated compatibility flag; ERFI is already disabled by default.",
     )
     parser.add_argument(
         "--no-domain-randomization",
         action="store_true",
-        help="Iskljuci model size/mass/friction randomization, ali ostavi ERFI.",
+        help=(
+            "Deprecated compatibility flag; domain randomization is already "
+            "disabled by default."
+        ),
     )
     parser.add_argument(
         "--no-checkpoints",
@@ -1282,6 +1304,11 @@ def main() -> None:
             else debug_defaults.get("num_updates_per_batch")
         ),
         learning_rate=args.learning_rate,
+        enable_erfi=args.erfi,
+        enable_domain_randomization=(
+            args.domain_randomization
+            and not debug_defaults.get("no_domain_randomization", False)
+        ),
         no_erfi=args.no_erfi,
         no_domain_randomization=(
             args.no_domain_randomization
