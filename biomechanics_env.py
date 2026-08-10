@@ -1581,15 +1581,15 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         # TYPE: REFERENCE_CODE_DERIVED
         if self._config.get("reference_gait", "none") != "bvh":
             return jp.array(False)
-        if self._reference_fallback_active(info):
-            return jp.array(False)
+        fallback_active = self._reference_fallback_active(info)
         clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
         loop_mode = self._bvh_reference_loop_modes[clip_id]
         motion_time = self._get_bvh_reference_motion_time(info, 0)
         motion_length = self._bvh_reference_motion_lengths[clip_id]
-        return (loop_mode == int(LoopMode.CLAMP)) & (
+        motion_over = (loop_mode == int(LoopMode.CLAMP)) & (
             motion_time >= motion_length
         )
+        return jp.where(fallback_active, jp.array(False), motion_over)
 
     def _get_gait_phase_angle(self, info: dict) -> jax.Array:
         """Periodican signal koji govori politici koja noga treba da bude swing."""
@@ -1603,8 +1603,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
 
     def _get_bvh_reference_phase_angle(self, info: dict) -> jax.Array:
         """Phase signal izveden iz aktivnog BVH clip-a."""
-        if self._reference_fallback_active(info):
-            return jp.array(0.0)
+        fallback_active = self._reference_fallback_active(info)
         clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
         motion_time = self._get_bvh_reference_motion_time(info, 0)
         motion_length = self._bvh_reference_motion_lengths[clip_id]
@@ -1615,7 +1614,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             phase - jp.floor(phase),
             jp.clip(phase, 0.0, 1.0),
         )
-        return 2.0 * jp.pi * phase
+        return jp.where(fallback_active, jp.array(0.0), 2.0 * jp.pi * phase)
 
     def _get_gait_reward(
         self,
