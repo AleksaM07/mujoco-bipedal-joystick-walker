@@ -603,10 +603,19 @@ def _root_motion_targets(
     initial_root_pos: np.ndarray,
     initial_root_quat: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
+    """Return root targets in this MuJoCo humanoid's upright frame.
+
+    DeepMimic/MimicKit motion files are already retargeted to the same
+    character skeleton that is simulated.  Our CMU BVH files are not.  Using
+    the raw BVH root quaternion rotates the generated MuJoCo character into a
+    different coordinate frame, which makes key-body FK targets physically
+    impossible for the policy.  Until a full skeleton retargeter exists, keep
+    root orientation in the MuJoCo upright pose and only preserve horizontal
+    root displacement from BVH.
+    """
     root = bvh.joints[bvh.root_name]
     root_values = bvh.motion[:, list(root.channel_indices)]
     root_translation = np.zeros((bvh.frames, 3), dtype=np.float32)
-    root_rotation_mats = np.repeat(np.eye(3, dtype=np.float32)[None, :, :], bvh.frames, axis=0)
 
     for channel_index, channel in enumerate(root.channels):
         values = root_values[:, channel_index]
@@ -616,21 +625,16 @@ def _root_motion_targets(
             root_translation[:, 1] = values
         elif channel == "Zposition":
             root_translation[:, 2] = values
-        elif channel.endswith("rotation"):
-            for frame, value in enumerate(values):
-                root_rotation_mats[frame] = (
-                    root_rotation_mats[frame] @ _axis_rotation(channel[0], float(value))
-                )
 
     root_pos = _bvh_positions_to_mujoco(root_translation)
     root_pos -= root_pos[0]
     root_pos += initial_root_pos[None, :]
-    root_quat = np.stack(
-        [_matrix_to_quat(_bvh_rotation_to_mujoco(matrix)) for matrix in root_rotation_mats],
+    root_pos[:, 2] = initial_root_pos[2]
+    root_quat = np.repeat(
+        _normalize_quat(initial_root_quat)[None, :],
+        bvh.frames,
         axis=0,
     )
-    if not np.all(np.isfinite(root_quat)):
-        root_quat[:] = initial_root_quat
     return root_pos.astype(np.float32), root_quat.astype(np.float32)
 
 

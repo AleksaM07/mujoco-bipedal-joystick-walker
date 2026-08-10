@@ -205,9 +205,8 @@ def select_data(
 ) -> mjx.Data:
     """Select reset data while avoiding Warp fields that are not vmap-able."""
     if backend == "mjx_warp":
-        where = getattr(current, "where", None)
-        if where is not None:
-            return where(condition, replacement)
+        # Do not use ``Data.where`` here.  In MJX-Warp batched reset it can keep
+        # references to transformed Warp buffers and leak tracers out of vmap/pmap.
         return _select_data_tree(
             current,
             condition,
@@ -279,7 +278,7 @@ def _select_data_tree(
         new_value: jax.Array,
         old_value: jax.Array,
     ) -> jax.Array:
-        if _data_path_name(path) in warp_non_vmap and getattr(condition, "shape", ()):
+        if _data_path_name(path) in warp_non_vmap:
             return old_value
         return select_leaf(new_value, old_value)
 

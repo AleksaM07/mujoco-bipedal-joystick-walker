@@ -22,7 +22,7 @@ from config import (
     default_biomechanics_env_config,
     resolve_project_path,
 )
-from phase1_backends import make_data_kwargs, put_model_for_backend
+from phase1_backends import make_data_kwargs, put_model_for_backend, select_data
 
 
 def load_qpos_from_mjdata_file(path: str | Path, expected_size: int) -> np.ndarray:
@@ -358,6 +358,16 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self._deepmimic_body_weights = jp.array(self._deepmimic_body_weights_np)
         self._deepmimic_key_body_ids_np = self._resolve_deepmimic_key_body_ids()
         self._deepmimic_key_body_ids = jp.array(self._deepmimic_key_body_ids_np)
+        self._bvh_target_observation_steps = tuple(
+            int(step)
+            for step in self._config.get(
+                "bvh_target_observation_steps",
+                (0, 1, 2, 3),
+            )
+        )
+        if not self._bvh_target_observation_steps:
+            self._bvh_target_observation_steps = (0,)
+        self._reference_target_observation_mode = "deepmimic"
         self._bvh_reference_qpos_targets = jp.expand_dims(
             jp.expand_dims(self._default_ctrl, axis=0),
             axis=0,
@@ -418,11 +428,14 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         )
         optional_size = int(expected_size) - base_size
         layouts = {
-            0: (False, False),
-            2: (True, False),
-            self.action_size: (False, True),
-            self.action_size + 2: (True, True),
+            0: (False, False, "deepmimic"),
+            2: (True, False, "deepmimic"),
+            self.action_size: (False, True, "legacy"),
+            self.action_size + 2: (True, True, "legacy"),
         }
+        deepmimic_target_size = self._reference_target_observation_size()
+        layouts[deepmimic_target_size] = (False, True, "deepmimic")
+        layouts[deepmimic_target_size + 2] = (True, True, "deepmimic")
         if optional_size not in layouts:
             raise ValueError(
                 "Checkpoint observation layout ne odgovara izabranom XML-u: "
@@ -433,6 +446,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         (
             self._include_gait_phase_observation,
             self._include_reference_target_observation,
+            self._reference_target_observation_mode,
         ) = layouts[optional_size]
 
     def _joint_action_scale(self, joint_name: str) -> float:
@@ -724,10 +738,26 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
 
     def reset(self, rng: jax.Array) -> mjx_env.State:
         """Resetuje humana u pocetnu pozu i uzorkuje joystick komandu."""
-        rng, command_key, pose_key, erfi_key, bias_key, gait_key, bvh_key = (
-            jax.random.split(rng, 7)
+        rng, command_key, pose_key, erfi_key, bias_key, gait_key, bvh_key, frame_key = (
+            jax.random.split(rng, 8)
         )
-        qpos = self._init_q.at[2].set(self._standing_height())
+        bvh_clip_id = jax.random.randint(
+            bvh_key,
+            shape=(),
+            minval=0,
+            maxval=int(self._bvh_reference_clip_count),
+        )
+        bvh_frame_count = self._bvh_reference_frame_counts[bvh_clip_id]
+        bvh_frame_offset = jax.random.randint(
+            frame_key,
+            shape=(),
+            minval=0,
+            maxval=bvh_frame_count,
+        )
+        qpos, qvel, ctrl, last_action = self._sample_initial_state_from_reference(
+            bvh_clip_id,
+            bvh_frame_offset,
+        )
         pose_noise = (
             jax.random.uniform(
                 pose_key,
@@ -738,18 +768,39 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             * self._init_actuator_noise
         )
         qpos = qpos.at[self._actuator_qpos_indices].add(pose_noise)
-        qvel = jp.zeros(self._mjx_model.nv)
         data = self._fresh_reset_data().replace(
             qpos=qpos,
             qvel=qvel,
-            ctrl=self._default_ctrl,
+            ctrl=ctrl,
         )
         data = mjx.forward(self._mjx_model, data)
+        fallback_qpos = self._init_q.at[2].set(self._standing_height())
+        fallback_qvel = jp.zeros(self._mjx_model.nv)
+        fallback_data = self._fresh_reset_data().replace(
+            qpos=fallback_qpos,
+            qvel=fallback_qvel,
+            ctrl=self._default_ctrl,
+        )
+        fallback_data = mjx.forward(self._mjx_model, fallback_data)
+        sampled_terminal = self._get_done(data)
+        data = select_data(data, sampled_terminal, fallback_data, self._physics_backend)
+        qpos = jp.where(sampled_terminal, fallback_qpos, qpos)
+        ctrl = jp.where(sampled_terminal, self._default_ctrl, ctrl)
+        last_action = jp.where(
+            sampled_terminal,
+            jp.zeros(self.action_size),
+            last_action,
+        )
+        bvh_frame_offset = jp.where(
+            sampled_terminal,
+            jp.array(0, dtype=jp.int32),
+            bvh_frame_offset,
+        )
         command = self.sample_command(command_key)
         info = {
             "rng": rng,
             "command": command,
-            "last_action": jp.zeros(self.action_size),
+            "last_action": last_action,
             "episode_torque_offset": self.sample_episode_torque_offset(bias_key),
             "use_rfi": jax.random.bernoulli(erfi_key, p=0.5),
             "step": jp.array(0),
@@ -759,12 +810,10 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 minval=0,
                 maxval=int(self.GAIT_PERIOD_STEPS),
             ),
-            "bvh_reference_clip_id": jax.random.randint(
-                bvh_key,
-                shape=(),
-                minval=0,
-                maxval=int(self._bvh_reference_clip_count),
-            ),
+            "bvh_reference_clip_id": bvh_clip_id,
+            "bvh_reference_frame_offset": bvh_frame_offset,
+            "init_motion_count": (1.0 - sampled_terminal.astype(jp.float32)),
+            "init_fallback_count": sampled_terminal.astype(jp.float32),
             "warp_world_id": jp.array(0, dtype=jp.int32),
             "last_foot_xy": self._foot_xy(data),
         }
@@ -799,6 +848,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "deepmimic_root_pose": jp.array(0.0),
             "deepmimic_root_velocity": jp.array(0.0),
             "deepmimic_key_position": jp.array(0.0),
+            "init_motion_count": (1.0 - sampled_terminal.astype(jp.float32)),
+            "init_fallback_count": sampled_terminal.astype(jp.float32),
             "contact_force": jp.array(0.0),
             "done_low_height": jp.array(0.0),
             "done_tipped": jp.array(0.0),
@@ -1096,7 +1147,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         if self._include_gait_phase_observation:
             optional_parts.append(self._get_gait_phase_obs(info))
         if self._include_reference_target_observation:
-            optional_parts.append(self._get_reference_target_delta(info))
+            optional_parts.append(self._get_reference_target_observation(data, info))
         state_parts[4:4] = optional_parts
         state_obs = jp.concatenate(state_parts)
         state_obs = jp.nan_to_num(state_obs, nan=0.0, posinf=10.0, neginf=-10.0)
@@ -1147,8 +1198,23 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         phase_angle = self._get_gait_phase_angle(info)
         return jp.array([jp.sin(phase_angle), jp.cos(phase_angle)])
 
+    def _get_reference_target_observation(
+        self,
+        data: mjx.Data,
+        info: dict,
+    ) -> jax.Array:
+        """Policy sees DeepMimic-style current/future target frames."""
+        if self._reference_target_observation_mode == "legacy":
+            return self._get_reference_target_delta(info)
+        if self._config.get("reference_gait", "none") == "none":
+            return jp.zeros(self._reference_target_observation_size())
+        return jp.concatenate([
+            self._get_reference_target_frame_observation(data, info, step)
+            for step in self._bvh_target_observation_steps
+        ])
+
     def _get_reference_target_delta(self, info: dict) -> jax.Array:
-        """Policy vidi trenutni reference target, inace uci skriveni zadatak."""
+        """Legacy actuator target delta for old checkpoint layouts."""
         if self._config.get("reference_gait", "none") == "none":
             return jp.zeros(self.action_size)
         target_qpos = self._get_reference_gait_target(info)
@@ -1157,6 +1223,47 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             target_qpos - self._default_ctrl,
             0.0,
         )
+
+    def _get_reference_target_frame_observation(
+        self,
+        data: mjx.Data,
+        info: dict,
+        future_step: int,
+    ) -> jax.Array:
+        """One target frame: actuator, root, and key-body references."""
+        clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
+        frame_index = self._get_bvh_reference_frame_at_offset(info, future_step)
+        target_qpos = self._bvh_reference_qpos_targets[clip_id, frame_index]
+        target_qvel = self._bvh_reference_qvel_targets[clip_id, frame_index]
+        target_root_pos = self._bvh_reference_root_pos_targets[clip_id, frame_index]
+        target_root_quat = self._bvh_reference_root_quat_targets[clip_id, frame_index]
+        target_key_pos = self._bvh_reference_key_pos_targets[clip_id, frame_index]
+        heading_world_to_local = self._heading_world_to_local(data)
+        root_delta = (target_root_pos - data.qpos[:3]) @ heading_world_to_local.T
+        key_rel = (target_key_pos - target_root_pos) @ heading_world_to_local.T
+        current_qpos = data.qpos[self._actuator_qpos_indices]
+        current_qvel = data.qvel[self._actuator_dof_indices]
+        return jp.concatenate([
+            jp.where(self._reference_gait_mask, target_qpos - current_qpos, 0.0),
+            jp.where(
+                self._reference_gait_mask,
+                0.1 * (target_qvel - current_qvel),
+                0.0,
+            ),
+            root_delta,
+            target_root_quat,
+            key_rel.reshape(-1),
+        ])
+
+    def _reference_target_observation_size(self) -> int:
+        """Size of the new MimicKit-style target observation block."""
+        per_frame = (
+            2 * self.action_size
+            + 3
+            + 4
+            + 3 * len(self._deepmimic_key_body_ids_np)
+        )
+        return per_frame * len(self._bvh_target_observation_steps)
 
     def _get_reward(
         self,
@@ -1244,11 +1351,16 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         base_height_reward = self.BASE_HEIGHT_REWARD_SCALE * (
             self._get_base_height_reward(data)
         )
-        gait_reward = self._get_gait_reward(data, info)
-        swing_clearance_deficit_cost = (
-            self.SWING_CLEARANCE_DEFICIT_COST_SCALE
-            * self._get_swing_clearance_deficit_cost(data, info)
-        )
+        bvh_mode = self._config.get("reference_gait", "none") == "bvh"
+        if bvh_mode:
+            gait_reward = jp.array(0.0)
+            swing_clearance_deficit_cost = jp.array(0.0)
+        else:
+            gait_reward = self._get_gait_reward(data, info)
+            swing_clearance_deficit_cost = (
+                self.SWING_CLEARANCE_DEFICIT_COST_SCALE
+                * self._get_swing_clearance_deficit_cost(data, info)
+            )
         reference_gait_reward = (
             self.REFERENCE_GAIT_REWARD_SCALE
             * self._get_reference_gait_reward(data, info)
@@ -1258,47 +1370,70 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             * self._get_reference_velocity_reward(data, info)
         )
         contact_force_cost = self._get_contact_force_cost(data)
-        foot_slip_cost = self.FOOT_SLIP_COST_SCALE * self._get_foot_slip_cost(
-            data,
-            info,
-        )
-        swing_drag_cost = (
-            self.SWING_FOOT_DRAG_COST_SCALE
-            * self._get_swing_foot_drag_cost(data, info)
-        )
+        if bvh_mode:
+            foot_slip_cost = jp.array(0.0)
+            swing_drag_cost = jp.array(0.0)
+        else:
+            foot_slip_cost = self.FOOT_SLIP_COST_SCALE * self._get_foot_slip_cost(
+                data,
+                info,
+            )
+            swing_drag_cost = (
+                self.SWING_FOOT_DRAG_COST_SCALE
+                * self._get_swing_foot_drag_cost(data, info)
+            )
         velocity_tracking_scale = self.VELOCITY_TRACKING_REWARD_SCALE
         forward_progress_scale = self.FORWARD_PROGRESS_REWARD_SCALE
         if self._config.command_profile == "forward_slow":
             velocity_tracking_scale = 0.8
             forward_progress_scale = 0.25
         height_cost = self.LOW_HEIGHT_COST_SCALE * jp.square(low_height)
-        reward = (
-            self.ALIVE_REWARD_SCALE
-            + velocity_tracking_scale * tracking
-            + forward_progress_scale * command_progress
-            + self.UPRIGHT_REWARD_SCALE * upright
-            + self.HEAD_UP_REWARD_SCALE * head_up
-            + base_height_reward
-            + posture_reward
-            + variable_posture_reward
-            + gait_reward
-            + reference_gait_reward
-            + reference_velocity_reward
-            - stuck_penalty
-            - action_cost
-            - action_rate_cost
-            - trunk_posture_cost
-            - variable_posture_cost
-            - contact_force_cost
-            - foot_slip_cost
-            - swing_drag_cost
-            - swing_clearance_deficit_cost
-            - height_cost
-            - overspeed_cost
-            - idle_motion_cost
-            - vertical_velocity_cost
-            - angular_velocity_cost
-        )
+        if bvh_mode:
+            reward = (
+                self.ALIVE_REWARD_SCALE
+                + 2.0 * reference_gait_reward
+                + 0.5 * velocity_tracking_scale * tracking
+                + 0.25 * forward_progress_scale * command_progress
+                + self.UPRIGHT_REWARD_SCALE * upright
+                + self.HEAD_UP_REWARD_SCALE * head_up
+                + 0.5 * base_height_reward
+                - stuck_penalty
+                - action_cost
+                - action_rate_cost
+                - contact_force_cost
+                - height_cost
+                - 0.5 * overspeed_cost
+                - vertical_velocity_cost
+                - angular_velocity_cost
+            )
+        else:
+            reward = (
+                self.ALIVE_REWARD_SCALE
+                + velocity_tracking_scale * tracking
+                + forward_progress_scale * command_progress
+                + self.UPRIGHT_REWARD_SCALE * upright
+                + self.HEAD_UP_REWARD_SCALE * head_up
+                + base_height_reward
+                + posture_reward
+                + variable_posture_reward
+                + gait_reward
+                + reference_gait_reward
+                + reference_velocity_reward
+                - stuck_penalty
+                - action_cost
+                - action_rate_cost
+                - trunk_posture_cost
+                - variable_posture_cost
+                - contact_force_cost
+                - foot_slip_cost
+                - swing_drag_cost
+                - swing_clearance_deficit_cost
+                - height_cost
+                - overspeed_cost
+                - idle_motion_cost
+                - vertical_velocity_cost
+                - angular_velocity_cost
+            )
         reward = jp.clip(reward, self.REWARD_MIN, self.REWARD_MAX)
         reward = jp.nan_to_num(
             reward,
@@ -1628,15 +1763,67 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
     def _get_bvh_reference_frame(self, info: dict) -> tuple[jax.Array, jax.Array]:
         """Vrati aktivni BVH clip i frame indeks."""
         clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
+        frame_index = self._get_bvh_reference_frame_at_offset(info, 0)
+        return clip_id, frame_index
+
+    def _get_bvh_reference_frame_at_offset(
+        self,
+        info: dict,
+        future_step: int,
+    ) -> jax.Array:
+        """Return BVH frame index with random reset phase and future offset."""
+        clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
         frame_count = self._bvh_reference_frame_counts[clip_id]
         frame_time = self._bvh_reference_frame_times[clip_id]
+        frame_offset = info.get(
+            "bvh_reference_frame_offset",
+            jp.array(0, dtype=jp.int32),
+        ).astype(jp.float32)
         frame_float = (
-            info["step"].astype(jp.float32)
+            frame_offset
+            + info["step"].astype(jp.float32)
+            * jp.array(self.dt, dtype=jp.float32)
+            / frame_time
+            + jp.array(future_step, dtype=jp.float32)
             * jp.array(self.dt, dtype=jp.float32)
             / frame_time
         )
-        frame_index = jp.mod(jp.floor(frame_float).astype(jp.int32), frame_count)
-        return clip_id, frame_index
+        return jp.mod(jp.floor(frame_float).astype(jp.int32), frame_count)
+
+    def _sample_initial_state_from_reference(
+        self,
+        clip_id: jax.Array,
+        frame_index: jax.Array,
+    ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
+        """DeepMimic-style reset into one coherent reference frame."""
+        if self._config.get("reference_gait", "none") != "bvh":
+            qpos = self._init_q.at[2].set(self._standing_height())
+            qvel = jp.zeros(self._mjx_model.nv)
+            return qpos, qvel, self._default_ctrl, jp.zeros(self.action_size)
+
+        target_qpos = self._bvh_reference_qpos_targets[clip_id, frame_index]
+        target_qvel = self._bvh_reference_qvel_targets[clip_id, frame_index]
+        qpos = self._init_q.at[:3].set(
+            self._bvh_reference_root_pos_targets[clip_id, frame_index]
+        )
+        qpos = qpos.at[3:7].set(
+            self._bvh_reference_root_quat_targets[clip_id, frame_index]
+        )
+        qpos = qpos.at[self._actuator_qpos_indices].set(target_qpos)
+        qvel = jp.zeros(self._mjx_model.nv)
+        qvel = qvel.at[:3].set(
+            self._bvh_reference_root_vel_targets[clip_id, frame_index]
+        )
+        qvel = qvel.at[3:6].set(
+            self._bvh_reference_root_angvel_targets[clip_id, frame_index]
+        )
+        qvel = qvel.at[self._actuator_dof_indices].set(target_qvel)
+        last_action = jp.clip(
+            (target_qpos - self._default_ctrl) / self._action_scale,
+            -1.0,
+            1.0,
+        )
+        return qpos, qvel, target_qpos, last_action
 
     def _get_variable_posture_reward(
         self,

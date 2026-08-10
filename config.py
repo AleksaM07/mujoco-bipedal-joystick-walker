@@ -585,6 +585,7 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # REF: PROJECT-BVH-MULTIFRAME-BESTMATCH
         # TYPE: ENGINEERING_DEFAULT
         bvh_multiclip_window=30,
+        bvh_target_observation_steps=(0, 1, 2, 3),
         action_noise_std=0.03,
         episode_bias_std=0.02,
         rfi_torque_limit=2.0,
@@ -712,6 +713,7 @@ class EnvConfig:
         ]
     )
     reference_target_observation: bool = True
+    bvh_target_observation_steps: tuple[int, ...] = (0, 1, 2, 3)
 
     # Evaluator postavlja ovu vrednost iz checkpoint metadata-e. Env zatim
     # automatski rekonstruiše stari/novi policy observation layout.

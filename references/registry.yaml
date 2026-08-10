@@ -89,6 +89,37 @@ MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG:
       Professor-facing Phase 1 experiments should use the same reward-group
       semantics and published-code hyperparameter scale as DeepMimic/MimicKit.
 
+PROJECT-DEEPMIMIC-STATE-SPACE-FIX:
+  type: ENGINEERING_DEFAULT
+  source:
+    title: "Local audit of Phase 1 BVH/MuJoCo state mismatch"
+    date: "2026-08-10"
+    files:
+      - "runs/20260810_0006_forward_V1_steps-80m_reward-m279p4359_s/train.log"
+      - "biomechanics_env.py"
+      - "bvh_reference.py"
+    url: null
+  used_in:
+    - "biomechanics_env.py"
+    - "bvh_reference.py"
+    - "config.py"
+  adaptation:
+    original: >
+      The failed 80m run had terminated=1.0, done_low=1.0, and dm_key=0.0
+      throughout evaluation. A reset audit showed BVH-derived key body targets
+      in a different coordinate frame than the MuJoCo humanoid.
+    project: >
+      BVH root orientation is kept in the MuJoCo upright frame until a full
+      skeleton retargeter exists; reset now initializes qpos/qvel/root/ctrl from
+      one coherent sampled reference frame; policy target observations include
+      current/future qpos, qvel, root, and key-body targets; BVH mode makes the
+      DeepMimic imitation reward the main positive reward and disables old gait
+      foot-slip/swing heuristics that conflict with imitation.
+    reason: >
+      DeepMimic assumes simulated state and reference motion live in the same
+      character state space. These changes make the current heuristic BVH bridge
+      internally coherent enough for Phase 1 training diagnostics.
+
 MARINA-BVH-STEP-SEGMENTATION:
   type: PROJECT_COLLABORATOR_DERIVED
   source:
