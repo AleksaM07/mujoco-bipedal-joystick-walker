@@ -10,7 +10,7 @@ from ml_collections import config_dict
 from mujoco import mjx
 from mujoco_playground._src import mjx_env
 
-from bvh_reference import load_bvh_references
+from bvh_reference import LoopMode, load_bvh_references
 from biomechanics_model import (
     HumanSpec,
     LEG_ACTUATED_JOINTS,
@@ -383,6 +383,10 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         )
         self._bvh_reference_frame_times = jp.array([self.dt], dtype=jp.float32)
         self._bvh_reference_frame_counts = jp.array([1], dtype=jp.int32)
+        self._bvh_reference_loop_modes = jp.array(
+            [int(LoopMode.CLAMP)],
+            dtype=jp.int32,
+        )
         self._bvh_reference_clip_count = 1
         self._bvh_reference_root_pos_targets_np = np.expand_dims(
             np.expand_dims(np.asarray(self._init_q_np[:3], dtype=np.float32), axis=0),
@@ -505,6 +509,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self._bvh_reference_qvel_targets = jp.array(references.qvel_targets)
         self._bvh_reference_frame_times = jp.array(references.frame_times)
         self._bvh_reference_frame_counts = jp.array(references.frame_counts)
+        self._bvh_reference_loop_modes = jp.array(references.loop_modes)
         self._bvh_reference_clip_count = len(references.source_paths)
         self._bvh_reference_root_pos_targets_np = references.root_pos_targets
         self._bvh_reference_root_quat_targets_np = references.root_quat_targets
@@ -919,7 +924,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         obs = self._get_obs(data, info)
 
         reward = self._get_reward(data, smoothed_action, previous_action, info)
-        done = self._get_done(data)
+        done = self._get_done(data, info)
         done_low_height, done_tipped, done_invalid = self._get_done_reasons(data)
         foot_slip = self._get_foot_slip_cost(data, info)
         swing_drag = self._get_swing_foot_drag_cost(data, info)
@@ -1253,13 +1258,16 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         target_root_pos = self._bvh_reference_root_pos_targets[clip_id, frame_index]
         target_root_quat = self._bvh_reference_root_quat_targets[clip_id, frame_index]
         target_key_pos = self._bvh_reference_key_pos_targets[clip_id, frame_index]
-        heading_world_to_local = self._heading_world_to_local(data)
-        root_delta = (target_root_pos - data.qpos[:3]) @ heading_world_to_local.T
+        sim_heading = self._heading_world_to_local_from_quat(data.qpos[3:7])
+        ref_heading = self._heading_world_to_local_from_quat(target_root_quat)
+        root_delta = (target_root_pos - data.qpos[:3]) @ sim_heading.T
+        # Local-root mode: XY progress is still useful to the policy, but height
+        # is the only root position term used by the DeepMimic reward.
         root_quat_delta = self._quat_mul(
-            self._quat_conjugate(data.qpos[3:7]),
-            target_root_quat,
+            self._quat_conjugate(self._heading_localize_quat(data.qpos[3:7])),
+            self._heading_localize_quat(target_root_quat),
         )
-        key_rel = (target_key_pos - target_root_pos) @ heading_world_to_local.T
+        key_rel = (target_key_pos - target_root_pos) @ ref_heading.T
         current_qpos = data.qpos[self._actuator_qpos_indices]
         current_qvel = data.qvel[self._actuator_dof_indices]
         return jp.concatenate([
@@ -1404,7 +1412,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 posinf=self.REWARD_MAX,
                 neginf=0.0,
             )
-            return jp.where(self._get_done(data), jp.array(0.0), reward)
+            return jp.where(self._get_done(data, info), jp.array(0.0), reward)
         reference_velocity_reward = (
             self.REFERENCE_VELOCITY_REWARD_SCALE
             * self._get_reference_velocity_reward(data, info)
@@ -1481,12 +1489,15 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             posinf=self.REWARD_MAX,
             neginf=self.REWARD_MIN,
         )
-        return jp.where(self._get_done(data), self.FALL_REWARD, reward)
+        return jp.where(self._get_done(data, info), self.FALL_REWARD, reward)
 
-    def _get_done(self, data: mjx.Data) -> jax.Array:
-        """Zavrsi epizodu ako human padne ili numerika ode u NaN."""
+    def _get_done(self, data: mjx.Data, info: dict | None = None) -> jax.Array:
+        """Zavrsi epizodu ako human padne, numerika ode u NaN, ili CLAMP motion istekne."""
         too_low, tipped_over, invalid = self._get_done_reasons(data)
-        return too_low | tipped_over | invalid
+        done = too_low | tipped_over | invalid
+        if info is not None:
+            done = done | self._get_bvh_motion_over(info)
+        return done
 
     def _get_done_reasons(
         self,
@@ -1502,6 +1513,20 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         invalid = jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any()
         return too_low, tipped_over, invalid
 
+    def _get_bvh_motion_over(self, info: dict) -> jax.Array:
+        """Terminate CLAMP clips when motion time reaches the last frame."""
+        # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
+        # TYPE: REFERENCE_CODE_DERIVED
+        if self._config.get("reference_gait", "none") != "bvh":
+            return jp.array(False)
+        clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
+        loop_mode = self._bvh_reference_loop_modes[clip_id]
+        frame_count = self._bvh_reference_frame_counts[clip_id]
+        frame_float = self._get_bvh_reference_frame_float(info, 0)
+        return (loop_mode == int(LoopMode.CLAMP)) & (
+            frame_float >= frame_count.astype(jp.float32)
+        )
+
     def _get_gait_phase_angle(self, info: dict) -> jax.Array:
         """Periodican signal koji govori politici koja noga treba da bude swing."""
         if self._config.get("reference_gait", "none") == "bvh":
@@ -1516,15 +1541,12 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         """Phase signal izveden iz aktivnog BVH clip-a."""
         clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
         frame_count = self._bvh_reference_frame_counts[clip_id]
-        frame_time = self._bvh_reference_frame_times[clip_id]
-        frame_float = (
-            info["step"].astype(jp.float32)
-            * jp.array(self.dt, dtype=jp.float32)
-            / frame_time
-        )
-        phase = jp.mod(frame_float, frame_count.astype(jp.float32)) / (
-            frame_count.astype(jp.float32)
-        )
+        frame_float = self._get_bvh_reference_frame_float(info, 0)
+        loop_mode = self._bvh_reference_loop_modes[clip_id]
+        wrapped = jp.mod(frame_float, frame_count.astype(jp.float32))
+        clamped = jp.clip(frame_float, 0.0, frame_count.astype(jp.float32) - 1.0)
+        phase_frame = jp.where(loop_mode == int(LoopMode.WRAP), wrapped, clamped)
+        phase = phase_frame / jp.maximum(frame_count.astype(jp.float32), 1.0)
         return 2.0 * jp.pi * phase
 
     def _get_gait_reward(
@@ -1632,26 +1654,13 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         data: mjx.Data,
         info: dict,
     ) -> dict[str, jax.Array]:
-        """DeepMimic-like imitation reward with a local temporal best-match."""
-        # REF: PROJECT-BVH-MULTIFRAME-BESTMATCH
-        # TYPE: ENGINEERING_DEFAULT
-        clip_id, center_frame = self._get_bvh_reference_frame(info)
-        frame_count = self._bvh_reference_frame_counts[clip_id]
-        window = int(self._config.get("bvh_multiclip_window", 30))
-        half_window = window // 2
-        offsets = jp.arange(window, dtype=jp.int32) - half_window
-        frame_indices = jp.mod(center_frame + offsets, frame_count)
-        rewards = jax.vmap(
-            lambda frame_index: self._get_bvh_deepmimic_frame_reward(
-                data,
-                clip_id,
-                frame_index,
-            )
-        )(frame_indices)
-        totals = rewards["total"]
-        best_index = jp.argmax(totals)
-        best = jax.tree_util.tree_map(lambda value: value[best_index], rewards)
-        return best
+        """DeepMimic/MimicKit imitation reward on the clocked reference frame."""
+        # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
+        # TYPE: REFERENCE_CODE_DERIVED
+        # Score only the wall-clock motion frame. Temporal best-match was removed
+        # because it rewarded phase free-riding / stalling.
+        clip_id, frame_index = self._get_bvh_reference_frame(info)
+        return self._get_bvh_deepmimic_frame_reward(data, clip_id, frame_index)
 
     def _get_bvh_deepmimic_frame_reward(
         self,
@@ -1660,9 +1669,12 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         frame_index: jax.Array,
     ) -> dict[str, jax.Array]:
         """Score one simulated state against one BVH reference frame."""
-        ref_body_pos = self._bvh_reference_body_pos_targets[clip_id, frame_index]
-        ref_body_quat = self._bvh_reference_body_quat_targets[clip_id, frame_index]
-        ref_body_cvel = self._bvh_reference_body_cvel_targets[clip_id, frame_index]
+        # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
+        # TYPE: REFERENCE_CODE_DERIVED
+        # Pose/velocity use actuator DOFs (MimicKit joint_rot/dof_vel). Root XY is
+        # ignored like MimicKit local-root mode; key bodies are heading-local.
+        ref_qpos = self._bvh_reference_qpos_targets[clip_id, frame_index]
+        ref_qvel = self._bvh_reference_qvel_targets[clip_id, frame_index]
         ref_key_pos = self._bvh_reference_key_pos_targets[clip_id, frame_index]
         ref_root_pos = self._bvh_reference_root_pos_targets[clip_id, frame_index]
         ref_root_quat = self._bvh_reference_root_quat_targets[clip_id, frame_index]
@@ -1671,29 +1683,40 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             clip_id,
             frame_index,
         ]
-        body_quat = data.xquat[self._deepmimic_body_ids]
-        body_cvel = data.cvel[self._deepmimic_body_ids]
+        qpos = data.qpos[self._actuator_qpos_indices]
+        qvel = data.qvel[self._actuator_dof_indices]
         key_pos = data.xpos[self._deepmimic_key_body_ids]
         root_pos = data.qpos[:3]
         root_quat = data.qpos[3:7]
         root_vel = data.qvel[:3]
         root_angvel = data.qvel[3:6]
 
-        pose_error = jp.sum(
-            self._deepmimic_body_weights
-            * self._quat_distance(body_quat, ref_body_quat)
-        )
-        velocity_error = jp.mean(jp.square(body_cvel - ref_body_cvel))
+        pose_error = jp.mean(jp.square(qpos - ref_qpos))
+        velocity_error = jp.mean(jp.square(qvel - ref_qvel))
 
-        heading_world_to_local = self._heading_world_to_local(data)
-        key_rel = (key_pos - root_pos) @ heading_world_to_local.T
-        ref_key_rel = (ref_key_pos - ref_root_pos) @ heading_world_to_local.T
+        sim_heading = self._heading_world_to_local_from_quat(root_quat)
+        ref_heading = self._heading_world_to_local_from_quat(ref_root_quat)
+        key_rel = (key_pos - root_pos) @ sim_heading.T
+        ref_key_rel = (ref_key_pos - ref_root_pos) @ ref_heading.T
         key_position_error = jp.sum(jp.square(key_rel - ref_key_rel))
 
-        root_pos_error = jp.sum(jp.square(root_pos - ref_root_pos))
-        root_rot_error = self._quat_distance(root_quat, ref_root_quat)
-        root_vel_error = jp.sum(jp.square(root_vel - ref_root_vel))
-        root_angvel_error = jp.sum(jp.square(root_angvel - ref_root_angvel))
+        # Local-root mode: ignore absolute XY. Height still matters.
+        root_pos_diff = root_pos - ref_root_pos
+        root_pos_diff = root_pos_diff.at[:2].set(0.0)
+        root_pos_error = jp.sum(jp.square(root_pos_diff))
+
+        local_root_quat = self._heading_localize_quat(root_quat)
+        local_ref_root_quat = self._heading_localize_quat(ref_root_quat)
+        root_rot_error = self._quat_distance(local_root_quat, local_ref_root_quat)
+
+        local_root_vel = sim_heading @ root_vel
+        local_ref_root_vel = ref_heading @ ref_root_vel
+        local_root_angvel = sim_heading @ root_angvel
+        local_ref_root_angvel = ref_heading @ ref_root_angvel
+        root_vel_error = jp.sum(jp.square(local_root_vel - local_ref_root_vel))
+        root_angvel_error = jp.sum(
+            jp.square(local_root_angvel - local_ref_root_angvel)
+        )
         root_pose_error = root_pos_error + 0.1 * root_rot_error
         root_velocity_error = root_vel_error + 0.1 * root_angvel_error
 
@@ -1835,20 +1858,19 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         frame_index = self._get_bvh_reference_frame_at_offset(info, 0)
         return clip_id, frame_index
 
-    def _get_bvh_reference_frame_at_offset(
+    def _get_bvh_reference_frame_float(
         self,
         info: dict,
         future_step: int,
     ) -> jax.Array:
-        """Return BVH frame index with random reset phase and future offset."""
+        """Return continuous BVH frame time including reset phase offset."""
         clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
-        frame_count = self._bvh_reference_frame_counts[clip_id]
         frame_time = self._bvh_reference_frame_times[clip_id]
         frame_offset = info.get(
             "bvh_reference_frame_offset",
             jp.array(0, dtype=jp.int32),
         ).astype(jp.float32)
-        frame_float = (
+        return (
             frame_offset
             + info["step"].astype(jp.float32)
             * jp.array(self.dt, dtype=jp.float32)
@@ -1857,7 +1879,21 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             * jp.array(self.dt, dtype=jp.float32)
             / frame_time
         )
-        return jp.mod(jp.floor(frame_float).astype(jp.int32), frame_count)
+
+    def _get_bvh_reference_frame_at_offset(
+        self,
+        info: dict,
+        future_step: int,
+    ) -> jax.Array:
+        """Return BVH frame index with random reset phase and future offset."""
+        clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
+        frame_count = self._bvh_reference_frame_counts[clip_id]
+        loop_mode = self._bvh_reference_loop_modes[clip_id]
+        frame_float = self._get_bvh_reference_frame_float(info, future_step)
+        frame_index = jp.floor(frame_float).astype(jp.int32)
+        wrapped = jp.mod(frame_index, frame_count)
+        clamped = jp.clip(frame_index, 0, frame_count - 1)
+        return jp.where(loop_mode == int(LoopMode.WRAP), wrapped, clamped)
 
     def _sample_initial_state_from_reference(
         self,
@@ -2059,6 +2095,39 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             lateral,
             jp.array([0.0, 0.0, 1.0]),
         ])
+
+    def _heading_world_to_local_from_quat(self, quat: jax.Array) -> jax.Array:
+        """Yaw-only world-to-heading frame from a root/body quaternion."""
+        # MuJoCo wxyz: rotate local +X into world, then project to XY.
+        x, y, z, w = quat[1], quat[2], quat[3], quat[0]
+        forward = jp.array([
+            1.0 - 2.0 * (y * y + z * z),
+            2.0 * (x * y + w * z),
+            0.0,
+        ])
+        forward = forward / jp.maximum(jp.linalg.norm(forward), 1e-6)
+        lateral = jp.array([-forward[1], forward[0], 0.0])
+        return jp.stack([
+            forward,
+            lateral,
+            jp.array([0.0, 0.0, 1.0]),
+        ])
+
+    def _heading_localize_quat(self, quat: jax.Array) -> jax.Array:
+        """Remove yaw from a quaternion, matching MimicKit local-root mode."""
+        heading = self._heading_world_to_local_from_quat(quat)
+        # heading rows are world axes expressed in heading frame; rebuild yaw quat.
+        yaw_cos = heading[0, 0]
+        yaw_sin = heading[0, 1]
+        half_angle_cos = jp.sqrt(jp.maximum(0.5 * (1.0 + yaw_cos), 0.0))
+        half_angle_sin = jp.where(
+            half_angle_cos > 1e-6,
+            0.5 * yaw_sin / jp.maximum(half_angle_cos, 1e-6),
+            0.0,
+        )
+        heading_quat = jp.array([half_angle_cos, 0.0, 0.0, half_angle_sin])
+        heading_quat = heading_quat / jp.maximum(jp.linalg.norm(heading_quat), 1e-6)
+        return self._quat_mul(self._quat_conjugate(heading_quat), quat)
 
     def _command_active(self, info: dict) -> jax.Array:
         """Return true when either linear or yaw joystick command is meaningful."""

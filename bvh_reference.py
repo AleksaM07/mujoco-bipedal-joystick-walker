@@ -103,7 +103,7 @@ class MotionClip:
     source_start_frame: int
     source_end_frame: int
     support_foot: str
-    loop_mode: LoopMode = LoopMode.WRAP
+    loop_mode: LoopMode = LoopMode.CLAMP
     weight: float = 1.0
 
     @property
@@ -374,6 +374,12 @@ def _retarget_segment(
         source_start_frame=segment.start_frame,
         source_end_frame=segment.end_frame,
         support_foot=segment.support_foot,
+        # REF: PROJECT-DEEPMIMIC-REWARD-LOCAL-ROOT
+        # TYPE: ENGINEERING_DEFAULT
+        # Step segments translate the root forward. WRAP would teleport root XY
+        # each cycle under absolute/local playback, so clamp until full cyclic
+        # clips + root sync exist.
+        loop_mode=LoopMode.CLAMP,
         weight=max(segment_bvh.frames - 1, 1) * segment_bvh.frame_time,
     )
 

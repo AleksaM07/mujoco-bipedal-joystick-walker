@@ -590,9 +590,6 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # Our BVH bridge does not yet retarget arms/head, so the default key
         # bodies are feet only. This keeps key-position reward physically honest.
         deepmimic_key_bodies=("right_foot", "left_foot"),
-        # REF: PROJECT-BVH-MULTIFRAME-BESTMATCH
-        # TYPE: ENGINEERING_DEFAULT
-        bvh_multiclip_window=30,
         bvh_target_observation_steps=(0, 1, 2, 3),
         action_noise_std=0.03,
         episode_bias_std=0.02,

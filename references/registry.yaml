@@ -89,6 +89,41 @@ MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG:
       Professor-facing Phase 1 experiments should use the same reward-group
       semantics and published-code hyperparameter scale as DeepMimic/MimicKit.
 
+PROJECT-DEEPMIMIC-REWARD-LOCAL-ROOT:
+  type: ENGINEERING_DEFAULT
+  source:
+    title: "Phase 1 DeepMimic reward corrections after 80M stall/fall failure"
+    date: "2026-08-10"
+    files:
+      - "biomechanics_env.py"
+      - "bvh_reference.py"
+      - "config.py"
+    url: null
+    related_code:
+      - repository: "https://github.com/xbpeng/MimicKit"
+        file: "mimickit/envs/deepmimic_env.py"
+        note: "local-root XY zeroing, joint pose/vel, clocked frame"
+      - repository: "https://github.com/xbpeng/DeepMimic"
+        file: "DeepMimicCore/scenes/SceneImitate.cpp"
+        note: "root sync / non-absolute root tracking spirit"
+  used_in:
+    - "biomechanics_env.py"
+    - "bvh_reference.py"
+    - "config.py"
+  adaptation:
+    original: >
+      MimicKit scores the wall-clock motion frame with joint pose/velocity
+      errors and, in local-root mode, ignores absolute root XY. DeepMimic syncs
+      kinematic root to the simulated character instead of forcing GPS tracking.
+    project: >
+      Removed temporal best-match; pose/vel use actuator DOFs; root reward keeps
+      height only and heading-local root rot/vel; key bodies use per-character
+      heading frames; BVH step clips default to CLAMP and end-of-motion
+      termination instead of WRAP teleport.
+    reason: >
+      The previous absolute-root + best-match + body-quat reward made walking
+      impossible to learn and encouraged stalling/falling even after 80M steps.
+
 PROJECT-DEEPMIMIC-STATE-SPACE-FIX:
   type: ENGINEERING_DEFAULT
   source:
@@ -326,6 +361,7 @@ PROJECT-BVH-FK-RETARGETING:
 
 PROJECT-BVH-MULTIFRAME-BESTMATCH:
   type: ENGINEERING_DEFAULT
+  status: deprecated
   source:
     title: "Local temporal best-match window for BVH imitation"
     authors: null
@@ -333,12 +369,13 @@ PROJECT-BVH-MULTIFRAME-BESTMATCH:
     section: null
     equation: null
     url: null
-  used_in:
-    - "biomechanics_env.py"
-    - "config.py"
+  used_in: []
   adaptation:
     original: "No verified DeepMimic equation or code path for this exact project implementation."
-    project: "For BVH imitation, score a local window of frames and use the best reward."
+    project: >
+      Removed. Best-match over a local frame window rewarded phase free-riding
+      and stalling. Replaced by clocked-frame scoring in
+      PROJECT-DEEPMIMIC-REWARD-LOCAL-ROOT.
     reason: "Reduces sensitivity to imperfect phase alignment in the current BVH retargeting path."
 
 BIOHUMANOID-FALL-HEIGHT:
