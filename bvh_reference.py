@@ -98,6 +98,7 @@ class MotionClip:
     root_quat_targets: np.ndarray
     root_vel_targets: np.ndarray
     root_angvel_targets: np.ndarray
+    wrap_delta: np.ndarray
     frame_time: float
     source_path: Path
     source_start_frame: int
@@ -121,6 +122,7 @@ class BvhReferenceBatch:
     root_quat_targets: np.ndarray
     root_vel_targets: np.ndarray
     root_angvel_targets: np.ndarray
+    wrap_deltas: np.ndarray
     frame_times: np.ndarray
     frame_counts: np.ndarray
     loop_modes: np.ndarray
@@ -181,6 +183,7 @@ class BvhMotionLibrary:
         root_quat_targets = np.zeros((clip_count, max_frames, 4), dtype=np.float32)
         root_vel_targets = np.zeros((clip_count, max_frames, 3), dtype=np.float32)
         root_angvel_targets = np.zeros((clip_count, max_frames, 3), dtype=np.float32)
+        wrap_deltas = np.zeros((clip_count, 3), dtype=np.float32)
         frame_times = np.zeros(clip_count, dtype=np.float32)
         frame_counts = np.zeros(clip_count, dtype=np.int32)
         loop_modes = np.zeros(clip_count, dtype=np.int32)
@@ -200,6 +203,7 @@ class BvhMotionLibrary:
             root_quat_targets[index, frame_count:] = clip.root_quat_targets[-1]
             root_vel_targets[index, :frame_count] = clip.root_vel_targets
             root_angvel_targets[index, :frame_count] = clip.root_angvel_targets
+            wrap_deltas[index] = clip.wrap_delta
 
             frame_times[index] = clip.frame_time
             frame_counts[index] = frame_count
@@ -221,6 +225,7 @@ class BvhMotionLibrary:
             root_quat_targets=root_quat_targets,
             root_vel_targets=root_vel_targets,
             root_angvel_targets=root_angvel_targets,
+            wrap_deltas=wrap_deltas,
             frame_times=frame_times,
             frame_counts=frame_counts,
             loop_modes=loop_modes,
@@ -369,17 +374,18 @@ def _retarget_segment(
         root_quat_targets=root_quat,
         root_vel_targets=_target_velocities(root_pos, segment_bvh.frame_time),
         root_angvel_targets=_quat_angular_velocities(root_quat, segment_bvh.frame_time),
+        wrap_delta=_motion_wrap_delta(root_pos),
         frame_time=segment_bvh.frame_time,
         source_path=source_path,
         source_start_frame=segment.start_frame,
         source_end_frame=segment.end_frame,
         support_foot=segment.support_foot,
-        # REF: PROJECT-DEEPMIMIC-REWARD-LOCAL-ROOT
-        # TYPE: ENGINEERING_DEFAULT
-        # Step segments translate the root forward. WRAP would teleport root XY
-        # each cycle under absolute/local playback, so clamp until full cyclic
-        # clips + root sync exist.
-        loop_mode=LoopMode.CLAMP,
+        # REF: MIMICKIT-MOTION-LIBRARY
+        # TYPE: REFERENCE_CODE_DERIVED
+        # MimicKit wraps locomotion clips and adds a per-loop root translation
+        # offset. We mirror that here so short walking segments do not terminate
+        # simply because the sampled phase started near the clip end.
+        loop_mode=LoopMode.WRAP,
         weight=max(segment_bvh.frames - 1, 1) * segment_bvh.frame_time,
     )
 
@@ -400,6 +406,15 @@ def _quat_angular_velocities(quats: np.ndarray, frame_time: float) -> np.ndarray
         velocities[index] = _quat_to_expmap(delta) / max(frame_time, 1e-6)
     velocities[-1] = velocities[-2]
     return velocities
+
+
+def _motion_wrap_delta(root_pos: np.ndarray) -> np.ndarray:
+    """Per-loop root translation offset in MimicKit's locomotion style."""
+    if root_pos.shape[0] < 2:
+        return np.zeros(3, dtype=np.float32)
+    wrap_delta = np.asarray(root_pos[-1] - root_pos[0], dtype=np.float32)
+    wrap_delta[2] = 0.0
+    return wrap_delta
 
 
 def _parse_bvh(path: Path) -> ParsedBvh:

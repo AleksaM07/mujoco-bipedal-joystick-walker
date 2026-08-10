@@ -401,6 +401,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             (1, 1, 3),
             dtype=np.float32,
         )
+        self._bvh_reference_wrap_deltas_np = np.zeros((1, 3), dtype=np.float32)
         self._configure_default_deepmimic_reference()
         self._configure_bvh_reference()
         self._refresh_reset_data_template()
@@ -515,6 +516,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self._bvh_reference_root_quat_targets_np = references.root_quat_targets
         self._bvh_reference_root_vel_targets_np = references.root_vel_targets
         self._bvh_reference_root_angvel_targets_np = references.root_angvel_targets
+        self._bvh_reference_wrap_deltas_np = references.wrap_deltas
         self._configure_deepmimic_reference_from_qpos(
             references.qpos_targets,
             references.qvel_targets,
@@ -638,6 +640,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self._bvh_reference_root_quat_targets = jp.array(root_quat)
         self._bvh_reference_root_vel_targets = jp.array(root_vel)
         self._bvh_reference_root_angvel_targets = jp.array(root_angvel)
+        self._bvh_reference_wrap_deltas = jp.array(self._bvh_reference_wrap_deltas_np)
         self._bvh_reference_com_targets = jp.array(com)
         self._bvh_reference_com_vel_targets = jp.array(com_vel)
 
@@ -865,6 +868,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "done_low_height": jp.array(0.0),
             "done_tipped": jp.array(0.0),
             "done_invalid": jp.array(0.0),
+            "done_motion_over": jp.array(0.0),
             "done": jp.array(0.0),
             "terminated": jp.array(0.0),
             "truncated": jp.array(0.0),
@@ -926,6 +930,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         reward = self._get_reward(data, smoothed_action, previous_action, info)
         done = self._get_done(data, info)
         done_low_height, done_tipped, done_invalid = self._get_done_reasons(data)
+        done_motion_over = self._get_bvh_motion_over(info).astype(reward.dtype)
         foot_slip = self._get_foot_slip_cost(data, info)
         swing_drag = self._get_swing_foot_drag_cost(data, info)
         swing_clearance = self._get_swing_clearance(data, info)
@@ -983,6 +988,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         metrics["done_low_height"] = done_low_height.astype(reward.dtype)
         metrics["done_tipped"] = done_tipped.astype(reward.dtype)
         metrics["done_invalid"] = done_invalid.astype(reward.dtype)
+        metrics["done_motion_over"] = done_motion_over
         metrics["done"] = done.astype(reward.dtype)
         info["last_foot_xy"] = self._foot_xy(data)
 
@@ -1253,11 +1259,16 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         """One target frame: actuator, root, and key-body references."""
         clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
         frame_index = self._get_bvh_reference_frame_at_offset(info, future_step)
+        root_offset = self._get_bvh_reference_root_offset(info, future_step)
         target_qpos = self._bvh_reference_qpos_targets[clip_id, frame_index]
         target_qvel = self._bvh_reference_qvel_targets[clip_id, frame_index]
-        target_root_pos = self._bvh_reference_root_pos_targets[clip_id, frame_index]
+        target_root_pos = (
+            self._bvh_reference_root_pos_targets[clip_id, frame_index] + root_offset
+        )
         target_root_quat = self._bvh_reference_root_quat_targets[clip_id, frame_index]
-        target_key_pos = self._bvh_reference_key_pos_targets[clip_id, frame_index]
+        target_key_pos = (
+            self._bvh_reference_key_pos_targets[clip_id, frame_index] + root_offset
+        )
         sim_heading = self._heading_world_to_local_from_quat(data.qpos[3:7])
         ref_heading = self._heading_world_to_local_from_quat(target_root_quat)
         root_delta = (target_root_pos - data.qpos[:3]) @ sim_heading.T
@@ -1660,11 +1671,12 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         # Score only the wall-clock motion frame. Temporal best-match was removed
         # because it rewarded phase free-riding / stalling.
         clip_id, frame_index = self._get_bvh_reference_frame(info)
-        return self._get_bvh_deepmimic_frame_reward(data, clip_id, frame_index)
+        return self._get_bvh_deepmimic_frame_reward(data, info, clip_id, frame_index)
 
     def _get_bvh_deepmimic_frame_reward(
         self,
         data: mjx.Data,
+        info: dict,
         clip_id: jax.Array,
         frame_index: jax.Array,
     ) -> dict[str, jax.Array]:
@@ -1673,10 +1685,15 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         # TYPE: REFERENCE_CODE_DERIVED
         # Pose/velocity use actuator DOFs (MimicKit joint_rot/dof_vel). Root XY is
         # ignored like MimicKit local-root mode; key bodies are heading-local.
+        root_offset = self._get_bvh_reference_root_offset(info, 0)
         ref_qpos = self._bvh_reference_qpos_targets[clip_id, frame_index]
         ref_qvel = self._bvh_reference_qvel_targets[clip_id, frame_index]
-        ref_key_pos = self._bvh_reference_key_pos_targets[clip_id, frame_index]
-        ref_root_pos = self._bvh_reference_root_pos_targets[clip_id, frame_index]
+        ref_key_pos = (
+            self._bvh_reference_key_pos_targets[clip_id, frame_index] + root_offset
+        )
+        ref_root_pos = (
+            self._bvh_reference_root_pos_targets[clip_id, frame_index] + root_offset
+        )
         ref_root_quat = self._bvh_reference_root_quat_targets[clip_id, frame_index]
         ref_root_vel = self._bvh_reference_root_vel_targets[clip_id, frame_index]
         ref_root_angvel = self._bvh_reference_root_angvel_targets[
@@ -1879,6 +1896,30 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             * jp.array(self.dt, dtype=jp.float32)
             / frame_time
         )
+
+    def _get_bvh_reference_loop_count(
+        self,
+        info: dict,
+        future_step: int,
+    ) -> jax.Array:
+        """Return how many WRAP cycles have elapsed for the active clip."""
+        clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
+        frame_count = self._bvh_reference_frame_counts[clip_id].astype(jp.float32)
+        loop_mode = self._bvh_reference_loop_modes[clip_id]
+        frame_float = self._get_bvh_reference_frame_float(info, future_step)
+        loop_count = jp.floor(frame_float / jp.maximum(frame_count, 1.0))
+        loop_count = jp.maximum(loop_count, 0.0)
+        return jp.where(loop_mode == int(LoopMode.WRAP), loop_count, 0.0)
+
+    def _get_bvh_reference_root_offset(
+        self,
+        info: dict,
+        future_step: int,
+    ) -> jax.Array:
+        """Return MimicKit-style root translation accumulated over WRAP cycles."""
+        clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
+        loop_count = self._get_bvh_reference_loop_count(info, future_step)
+        return self._bvh_reference_wrap_deltas[clip_id] * loop_count
 
     def _get_bvh_reference_frame_at_offset(
         self,

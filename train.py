@@ -1077,11 +1077,13 @@ def run_reference_playback_audit(
     resets: int,
     steps: int,
     seed: int,
+    physics_backend: str = "mjx_jax",
 ) -> None:
     """Play zero residual actions against the BVH reference without PPO."""
     patch_jax_for_brax_compatibility()
+    env_config.physics_backend = physics_backend
+    env_config.playground_impl = "warp" if physics_backend == "mjx_warp" else "jax"
     if env_config.physics_backend == "mjx_warp":
-        env_config.playground_impl = "warp"
         env_config.warp_num_worlds = 1
         capacity_plan = resolve_warp_capacities(
             env_config.warp_num_worlds,
@@ -1101,6 +1103,7 @@ def run_reference_playback_audit(
     low = 0
     tipped = 0
     invalid = 0
+    motion_over = 0
     first_failure_steps: list[int] = []
     zero_action = jnp.zeros(env.action_size)
 
@@ -1118,6 +1121,9 @@ def run_reference_playback_audit(
                 low += int(float(jax.device_get(state.metrics["done_low_height"])) > 0.5)
                 tipped += int(float(jax.device_get(state.metrics["done_tipped"])) > 0.5)
                 invalid += int(float(jax.device_get(state.metrics["done_invalid"])) > 0.5)
+                motion_over += int(
+                    float(jax.device_get(state.metrics["done_motion_over"])) > 0.5
+                )
                 break
         if survived:
             valid += 1
@@ -1129,8 +1135,10 @@ def run_reference_playback_audit(
     )
     print(
         "reference_playback_audit | "
+        f"physics_backend={env_config.physics_backend} | "
         f"valid={valid} | failed={failed} | resets={total_resets} | "
         f"steps={max_steps} | low={low} | tipped={tipped} | invalid={invalid} | "
+        f"motion_over={motion_over} | "
         f"avg_failure_step={avg_failure_step}"
     )
 
@@ -1346,6 +1354,16 @@ def main() -> None:
         default=500,
         help="Max steps per reset for --reference-playback-audit.",
     )
+    parser.add_argument(
+        "--reference-playback-backend",
+        choices=["mjx_jax", "mjx_warp"],
+        default="mjx_jax",
+        help=(
+            "Physics backend for --reference-playback-audit. Default is "
+            "mjx_jax so the diagnostic avoids Warp allocator/OOM noise; "
+            "training still defaults to MJX-Warp."
+        ),
+    )
     parser.add_argument("--out", type=Path, default=RUNS_DIR)
     args = parser.parse_args()
 
@@ -1388,6 +1406,7 @@ def main() -> None:
             resets=args.reference_playback_resets,
             steps=args.reference_playback_steps,
             seed=args.seed,
+            physics_backend=args.reference_playback_backend,
         )
         return
 
