@@ -1104,15 +1104,36 @@ def run_reference_playback_audit(
     tipped = 0
     invalid = 0
     motion_over = 0
+    init_motion = 0.0
+    init_fallback = 0.0
+    init_rejected = 0.0
     first_failure_steps: list[int] = []
+    metric_sums = {
+        "reward": 0.0,
+        "reference_gait": 0.0,
+        "deepmimic_pose": 0.0,
+        "deepmimic_velocity": 0.0,
+        "deepmimic_root_pose": 0.0,
+        "deepmimic_root_velocity": 0.0,
+        "deepmimic_key_position": 0.0,
+    }
+    metric_steps = 0
     zero_action = jnp.zeros(env.action_size)
 
     for reset_index in range(total_resets):
         rng = jax.random.PRNGKey(seed + reset_index)
         state = env.reset(rng)
+        init_motion += float(jax.device_get(state.metrics["init_motion_count"]))
+        init_fallback += float(jax.device_get(state.metrics["init_fallback_count"]))
+        init_rejected += float(jax.device_get(state.metrics["init_rejected_count"]))
         survived = True
         for step_index in range(max_steps):
             state = env.step(state, zero_action)
+            for metric_name in metric_sums:
+                metric_sums[metric_name] += float(
+                    jax.device_get(state.metrics[metric_name])
+                )
+            metric_steps += 1
             done = bool(jax.device_get(state.done))
             if done:
                 failed += 1
@@ -1133,12 +1154,25 @@ def run_reference_playback_audit(
         if first_failure_steps
         else None
     )
+    metric_means = {
+        name: (value / metric_steps if metric_steps else None)
+        for name, value in metric_sums.items()
+    }
     print(
         "reference_playback_audit | "
         f"physics_backend={env_config.physics_backend} | "
         f"valid={valid} | failed={failed} | resets={total_resets} | "
         f"steps={max_steps} | low={low} | tipped={tipped} | invalid={invalid} | "
-        f"motion_over={motion_over} | "
+        f"motion_over={motion_over} | init_motion={init_motion:.0f} | "
+        f"init_fallback={init_fallback:.0f} | "
+        f"avg_init_rejected={init_rejected / total_resets:.2f} | "
+        f"avg_reward={metric_means['reward']} | "
+        f"avg_reference_gait={metric_means['reference_gait']} | "
+        f"avg_pose={metric_means['deepmimic_pose']} | "
+        f"avg_vel={metric_means['deepmimic_velocity']} | "
+        f"avg_root_pose={metric_means['deepmimic_root_pose']} | "
+        f"avg_root_vel={metric_means['deepmimic_root_velocity']} | "
+        f"avg_key_pos={metric_means['deepmimic_key_position']} | "
         f"avg_failure_step={avg_failure_step}"
     )
 

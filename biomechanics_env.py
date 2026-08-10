@@ -186,6 +186,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
     DEEPMIMIC_ROOT_POSE_SCALE = 5.0
     DEEPMIMIC_ROOT_VELOCITY_SCALE = 1.0
     DEEPMIMIC_KEY_POSITION_SCALE = 10.0
+    RESET_SAMPLE_ATTEMPTS = 8
     CONTACT_FORCE_COST_SCALE = 1e-4
     CONTACT_FORCE_COST_CLIP = 1000.0
     STUCK_COMMAND_THRESHOLD = 0.10
@@ -383,10 +384,12 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         )
         self._bvh_reference_frame_times = jp.array([self.dt], dtype=jp.float32)
         self._bvh_reference_frame_counts = jp.array([1], dtype=jp.int32)
+        self._bvh_reference_motion_lengths = jp.array([self.dt], dtype=jp.float32)
         self._bvh_reference_loop_modes = jp.array(
             [int(LoopMode.CLAMP)],
             dtype=jp.int32,
         )
+        self._bvh_reference_weights = jp.array([1.0], dtype=jp.float32)
         self._bvh_reference_clip_count = 1
         self._bvh_reference_root_pos_targets_np = np.expand_dims(
             np.expand_dims(np.asarray(self._init_q_np[:3], dtype=np.float32), axis=0),
@@ -403,6 +406,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         )
         self._bvh_reference_wrap_deltas_np = np.zeros((1, 3), dtype=np.float32)
         self._configure_default_deepmimic_reference()
+        self._cache_standing_reference()
         self._configure_bvh_reference()
         self._refresh_reset_data_template()
         self._configure_policy_observation_layout()
@@ -510,7 +514,15 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self._bvh_reference_qvel_targets = jp.array(references.qvel_targets)
         self._bvh_reference_frame_times = jp.array(references.frame_times)
         self._bvh_reference_frame_counts = jp.array(references.frame_counts)
+        self._bvh_reference_motion_lengths = jp.array(
+            np.maximum(
+                references.frame_times * np.maximum(references.frame_counts - 1, 1),
+                1e-6,
+            ),
+            dtype=jp.float32,
+        )
         self._bvh_reference_loop_modes = jp.array(references.loop_modes)
+        self._bvh_reference_weights = jp.array(references.weights, dtype=jp.float32)
         self._bvh_reference_clip_count = len(references.source_paths)
         self._bvh_reference_root_pos_targets_np = references.root_pos_targets
         self._bvh_reference_root_quat_targets_np = references.root_quat_targets
@@ -531,6 +543,19 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         qpos_targets = np.asarray(self._bvh_reference_qpos_targets, dtype=np.float32)
         qvel_targets = np.asarray(self._bvh_reference_qvel_targets, dtype=np.float32)
         self._configure_deepmimic_reference_from_qpos(qpos_targets, qvel_targets)
+
+    def _cache_standing_reference(self) -> None:
+        """Keep a coherent one-frame standing reference for reset fallback."""
+        self._standing_reference_qpos_targets = jp.array(self._bvh_reference_qpos_targets)
+        self._standing_reference_qvel_targets = jp.array(self._bvh_reference_qvel_targets)
+        self._standing_reference_key_pos_targets = jp.array(self._bvh_reference_key_pos_targets)
+        self._standing_reference_root_pos_targets = jp.array(self._bvh_reference_root_pos_targets)
+        self._standing_reference_root_quat_targets = jp.array(self._bvh_reference_root_quat_targets)
+        self._standing_reference_root_vel_targets = jp.array(self._bvh_reference_root_vel_targets)
+        self._standing_reference_root_angvel_targets = jp.array(
+            self._bvh_reference_root_angvel_targets
+        )
+        self._standing_reference_wrap_deltas = jp.zeros((1, 3), dtype=jp.float32)
 
     def _configure_deepmimic_reference_from_qpos(
         self,
@@ -752,42 +777,9 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
 
     def reset(self, rng: jax.Array) -> mjx_env.State:
         """Resetuje humana u pocetnu pozu i uzorkuje joystick komandu."""
-        rng, command_key, pose_key, erfi_key, bias_key, gait_key, bvh_key, frame_key = (
-            jax.random.split(rng, 8)
+        rng, command_key, erfi_key, bias_key, gait_key, bvh_key = (
+            jax.random.split(rng, 6)
         )
-        bvh_clip_id = jax.random.randint(
-            bvh_key,
-            shape=(),
-            minval=0,
-            maxval=int(self._bvh_reference_clip_count),
-        )
-        bvh_frame_count = self._bvh_reference_frame_counts[bvh_clip_id]
-        bvh_frame_offset = jax.random.randint(
-            frame_key,
-            shape=(),
-            minval=0,
-            maxval=bvh_frame_count,
-        )
-        qpos, qvel, ctrl, last_action = self._sample_initial_state_from_reference(
-            bvh_clip_id,
-            bvh_frame_offset,
-        )
-        pose_noise = (
-            jax.random.uniform(
-                pose_key,
-                shape=(self.action_size,),
-                minval=-1.0,
-                maxval=1.0,
-            )
-            * self._init_actuator_noise
-        )
-        qpos = qpos.at[self._actuator_qpos_indices].add(pose_noise)
-        data = self._fresh_reset_data().replace(
-            qpos=qpos,
-            qvel=qvel,
-            ctrl=ctrl,
-        )
-        data = mjx.forward(self._mjx_model, data)
         fallback_qpos = self._init_q.at[2].set(self._standing_height())
         fallback_qvel = jp.zeros(self._mjx_model.nv)
         fallback_data = self._fresh_reset_data().replace(
@@ -796,20 +788,71 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             ctrl=self._default_ctrl,
         )
         fallback_data = mjx.forward(self._mjx_model, fallback_data)
-        sampled_terminal = self._get_done(data)
-        data = select_data(data, sampled_terminal, fallback_data, self._physics_backend)
-        qpos = jp.where(sampled_terminal, fallback_qpos, qpos)
-        ctrl = jp.where(sampled_terminal, self._default_ctrl, ctrl)
-        last_action = jp.where(
-            sampled_terminal,
-            jp.zeros(self.action_size),
-            last_action,
-        )
-        bvh_frame_offset = jp.where(
-            sampled_terminal,
-            jp.array(0, dtype=jp.int32),
-            bvh_frame_offset,
-        )
+        data = fallback_data
+        qpos = fallback_qpos
+        ctrl = self._default_ctrl
+        last_action = jp.zeros(self.action_size)
+        bvh_clip_id = jp.array(0, dtype=jp.int32)
+        bvh_time_offset = jp.array(0.0, dtype=jp.float32)
+        sampled_valid = jp.array(False)
+        rejected_count = jp.array(0.0, dtype=jp.float32)
+
+        for _ in range(self.RESET_SAMPLE_ATTEMPTS):
+            bvh_key, clip_key, sample_time_key, pose_key = jax.random.split(
+                bvh_key,
+                4,
+            )
+            candidate_clip_id = self._sample_weighted_bvh_clip_id(clip_key)
+            candidate_time_offset = self._sample_bvh_motion_time(
+                sample_time_key,
+                candidate_clip_id,
+            )
+            candidate_qpos, candidate_qvel, candidate_ctrl, candidate_last_action = (
+                self._sample_initial_state_from_reference(
+                    candidate_clip_id,
+                    candidate_time_offset,
+                )
+            )
+            pose_noise = (
+                jax.random.uniform(
+                    pose_key,
+                    shape=(self.action_size,),
+                    minval=-1.0,
+                    maxval=1.0,
+                )
+                * self._init_actuator_noise
+            )
+            candidate_qpos = candidate_qpos.at[self._actuator_qpos_indices].add(
+                pose_noise
+            )
+            candidate_data = self._fresh_reset_data().replace(
+                qpos=candidate_qpos,
+                qvel=candidate_qvel,
+                ctrl=candidate_ctrl,
+            )
+            candidate_data = mjx.forward(self._mjx_model, candidate_data)
+            candidate_terminal = self._get_done(candidate_data)
+            take_candidate = (~sampled_valid) & (~candidate_terminal)
+            rejected_count = rejected_count + (
+                ((~sampled_valid) & candidate_terminal).astype(jp.float32)
+            )
+            data = select_data(
+                data,
+                take_candidate,
+                candidate_data,
+                self._physics_backend,
+            )
+            qpos = jp.where(take_candidate, candidate_qpos, qpos)
+            ctrl = jp.where(take_candidate, candidate_ctrl, ctrl)
+            last_action = jp.where(take_candidate, candidate_last_action, last_action)
+            bvh_clip_id = jp.where(take_candidate, candidate_clip_id, bvh_clip_id)
+            bvh_time_offset = jp.where(
+                take_candidate,
+                candidate_time_offset,
+                bvh_time_offset,
+            )
+            sampled_valid = sampled_valid | (~candidate_terminal)
+
         command = self.sample_command(command_key)
         info = {
             "rng": rng,
@@ -817,7 +860,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "last_action": last_action,
             "episode_torque_offset": self.sample_episode_torque_offset(bias_key),
             "use_rfi": jax.random.bernoulli(erfi_key, p=0.5),
-            "step": jp.array(0),
+            "motion_step": jp.array(0, dtype=jp.int32),
+            "command_step": jp.array(0, dtype=jp.int32),
             "gait_step": jax.random.randint(
                 gait_key,
                 shape=(),
@@ -825,9 +869,11 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 maxval=int(self.GAIT_PERIOD_STEPS),
             ),
             "bvh_reference_clip_id": bvh_clip_id,
-            "bvh_reference_frame_offset": bvh_frame_offset,
-            "init_motion_count": (1.0 - sampled_terminal.astype(jp.float32)),
-            "init_fallback_count": sampled_terminal.astype(jp.float32),
+            "bvh_reference_time_offset": bvh_time_offset,
+            "reference_fallback_standing": ~sampled_valid,
+            "init_motion_count": sampled_valid.astype(jp.float32),
+            "init_fallback_count": (~sampled_valid).astype(jp.float32),
+            "init_rejected_count": rejected_count,
             "warp_world_id": jp.array(0, dtype=jp.int32),
             "last_foot_xy": self._foot_xy(data),
         }
@@ -862,8 +908,9 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "deepmimic_root_pose": jp.array(0.0),
             "deepmimic_root_velocity": jp.array(0.0),
             "deepmimic_key_position": jp.array(0.0),
-            "init_motion_count": (1.0 - sampled_terminal.astype(jp.float32)),
-            "init_fallback_count": sampled_terminal.astype(jp.float32),
+            "init_motion_count": sampled_valid.astype(jp.float32),
+            "init_fallback_count": (~sampled_valid).astype(jp.float32),
+            "init_rejected_count": rejected_count,
             "contact_force": jp.array(0.0),
             "done_low_height": jp.array(0.0),
             "done_tipped": jp.array(0.0),
@@ -912,14 +959,24 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             info["use_rfi"],
         )
 
-        should_resample = info["step"] > self._config.command_resample_steps
+        should_resample = (
+            info["command_step"] > self._config.command_resample_steps
+        )
         info["command"] = jp.where(
             should_resample,
             self.sample_command(command_key),
             info["command"],
         )
         info["last_action"] = smoothed_action
-        info["step"] = jp.where(should_resample, 0, info["step"] + 1)
+        info["motion_step"] = info["motion_step"] + jp.array(
+            1,
+            dtype=info["motion_step"].dtype,
+        )
+        info["command_step"] = jp.where(
+            should_resample,
+            jp.array(0, dtype=info["command_step"].dtype),
+            info["command_step"] + jp.array(1, dtype=info["command_step"].dtype),
+        )
         info["gait_step"] = jp.mod(
             info["gait_step"] + jp.array(1, dtype=info["gait_step"].dtype),
             self.GAIT_PERIOD_STEPS,
@@ -1257,18 +1314,12 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         future_step: int,
     ) -> jax.Array:
         """One target frame: actuator, root, and key-body references."""
-        clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
-        frame_index = self._get_bvh_reference_frame_at_offset(info, future_step)
-        root_offset = self._get_bvh_reference_root_offset(info, future_step)
-        target_qpos = self._bvh_reference_qpos_targets[clip_id, frame_index]
-        target_qvel = self._bvh_reference_qvel_targets[clip_id, frame_index]
-        target_root_pos = (
-            self._bvh_reference_root_pos_targets[clip_id, frame_index] + root_offset
-        )
-        target_root_quat = self._bvh_reference_root_quat_targets[clip_id, frame_index]
-        target_key_pos = (
-            self._bvh_reference_key_pos_targets[clip_id, frame_index] + root_offset
-        )
+        reference = self._query_bvh_reference(info, future_step)
+        target_qpos = reference["qpos"]
+        target_qvel = reference["qvel"]
+        target_root_pos = reference["root_pos"]
+        target_root_quat = reference["root_quat"]
+        target_key_pos = reference["key_pos"]
         sim_heading = self._heading_world_to_local_from_quat(data.qpos[3:7])
         ref_heading = self._heading_world_to_local_from_quat(target_root_quat)
         root_delta = (target_root_pos - data.qpos[:3]) @ sim_heading.T
@@ -1530,12 +1581,14 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         # TYPE: REFERENCE_CODE_DERIVED
         if self._config.get("reference_gait", "none") != "bvh":
             return jp.array(False)
+        if self._reference_fallback_active(info):
+            return jp.array(False)
         clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
         loop_mode = self._bvh_reference_loop_modes[clip_id]
-        frame_count = self._bvh_reference_frame_counts[clip_id]
-        frame_float = self._get_bvh_reference_frame_float(info, 0)
+        motion_time = self._get_bvh_reference_motion_time(info, 0)
+        motion_length = self._bvh_reference_motion_lengths[clip_id]
         return (loop_mode == int(LoopMode.CLAMP)) & (
-            frame_float >= frame_count.astype(jp.float32)
+            motion_time >= motion_length
         )
 
     def _get_gait_phase_angle(self, info: dict) -> jax.Array:
@@ -1550,14 +1603,18 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
 
     def _get_bvh_reference_phase_angle(self, info: dict) -> jax.Array:
         """Phase signal izveden iz aktivnog BVH clip-a."""
+        if self._reference_fallback_active(info):
+            return jp.array(0.0)
         clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
-        frame_count = self._bvh_reference_frame_counts[clip_id]
-        frame_float = self._get_bvh_reference_frame_float(info, 0)
+        motion_time = self._get_bvh_reference_motion_time(info, 0)
+        motion_length = self._bvh_reference_motion_lengths[clip_id]
         loop_mode = self._bvh_reference_loop_modes[clip_id]
-        wrapped = jp.mod(frame_float, frame_count.astype(jp.float32))
-        clamped = jp.clip(frame_float, 0.0, frame_count.astype(jp.float32) - 1.0)
-        phase_frame = jp.where(loop_mode == int(LoopMode.WRAP), wrapped, clamped)
-        phase = phase_frame / jp.maximum(frame_count.astype(jp.float32), 1.0)
+        phase = motion_time / jp.maximum(motion_length, 1e-6)
+        phase = jp.where(
+            loop_mode == int(LoopMode.WRAP),
+            phase - jp.floor(phase),
+            jp.clip(phase, 0.0, 1.0),
+        )
         return 2.0 * jp.pi * phase
 
     def _get_gait_reward(
@@ -1670,8 +1727,12 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         # TYPE: REFERENCE_CODE_DERIVED
         # Score only the wall-clock motion frame. Temporal best-match was removed
         # because it rewarded phase free-riding / stalling.
-        clip_id, frame_index = self._get_bvh_reference_frame(info)
-        return self._get_bvh_deepmimic_frame_reward(data, info, clip_id, frame_index)
+        return self._get_bvh_deepmimic_frame_reward(
+            data,
+            info,
+            jp.array(0, dtype=jp.int32),
+            jp.array(0, dtype=jp.int32),
+        )
 
     def _get_bvh_deepmimic_frame_reward(
         self,
@@ -1685,21 +1746,15 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         # TYPE: REFERENCE_CODE_DERIVED
         # Pose/velocity use actuator DOFs (MimicKit joint_rot/dof_vel). Root XY is
         # ignored like MimicKit local-root mode; key bodies are heading-local.
-        root_offset = self._get_bvh_reference_root_offset(info, 0)
-        ref_qpos = self._bvh_reference_qpos_targets[clip_id, frame_index]
-        ref_qvel = self._bvh_reference_qvel_targets[clip_id, frame_index]
-        ref_key_pos = (
-            self._bvh_reference_key_pos_targets[clip_id, frame_index] + root_offset
-        )
-        ref_root_pos = (
-            self._bvh_reference_root_pos_targets[clip_id, frame_index] + root_offset
-        )
-        ref_root_quat = self._bvh_reference_root_quat_targets[clip_id, frame_index]
-        ref_root_vel = self._bvh_reference_root_vel_targets[clip_id, frame_index]
-        ref_root_angvel = self._bvh_reference_root_angvel_targets[
-            clip_id,
-            frame_index,
-        ]
+        del clip_id, frame_index
+        reference = self._query_bvh_reference(info, 0)
+        ref_qpos = reference["qpos"]
+        ref_qvel = reference["qvel"]
+        ref_key_pos = reference["key_pos"]
+        ref_root_pos = reference["root_pos"]
+        ref_root_quat = reference["root_quat"]
+        ref_root_vel = reference["root_vel"]
+        ref_root_angvel = reference["root_angvel"]
         qpos = data.qpos[self._actuator_qpos_indices]
         qvel = data.qvel[self._actuator_dof_indices]
         key_pos = data.xpos[self._deepmimic_key_body_ids]
@@ -1790,6 +1845,30 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         ])
         return quat / jp.maximum(jp.linalg.norm(quat), 1e-6)
 
+    def _quat_slerp(
+        self,
+        quat0: jax.Array,
+        quat1: jax.Array,
+        alpha: jax.Array,
+    ) -> jax.Array:
+        """Shortest-path quaternion interpolation in MuJoCo wxyz order."""
+        quat0 = quat0 / jp.maximum(jp.linalg.norm(quat0), 1e-6)
+        quat1 = quat1 / jp.maximum(jp.linalg.norm(quat1), 1e-6)
+        dot = jp.sum(quat0 * quat1)
+        quat1 = jp.where(dot < 0.0, -quat1, quat1)
+        dot = jp.abs(jp.sum(quat0 * quat1))
+        linear = quat0 + alpha * (quat1 - quat0)
+        linear = linear / jp.maximum(jp.linalg.norm(linear), 1e-6)
+
+        theta0 = jp.arccos(jp.clip(dot, -1.0 + 1e-6, 1.0 - 1e-6))
+        sin_theta0 = jp.sin(theta0)
+        theta = theta0 * alpha
+        scale0 = jp.sin(theta0 - theta) / jp.maximum(sin_theta0, 1e-6)
+        scale1 = jp.sin(theta) / jp.maximum(sin_theta0, 1e-6)
+        spherical = scale0 * quat0 + scale1 * quat1
+        spherical = spherical / jp.maximum(jp.linalg.norm(spherical), 1e-6)
+        return jp.where(dot > 0.9995, linear, spherical)
+
     def _resolve_deepmimic_key_body_ids(self) -> np.ndarray:
         """Return configured key bodies that exist in this MuJoCo model."""
         # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
@@ -1860,86 +1939,157 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         )
 
     def _get_bvh_reference_gait_target(self, info: dict) -> jax.Array:
-        """Vrati retargetovanu BVH pozu najblizu trenutnom env vremenu."""
-        clip_id, frame_index = self._get_bvh_reference_frame(info)
-        return self._bvh_reference_qpos_targets[clip_id, frame_index]
+        """Vrati interpoliranu BVH pozu za trenutno motion vreme."""
+        return self._query_bvh_reference(info, 0)["qpos"]
 
     def _get_bvh_reference_velocity_target(self, info: dict) -> jax.Array:
-        """Vrati retargetovanu BVH joint brzinu za trenutni frame."""
-        clip_id, frame_index = self._get_bvh_reference_frame(info)
-        return self._bvh_reference_qvel_targets[clip_id, frame_index]
+        """Vrati interpoliranu BVH joint brzinu za trenutno motion vreme."""
+        return self._query_bvh_reference(info, 0)["qvel"]
 
-    def _get_bvh_reference_frame(self, info: dict) -> tuple[jax.Array, jax.Array]:
-        """Vrati aktivni BVH clip i frame indeks."""
-        clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
-        frame_index = self._get_bvh_reference_frame_at_offset(info, 0)
-        return clip_id, frame_index
+    def _sample_weighted_bvh_clip_id(self, rng: jax.Array) -> jax.Array:
+        """Sample clip ids using MimicKit-style motion weights."""
+        if self._bvh_reference_clip_count == 1:
+            return jp.array(0, dtype=jp.int32)
+        return jax.random.choice(
+            rng,
+            a=jp.arange(self._bvh_reference_clip_count, dtype=jp.int32),
+            p=self._bvh_reference_weights,
+            shape=(),
+        ).astype(jp.int32)
 
-    def _get_bvh_reference_frame_float(
+    def _sample_bvh_motion_time(
+        self,
+        rng: jax.Array,
+        clip_id: jax.Array,
+    ) -> jax.Array:
+        """Sample a continuous motion time with a small clamp safety margin."""
+        motion_length = self._bvh_reference_motion_lengths[clip_id]
+        loop_mode = self._bvh_reference_loop_modes[clip_id]
+        clamp_margin = jp.array(self.dt, dtype=jp.float32)
+        usable_length = jp.where(
+            loop_mode == int(LoopMode.CLAMP),
+            jp.maximum(motion_length - clamp_margin, 0.0),
+            motion_length,
+        )
+        phase = jax.random.uniform(rng, shape=(), minval=0.0, maxval=1.0)
+        return phase * jp.maximum(usable_length, 0.0)
+
+    def _reference_fallback_active(self, info: dict) -> jax.Array:
+        return info.get("reference_fallback_standing", jp.array(False))
+
+    def _get_bvh_reference_motion_time(
         self,
         info: dict,
         future_step: int,
     ) -> jax.Array:
-        """Return continuous BVH frame time including reset phase offset."""
-        clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
-        frame_time = self._bvh_reference_frame_times[clip_id]
-        frame_offset = info.get(
-            "bvh_reference_frame_offset",
-            jp.array(0, dtype=jp.int32),
-        ).astype(jp.float32)
+        """Continuous motion time offset used by every BVH query."""
         return (
-            frame_offset
-            + info["step"].astype(jp.float32)
+            info.get("bvh_reference_time_offset", jp.array(0.0, dtype=jp.float32))
+            + (
+                info["motion_step"].astype(jp.float32)
+                + jp.array(future_step, dtype=jp.float32)
+            )
             * jp.array(self.dt, dtype=jp.float32)
-            / frame_time
-            + jp.array(future_step, dtype=jp.float32)
-            * jp.array(self.dt, dtype=jp.float32)
-            / frame_time
         )
 
-    def _get_bvh_reference_loop_count(
+    def _query_bvh_reference_clip(
         self,
-        info: dict,
-        future_step: int,
-    ) -> jax.Array:
-        """Return how many WRAP cycles have elapsed for the active clip."""
-        clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
-        frame_count = self._bvh_reference_frame_counts[clip_id].astype(jp.float32)
-        loop_mode = self._bvh_reference_loop_modes[clip_id]
-        frame_float = self._get_bvh_reference_frame_float(info, future_step)
-        loop_count = jp.floor(frame_float / jp.maximum(frame_count, 1.0))
-        loop_count = jp.maximum(loop_count, 0.0)
-        return jp.where(loop_mode == int(LoopMode.WRAP), loop_count, 0.0)
-
-    def _get_bvh_reference_root_offset(
-        self,
-        info: dict,
-        future_step: int,
-    ) -> jax.Array:
-        """Return MimicKit-style root translation accumulated over WRAP cycles."""
-        clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
-        loop_count = self._get_bvh_reference_loop_count(info, future_step)
-        return self._bvh_reference_wrap_deltas[clip_id] * loop_count
-
-    def _get_bvh_reference_frame_at_offset(
-        self,
-        info: dict,
-        future_step: int,
-    ) -> jax.Array:
-        """Return BVH frame index with random reset phase and future offset."""
-        clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
+        clip_id: jax.Array,
+        motion_time: jax.Array,
+    ) -> dict[str, jax.Array]:
+        """Interpolate one BVH clip at continuous motion time."""
+        motion_length = self._bvh_reference_motion_lengths[clip_id]
         frame_count = self._bvh_reference_frame_counts[clip_id]
         loop_mode = self._bvh_reference_loop_modes[clip_id]
-        frame_float = self._get_bvh_reference_frame_float(info, future_step)
-        frame_index = jp.floor(frame_float).astype(jp.int32)
-        wrapped = jp.mod(frame_index, frame_count)
-        clamped = jp.clip(frame_index, 0, frame_count - 1)
-        return jp.where(loop_mode == int(LoopMode.WRAP), wrapped, clamped)
+        loop_count = jp.where(
+            loop_mode == int(LoopMode.WRAP),
+            jp.floor(motion_time / jp.maximum(motion_length, 1e-6)),
+            0.0,
+        )
+        phase = motion_time / jp.maximum(motion_length, 1e-6)
+        phase = jp.where(
+            loop_mode == int(LoopMode.WRAP),
+            phase - jp.floor(phase),
+            jp.clip(phase, 0.0, 1.0),
+        )
+        frame_float = phase * jp.maximum(frame_count.astype(jp.float32) - 1.0, 0.0)
+        frame_index0 = jp.floor(frame_float).astype(jp.int32)
+        frame_index1 = jp.minimum(frame_index0 + 1, frame_count - 1)
+        alpha = frame_float - frame_index0.astype(jp.float32)
+        root_offset = self._bvh_reference_wrap_deltas[clip_id] * loop_count
+
+        qpos0 = self._bvh_reference_qpos_targets[clip_id, frame_index0]
+        qpos1 = self._bvh_reference_qpos_targets[clip_id, frame_index1]
+        qvel0 = self._bvh_reference_qvel_targets[clip_id, frame_index0]
+        qvel1 = self._bvh_reference_qvel_targets[clip_id, frame_index1]
+        root_pos0 = self._bvh_reference_root_pos_targets[clip_id, frame_index0]
+        root_pos1 = self._bvh_reference_root_pos_targets[clip_id, frame_index1]
+        root_quat0 = self._bvh_reference_root_quat_targets[clip_id, frame_index0]
+        root_quat1 = self._bvh_reference_root_quat_targets[clip_id, frame_index1]
+        root_vel0 = self._bvh_reference_root_vel_targets[clip_id, frame_index0]
+        root_vel1 = self._bvh_reference_root_vel_targets[clip_id, frame_index1]
+        root_angvel0 = self._bvh_reference_root_angvel_targets[clip_id, frame_index0]
+        root_angvel1 = self._bvh_reference_root_angvel_targets[clip_id, frame_index1]
+        key_pos0 = self._bvh_reference_key_pos_targets[clip_id, frame_index0]
+        key_pos1 = self._bvh_reference_key_pos_targets[clip_id, frame_index1]
+
+        qpos = qpos0 + alpha * (qpos1 - qpos0)
+        qvel = qvel0 + alpha * (qvel1 - qvel0)
+        root_pos = root_pos0 + alpha * (root_pos1 - root_pos0) + root_offset
+        root_quat = self._quat_slerp(root_quat0, root_quat1, alpha)
+        root_vel = root_vel0 + alpha * (root_vel1 - root_vel0)
+        root_angvel = root_angvel0 + alpha * (root_angvel1 - root_angvel0)
+        key_pos = key_pos0 + alpha * (key_pos1 - key_pos0) + root_offset[None, :]
+        return {
+            "clip_id": clip_id,
+            "frame_index0": frame_index0,
+            "frame_index1": frame_index1,
+            "alpha": alpha,
+            "loop_count": loop_count,
+            "qpos": qpos,
+            "qvel": qvel,
+            "root_pos": root_pos,
+            "root_quat": root_quat,
+            "root_vel": root_vel,
+            "root_angvel": root_angvel,
+            "key_pos": key_pos,
+        }
+
+    def _query_bvh_reference(
+        self,
+        info: dict,
+        future_step: int,
+    ) -> dict[str, jax.Array]:
+        """Query the active BVH reference at continuous time, with standing fallback."""
+        clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
+        motion_time = self._get_bvh_reference_motion_time(info, future_step)
+        queried = self._query_bvh_reference_clip(clip_id, motion_time)
+        use_standing = self._reference_fallback_active(info)
+        standing = {
+            "clip_id": jp.array(0, dtype=jp.int32),
+            "frame_index0": jp.array(0, dtype=jp.int32),
+            "frame_index1": jp.array(0, dtype=jp.int32),
+            "alpha": jp.array(0.0, dtype=jp.float32),
+            "loop_count": jp.array(0.0, dtype=jp.float32),
+            "qpos": self._standing_reference_qpos_targets[0, 0],
+            "qvel": self._standing_reference_qvel_targets[0, 0],
+            "root_pos": self._standing_reference_root_pos_targets[0, 0],
+            "root_quat": self._standing_reference_root_quat_targets[0, 0],
+            "root_vel": self._standing_reference_root_vel_targets[0, 0],
+            "root_angvel": self._standing_reference_root_angvel_targets[0, 0],
+            "key_pos": self._standing_reference_key_pos_targets[0, 0],
+        }
+        return {
+            key: jp.where(use_standing, standing[key], queried[key])
+            if queried[key].ndim == 0
+            else jp.where(use_standing, standing[key], queried[key])
+            for key in queried
+        }
 
     def _sample_initial_state_from_reference(
         self,
         clip_id: jax.Array,
-        frame_index: jax.Array,
+        motion_time: jax.Array,
     ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
         """DeepMimic-style reset into one coherent reference frame."""
         if self._config.get("reference_gait", "none") != "bvh":
@@ -1947,22 +2097,15 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             qvel = jp.zeros(self._mjx_model.nv)
             return qpos, qvel, self._default_ctrl, jp.zeros(self.action_size)
 
-        target_qpos = self._bvh_reference_qpos_targets[clip_id, frame_index]
-        target_qvel = self._bvh_reference_qvel_targets[clip_id, frame_index]
-        qpos = self._init_q.at[:3].set(
-            self._bvh_reference_root_pos_targets[clip_id, frame_index]
-        )
-        qpos = qpos.at[3:7].set(
-            self._bvh_reference_root_quat_targets[clip_id, frame_index]
-        )
+        reference = self._query_bvh_reference_clip(clip_id, motion_time)
+        target_qpos = reference["qpos"]
+        target_qvel = reference["qvel"]
+        qpos = self._init_q.at[:3].set(reference["root_pos"])
+        qpos = qpos.at[3:7].set(reference["root_quat"])
         qpos = qpos.at[self._actuator_qpos_indices].set(target_qpos)
         qvel = jp.zeros(self._mjx_model.nv)
-        qvel = qvel.at[:3].set(
-            self._bvh_reference_root_vel_targets[clip_id, frame_index]
-        )
-        qvel = qvel.at[3:6].set(
-            self._bvh_reference_root_angvel_targets[clip_id, frame_index]
-        )
+        qvel = qvel.at[:3].set(reference["root_vel"])
+        qvel = qvel.at[3:6].set(reference["root_angvel"])
         qvel = qvel.at[self._actuator_dof_indices].set(target_qvel)
         return qpos, qvel, target_qpos, jp.zeros(self.action_size)
 

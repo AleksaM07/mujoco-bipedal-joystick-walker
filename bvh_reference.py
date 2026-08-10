@@ -303,89 +303,130 @@ def _retarget_segment(
         index = actuator_joint_names.index(joint_name)
         targets[:, index] = np.clip(values, lower_limits[index], upper_limits[index])
 
-    def assign_centered(
+    # REF: MIMICKIT-MOTION-LIBRARY
+    # TYPE: ENGINEERING_DEFAULT
+    # MimicKit consumes motions in character-local joint rotation space.
+    # We do not have a full offline retargeter yet, but we can still stay in
+    # that spirit: convert each BVH joint's local rotation into the MuJoCo
+    # character frame, measure the delta from the clip's first frame, and use
+    # those local rotation deltas as actuator targets. This is far more
+    # coherent than reading a few raw Euler channels and centering them by
+    # clip mean/percentile.
+    pelvis_delta = _joint_local_rotation_delta(
+        segment_bvh,
+        ("Hips",),
+        allow_missing=True,
+    )
+    lowerback_delta = _joint_local_rotation_delta(
+        segment_bvh,
+        ("lowerback",),
+        allow_missing=True,
+    )
+    chest_delta = _joint_local_rotation_delta(
+        segment_bvh,
+        ("Chest",),
+        allow_missing=True,
+    )
+    abdomen_delta = 0.7 * lowerback_delta + 0.3 * chest_delta
+    if not np.any(abdomen_delta):
+        abdomen_delta = 0.5 * pelvis_delta
+
+    left_hip_delta = _joint_local_rotation_delta(
+        segment_bvh,
+        ("LeftUpLeg", "LeftHip"),
+        allow_missing=True,
+    )
+    right_hip_delta = _joint_local_rotation_delta(
+        segment_bvh,
+        ("RightUpLeg", "RightHip"),
+        allow_missing=True,
+    )
+    left_knee_delta = _joint_local_rotation_delta(
+        segment_bvh,
+        ("LeftLeg", "LeftKnee"),
+        allow_missing=True,
+    )
+    right_knee_delta = _joint_local_rotation_delta(
+        segment_bvh,
+        ("RightLeg", "RightKnee"),
+        allow_missing=True,
+    )
+    left_ankle_delta = _joint_local_rotation_delta(
+        segment_bvh,
+        ("LeftFoot", "LeftAnkle"),
+        allow_missing=True,
+    )
+    right_ankle_delta = _joint_local_rotation_delta(
+        segment_bvh,
+        ("RightFoot", "RightAnkle"),
+        allow_missing=True,
+    )
+
+    def assign_expmap_axis(
         joint_name: str,
-        source_joints: tuple[str, ...],
-        channel_name: str,
+        rotation_delta: np.ndarray,
+        axis: int,
         scale: float,
         sign: float = 1.0,
     ) -> None:
         if joint_name not in actuator_joint_names:
             return
-        try:
-            values = _centered_rotation(segment_bvh, source_joints, channel_name)
-        except ValueError:
-            return
         index = actuator_joint_names.index(joint_name)
-        assign_target(joint_name, default_ctrl[index] + sign * scale * values)
+        assign_target(
+            joint_name,
+            default_ctrl[index] + sign * scale * rotation_delta[:, axis],
+        )
 
-    def assign_flexion(
-        joint_name: str,
-        source_joints: tuple[str, ...],
-        channel_name: str,
-        scale: float,
-        sign: float,
-    ) -> None:
-        if joint_name not in actuator_joint_names:
-            return
-        try:
-            values = _positive_flexion(segment_bvh, source_joints, channel_name)
-        except ValueError:
-            return
-        index = actuator_joint_names.index(joint_name)
-        assign_target(joint_name, default_ctrl[index] + sign * scale * values)
+    assign_expmap_axis("abdomen_x", abdomen_delta, 0, 0.85)
+    assign_expmap_axis("abdomen_y", abdomen_delta, 1, 0.75)
+    assign_expmap_axis("abdomen_z", abdomen_delta, 2, 0.75)
+    assign_expmap_axis("pelvis_x", pelvis_delta, 0, 0.60)
+    assign_expmap_axis("pelvis_y", pelvis_delta, 1, 0.55)
+    assign_expmap_axis("pelvis_z", pelvis_delta, 2, 0.55)
 
-    # REF: MIMICKIT-MOTION-LIBRARY
-    # TYPE: ENGINEERING_DEFAULT
-    # MimicKit motions are already in the simulated character DOF space. Our
-    # CMU BVH source is not, so this is a conservative deterministic bridge:
-    # map the main BVH Euler channels into every locomotion actuator instead of
-    # the previous 6-DOF proxy. The scales are intentionally below joint limits
-    # because the policy still learns residual control on top of these targets.
-    assign_centered("abdomen_x", ("lowerback", "Chest"), "Xrotation", 0.18)
-    assign_centered("abdomen_y", ("lowerback", "Chest"), "Yrotation", 0.14)
-    assign_centered("abdomen_z", ("lowerback", "Chest"), "Zrotation", 0.14)
-    assign_centered("pelvis_x", ("Hips", "lowerback"), "Xrotation", 0.10)
-    assign_centered("pelvis_y", ("Hips", "lowerback"), "Yrotation", 0.08)
-    assign_centered("pelvis_z", ("Hips", "lowerback"), "Zrotation", 0.08)
-
-    assign_centered("left_hip_x", ("LeftHip", "LeftUpLeg"), "Xrotation", 0.55)
-    assign_centered("right_hip_x", ("RightHip", "RightUpLeg"), "Xrotation", 0.55)
-    assign_centered("left_hip_y", ("LeftHip", "LeftUpLeg"), "Yrotation", 0.30)
-    assign_centered("right_hip_y", ("RightHip", "RightUpLeg"), "Yrotation", 0.30)
-    assign_centered("left_hip_z", ("LeftHip", "LeftUpLeg"), "Zrotation", 0.30)
-    assign_centered("right_hip_z", ("RightHip", "RightUpLeg"), "Zrotation", 0.30)
-    assign_flexion("left_knee_z", ("LeftKnee", "LeftLeg"), "Xrotation", 0.75, -1.0)
-    assign_flexion("right_knee_z", ("RightKnee", "RightLeg"), "Xrotation", 0.75, -1.0)
-    assign_centered("left_ankle_y", ("LeftAnkle", "LeftFoot"), "Xrotation", 0.35)
-    assign_centered("right_ankle_y", ("RightAnkle", "RightFoot"), "Xrotation", 0.35)
-    assign_centered("left_ankle_z", ("LeftAnkle", "LeftFoot"), "Zrotation", 0.20)
-    assign_centered("right_ankle_z", ("RightAnkle", "RightFoot"), "Zrotation", 0.20)
+    assign_expmap_axis("left_hip_x", left_hip_delta, 0, 1.00)
+    assign_expmap_axis("right_hip_x", right_hip_delta, 0, 1.00)
+    assign_expmap_axis("left_hip_y", left_hip_delta, 1, 0.85)
+    assign_expmap_axis("right_hip_y", right_hip_delta, 1, 0.85)
+    assign_expmap_axis("left_hip_z", left_hip_delta, 2, 0.85)
+    assign_expmap_axis("right_hip_z", right_hip_delta, 2, 0.85)
+    assign_expmap_axis("left_knee_z", left_knee_delta, 0, 1.10, sign=-1.0)
+    assign_expmap_axis("right_knee_z", right_knee_delta, 0, 1.10, sign=-1.0)
+    assign_expmap_axis("left_ankle_y", left_ankle_delta, 0, 0.90)
+    assign_expmap_axis("right_ankle_y", right_ankle_delta, 0, 0.90)
+    assign_expmap_axis("left_ankle_z", left_ankle_delta, 2, 0.60)
+    assign_expmap_axis("right_ankle_z", right_ankle_delta, 2, 0.60)
 
     root_pos, root_quat = _root_motion_targets(
         segment_bvh,
         initial_root_pos,
         initial_root_quat,
     )
-    return MotionClip(
+    qvel_targets = _target_velocities(targets, segment_bvh.frame_time)
+    root_vel_targets = _target_velocities(root_pos, segment_bvh.frame_time)
+    root_angvel_targets = _quat_angular_velocities(root_quat, segment_bvh.frame_time)
+    loop_mode = _resolve_loop_mode(
         qpos_targets=targets,
-        qvel_targets=_target_velocities(targets, segment_bvh.frame_time),
+        qvel_targets=qvel_targets,
         root_pos_targets=root_pos,
         root_quat_targets=root_quat,
-        root_vel_targets=_target_velocities(root_pos, segment_bvh.frame_time),
-        root_angvel_targets=_quat_angular_velocities(root_quat, segment_bvh.frame_time),
+        root_vel_targets=root_vel_targets,
+        root_angvel_targets=root_angvel_targets,
+    )
+    return MotionClip(
+        qpos_targets=targets,
+        qvel_targets=qvel_targets,
+        root_pos_targets=root_pos,
+        root_quat_targets=root_quat,
+        root_vel_targets=root_vel_targets,
+        root_angvel_targets=root_angvel_targets,
         wrap_delta=_motion_wrap_delta(root_pos),
         frame_time=segment_bvh.frame_time,
         source_path=source_path,
         source_start_frame=segment.start_frame,
         source_end_frame=segment.end_frame,
         support_foot=segment.support_foot,
-        # REF: MIMICKIT-MOTION-LIBRARY
-        # TYPE: REFERENCE_CODE_DERIVED
-        # MimicKit wraps locomotion clips and adds a per-loop root translation
-        # offset. We mirror that here so short walking segments do not terminate
-        # simply because the sampled phase started near the clip end.
-        loop_mode=LoopMode.WRAP,
+        loop_mode=loop_mode,
         weight=max(segment_bvh.frames - 1, 1) * segment_bvh.frame_time,
     )
 
@@ -415,6 +456,83 @@ def _motion_wrap_delta(root_pos: np.ndarray) -> np.ndarray:
     wrap_delta = np.asarray(root_pos[-1] - root_pos[0], dtype=np.float32)
     wrap_delta[2] = 0.0
     return wrap_delta
+
+
+def _resolve_loop_mode(
+    qpos_targets: np.ndarray,
+    qvel_targets: np.ndarray,
+    root_pos_targets: np.ndarray,
+    root_quat_targets: np.ndarray,
+    root_vel_targets: np.ndarray,
+    root_angvel_targets: np.ndarray,
+) -> LoopMode:
+    """Mark a clip WRAP only when its seam is reasonably continuous."""
+    if qpos_targets.shape[0] < 3:
+        return LoopMode.CLAMP
+
+    pose_rms = float(np.sqrt(np.mean(np.square(qpos_targets[-1] - qpos_targets[0]))))
+    pose_max = float(np.max(np.abs(qpos_targets[-1] - qpos_targets[0])))
+    vel_rms = float(np.sqrt(np.mean(np.square(qvel_targets[-1] - qvel_targets[0]))))
+    root_vel_err = float(np.linalg.norm(root_vel_targets[-1] - root_vel_targets[0]))
+    root_angvel_err = float(
+        np.linalg.norm(root_angvel_targets[-1] - root_angvel_targets[0])
+    )
+    root_height_err = float(abs(root_pos_targets[-1, 2] - root_pos_targets[0, 2]))
+    root_rot_err = float(
+        np.linalg.norm(
+            _quat_to_expmap(
+                _quat_mul(
+                    _quat_conjugate(root_quat_targets[0]),
+                    root_quat_targets[-1],
+                )
+            )
+        )
+    )
+
+    seam_ok = (
+        pose_rms < 0.18
+        and pose_max < 0.5
+        and vel_rms < 2.5
+        and root_vel_err < 1.5
+        and root_angvel_err < 3.0
+        and root_height_err < 0.06
+        and root_rot_err < 0.35
+    )
+    return LoopMode.WRAP if seam_ok else LoopMode.CLAMP
+
+
+def _joint_local_rotation_delta(
+    bvh: ParsedBvh,
+    joint_names: tuple[str, ...],
+    allow_missing: bool = False,
+) -> np.ndarray:
+    """Return MuJoCo-frame local joint rotation deltas as exp-map vectors."""
+    joint_name = _first_existing_joint(bvh, joint_names)
+    if joint_name is None:
+        if allow_missing:
+            return np.zeros((bvh.frames, 3), dtype=np.float32)
+        joined = ", ".join(joint_names)
+        raise ValueError(f"BVH nema nijedan trazeni joint: {joined}.")
+
+    joint = bvh.joints[joint_name]
+    local_quats = np.zeros((bvh.frames, 4), dtype=np.float32)
+    for frame_index in range(bvh.frames):
+        rotation = np.eye(3, dtype=np.float32)
+        channel_values = bvh.motion[frame_index, list(joint.channel_indices)]
+        for channel, value in zip(joint.channels, channel_values, strict=True):
+            if channel.endswith("rotation"):
+                rotation = rotation @ _axis_rotation(channel[0], float(value))
+        local_quats[frame_index] = _matrix_to_quat(_bvh_rotation_to_mujoco(rotation))
+
+    local_quats = _continuous_quat_sequence(local_quats)
+    baseline_inv = _quat_conjugate(local_quats[0])
+    return np.stack(
+        [
+            _quat_to_expmap(_quat_mul(baseline_inv, local_quat))
+            for local_quat in local_quats
+        ],
+        axis=0,
+    ).astype(np.float32)
 
 
 def _parse_bvh(path: Path) -> ParsedBvh:
@@ -649,36 +767,45 @@ def _root_motion_targets(
     initial_root_pos: np.ndarray,
     initial_root_quat: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Return root targets in this MuJoCo humanoid's upright frame.
-
-    DeepMimic/MimicKit motion files are already retargeted to the same
-    character skeleton that is simulated.  Our CMU BVH files are not.  Using
-    the raw BVH root quaternion rotates the generated MuJoCo character into a
-    different coordinate frame, which makes key-body FK targets physically
-    impossible for the policy.  Until a full skeleton retargeter exists, keep
-    root orientation in the MuJoCo upright pose and only preserve horizontal
-    root displacement from BVH.
-    """
+    """Return root targets aligned to the MuJoCo character's initial frame."""
     root = bvh.joints[bvh.root_name]
     root_values = bvh.motion[:, list(root.channel_indices)]
     root_translation = np.zeros((bvh.frames, 3), dtype=np.float32)
+    root_rotation = np.repeat(np.eye(3, dtype=np.float32)[None, :, :], bvh.frames, axis=0)
 
-    for channel_index, channel in enumerate(root.channels):
-        values = root_values[:, channel_index]
-        if channel == "Xposition":
-            root_translation[:, 0] = values
-        elif channel == "Yposition":
-            root_translation[:, 1] = values
-        elif channel == "Zposition":
-            root_translation[:, 2] = values
+    for frame_index in range(bvh.frames):
+        rotation = np.eye(3, dtype=np.float32)
+        for channel_index, channel in enumerate(root.channels):
+            value = float(root_values[frame_index, channel_index])
+            if channel == "Xposition":
+                root_translation[frame_index, 0] = value
+            elif channel == "Yposition":
+                root_translation[frame_index, 1] = value
+            elif channel == "Zposition":
+                root_translation[frame_index, 2] = value
+            elif channel.endswith("rotation"):
+                rotation = rotation @ _axis_rotation(channel[0], value)
+        root_rotation[frame_index] = rotation
 
-    root_pos = _bvh_positions_to_mujoco(root_translation)
-    root_pos -= root_pos[0]
+    root_pos_local = _bvh_positions_to_mujoco(root_translation)
+    root_pos_local -= root_pos_local[0]
+
+    raw_root_quat = np.stack(
+        [
+            _matrix_to_quat(_bvh_rotation_to_mujoco(rotation))
+            for rotation in root_rotation
+        ],
+        axis=0,
+    )
+    raw_root_quat = _continuous_quat_sequence(raw_root_quat)
+
+    initial_root_quat = _normalize_quat(initial_root_quat)
+    alignment_quat = _quat_mul(initial_root_quat, _quat_conjugate(raw_root_quat[0]))
+    alignment_rot = _quat_to_matrix(alignment_quat)
+    root_pos = root_pos_local @ alignment_rot.T
     root_pos += initial_root_pos[None, :]
-    root_pos[:, 2] = initial_root_pos[2]
-    root_quat = np.repeat(
-        _normalize_quat(initial_root_quat)[None, :],
-        bvh.frames,
+    root_quat = np.stack(
+        [_quat_mul(alignment_quat, quat) for quat in raw_root_quat],
         axis=0,
     )
     return root_pos.astype(np.float32), root_quat.astype(np.float32)
@@ -726,40 +853,6 @@ def _median_filter_bool(values: np.ndarray, kernel_size: int) -> np.ndarray:
 
 def _heel_strikes(contact: np.ndarray) -> np.ndarray:
     return np.where(np.diff(contact.astype(np.int32)) == 1)[0] + 1
-
-
-def _rotation_degrees(
-    bvh: ParsedBvh,
-    joint_names: tuple[str, ...],
-    channel_name: str,
-) -> np.ndarray:
-    for joint_name in joint_names:
-        try:
-            channel_index = bvh.channels.index((joint_name, channel_name))
-        except ValueError:
-            continue
-        return bvh.motion[:, channel_index]
-    joined = ", ".join(f"{name}.{channel_name}" for name in joint_names)
-    raise ValueError(f"BVH nema nijedan trazeni kanal: {joined}.")
-
-
-def _centered_rotation(
-    bvh: ParsedBvh,
-    joint_names: tuple[str, ...],
-    channel_name: str,
-) -> np.ndarray:
-    degrees = _rotation_degrees(bvh, joint_names, channel_name)
-    return np.deg2rad(degrees - np.mean(degrees))
-
-
-def _positive_flexion(
-    bvh: ParsedBvh,
-    joint_names: tuple[str, ...],
-    channel_name: str,
-) -> np.ndarray:
-    degrees = _rotation_degrees(bvh, joint_names, channel_name)
-    baseline = np.percentile(degrees, 5.0)
-    return np.deg2rad(np.maximum(degrees - baseline, 0.0))
 
 
 def _first_existing_joint(bvh: ParsedBvh, names: tuple[str, ...]) -> str | None:
@@ -846,6 +939,15 @@ def _normalize_quat(quat: np.ndarray) -> np.ndarray:
     return (quat / norm).astype(np.float32)
 
 
+def _continuous_quat_sequence(quats: np.ndarray) -> np.ndarray:
+    """Flip quaternion signs so neighboring frames stay on the same hemisphere."""
+    result = np.asarray(quats, dtype=np.float32).copy()
+    for index in range(1, result.shape[0]):
+        if float(np.dot(result[index - 1], result[index])) < 0.0:
+            result[index] = -result[index]
+    return result
+
+
 def _quat_conjugate(quat: np.ndarray) -> np.ndarray:
     return np.array([quat[0], -quat[1], -quat[2], -quat[3]], dtype=np.float32)
 
@@ -863,6 +965,19 @@ def _quat_mul(left: np.ndarray, right: np.ndarray) -> np.ndarray:
             ],
             dtype=np.float32,
         )
+    )
+
+
+def _quat_to_matrix(quat: np.ndarray) -> np.ndarray:
+    quat = _normalize_quat(quat)
+    w, x, y, z = quat
+    return np.array(
+        [
+            [1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y - z * w), 2.0 * (x * z + y * w)],
+            [2.0 * (x * y + z * w), 1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z - x * w)],
+            [2.0 * (x * z - y * w), 2.0 * (y * z + x * w), 1.0 - 2.0 * (x * x + y * y)],
+        ],
+        dtype=np.float32,
     )
 
 
