@@ -298,39 +298,64 @@ def _retarget_segment(
         index = actuator_joint_names.index(joint_name)
         targets[:, index] = np.clip(values, lower_limits[index], upper_limits[index])
 
-    assign_target(
-        "left_hip_x",
-        default_ctrl[actuator_joint_names.index("left_hip_x")]
-        + 0.55 * _centered_rotation(segment_bvh, ("LeftHip", "LeftUpLeg"), "Xrotation"),
-    )
-    assign_target(
-        "right_hip_x",
-        default_ctrl[actuator_joint_names.index("right_hip_x")]
-        + 0.55
-        * _centered_rotation(segment_bvh, ("RightHip", "RightUpLeg"), "Xrotation"),
-    )
-    assign_target(
-        "left_knee_z",
-        default_ctrl[actuator_joint_names.index("left_knee_z")]
-        - 0.75 * _positive_flexion(segment_bvh, ("LeftKnee", "LeftLeg"), "Xrotation"),
-    )
-    assign_target(
-        "right_knee_z",
-        default_ctrl[actuator_joint_names.index("right_knee_z")]
-        - 0.75 * _positive_flexion(segment_bvh, ("RightKnee", "RightLeg"), "Xrotation"),
-    )
-    assign_target(
-        "left_ankle_y",
-        default_ctrl[actuator_joint_names.index("left_ankle_y")]
-        + 0.35
-        * _centered_rotation(segment_bvh, ("LeftAnkle", "LeftFoot"), "Xrotation"),
-    )
-    assign_target(
-        "right_ankle_y",
-        default_ctrl[actuator_joint_names.index("right_ankle_y")]
-        + 0.35
-        * _centered_rotation(segment_bvh, ("RightAnkle", "RightFoot"), "Xrotation"),
-    )
+    def assign_centered(
+        joint_name: str,
+        source_joints: tuple[str, ...],
+        channel_name: str,
+        scale: float,
+        sign: float = 1.0,
+    ) -> None:
+        if joint_name not in actuator_joint_names:
+            return
+        try:
+            values = _centered_rotation(segment_bvh, source_joints, channel_name)
+        except ValueError:
+            return
+        index = actuator_joint_names.index(joint_name)
+        assign_target(joint_name, default_ctrl[index] + sign * scale * values)
+
+    def assign_flexion(
+        joint_name: str,
+        source_joints: tuple[str, ...],
+        channel_name: str,
+        scale: float,
+        sign: float,
+    ) -> None:
+        if joint_name not in actuator_joint_names:
+            return
+        try:
+            values = _positive_flexion(segment_bvh, source_joints, channel_name)
+        except ValueError:
+            return
+        index = actuator_joint_names.index(joint_name)
+        assign_target(joint_name, default_ctrl[index] + sign * scale * values)
+
+    # REF: MIMICKIT-MOTION-LIBRARY
+    # TYPE: ENGINEERING_DEFAULT
+    # MimicKit motions are already in the simulated character DOF space. Our
+    # CMU BVH source is not, so this is a conservative deterministic bridge:
+    # map the main BVH Euler channels into every locomotion actuator instead of
+    # the previous 6-DOF proxy. The scales are intentionally below joint limits
+    # because the policy still learns residual control on top of these targets.
+    assign_centered("abdomen_x", ("lowerback", "Chest"), "Xrotation", 0.18)
+    assign_centered("abdomen_y", ("lowerback", "Chest"), "Yrotation", 0.14)
+    assign_centered("abdomen_z", ("lowerback", "Chest"), "Zrotation", 0.14)
+    assign_centered("pelvis_x", ("Hips", "lowerback"), "Xrotation", 0.10)
+    assign_centered("pelvis_y", ("Hips", "lowerback"), "Yrotation", 0.08)
+    assign_centered("pelvis_z", ("Hips", "lowerback"), "Zrotation", 0.08)
+
+    assign_centered("left_hip_x", ("LeftHip", "LeftUpLeg"), "Xrotation", 0.55)
+    assign_centered("right_hip_x", ("RightHip", "RightUpLeg"), "Xrotation", 0.55)
+    assign_centered("left_hip_y", ("LeftHip", "LeftUpLeg"), "Yrotation", 0.30)
+    assign_centered("right_hip_y", ("RightHip", "RightUpLeg"), "Yrotation", 0.30)
+    assign_centered("left_hip_z", ("LeftHip", "LeftUpLeg"), "Zrotation", 0.30)
+    assign_centered("right_hip_z", ("RightHip", "RightUpLeg"), "Zrotation", 0.30)
+    assign_flexion("left_knee_z", ("LeftKnee", "LeftLeg"), "Xrotation", 0.75, -1.0)
+    assign_flexion("right_knee_z", ("RightKnee", "RightLeg"), "Xrotation", 0.75, -1.0)
+    assign_centered("left_ankle_y", ("LeftAnkle", "LeftFoot"), "Xrotation", 0.35)
+    assign_centered("right_ankle_y", ("RightAnkle", "RightFoot"), "Xrotation", 0.35)
+    assign_centered("left_ankle_z", ("LeftAnkle", "LeftFoot"), "Zrotation", 0.20)
+    assign_centered("right_ankle_z", ("RightAnkle", "RightFoot"), "Zrotation", 0.20)
 
     root_pos, root_quat = _root_motion_targets(
         segment_bvh,

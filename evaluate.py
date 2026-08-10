@@ -705,6 +705,28 @@ def main():
         "legacy_action_prior",
         None,
     )
+    deepmimic_reward_mode = str(
+        run_env_value(run_config, "deepmimic_reward_mode", "pure")
+    )
+    deepmimic_key_bodies = run_env_value(
+        run_config,
+        "deepmimic_key_bodies",
+        None,
+    )
+    if deepmimic_key_bodies is None:
+        deepmimic_key_bodies = (
+            ("head", "right_hand", "left_hand", "right_foot", "left_foot")
+            if checkpoint_observation_size is not None
+            else ("right_foot", "left_foot")
+        )
+    if isinstance(deepmimic_key_bodies, str):
+        deepmimic_key_bodies = tuple(
+            body.strip()
+            for body in deepmimic_key_bodies.split(",")
+            if body.strip()
+        )
+    else:
+        deepmimic_key_bodies = tuple(str(body) for body in deepmimic_key_bodies)
     if args.legacy_action_prior is not None:
         legacy_action_prior = args.legacy_action_prior
     elif saved_legacy_action_prior is not None:
@@ -726,6 +748,8 @@ def main():
         f"reference_gait={reference_gait} | "
         f"reference_gait_file={reference_gait_file} | "
         f"reference_target_observation={reference_target_observation} | "
+        f"deepmimic_reward_mode={deepmimic_reward_mode} | "
+        f"deepmimic_key_bodies={deepmimic_key_bodies} | "
         f"checkpoint_obs={checkpoint_observation_size} | "
         f"checkpoint_actions={checkpoint_action_size} | "
         f"dict_observation={policy_observation_dict} | "
@@ -746,6 +770,8 @@ def main():
         reference_gait=reference_gait,
         reference_gait_file=reference_gait_file,
         reference_target_observation=reference_target_observation,
+        deepmimic_reward_mode=deepmimic_reward_mode,
+        deepmimic_key_bodies=deepmimic_key_bodies,
         policy_observation_size=checkpoint_observation_size,
         policy_observation_dict=policy_observation_dict,
         xml_path=xml_path,
@@ -829,6 +855,8 @@ def make_environment(env_config: EnvConfig):
         "command_profile": env_config.command_profile,
         "reference_gait": env_config.reference_gait,
         "reference_target_observation": env_config.reference_target_observation,
+        "deepmimic_reward_mode": env_config.deepmimic_reward_mode,
+        "deepmimic_key_bodies": env_config.deepmimic_key_bodies,
         "policy_observation_size": env_config.policy_observation_size,
         "policy_observation_dict": env_config.policy_observation_dict,
         "action_smoothing": env_config.action_smoothing,

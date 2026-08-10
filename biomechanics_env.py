@@ -290,9 +290,13 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             0.2 if joint_name in TRUNK_ACTUATED_JOINTS else 1.0
             for joint_name in actuator_joint_names
         ])
-        self._reference_gait_mask = jp.array([
-            joint_name
-            in {
+        if self._config.get("reference_gait", "none") == "bvh":
+            # DeepMimic/MimicKit references cover the whole controlled DOF set.
+            # For our BVH bridge this is also safer: unmasked joints still get
+            # explicit default/retarget targets instead of silently drifting.
+            reference_gait_names = set(actuator_joint_names)
+        else:
+            reference_gait_names = {
                 "left_hip_x",
                 "right_hip_x",
                 "left_knee_z",
@@ -300,6 +304,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 "left_ankle_y",
                 "right_ankle_y",
             }
+        self._reference_gait_mask = jp.array([
+            joint_name in reference_gait_names
             for joint_name in actuator_joint_names
         ])
         self._reference_gait_sin_offsets = jp.array([
@@ -1249,6 +1255,10 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         target_key_pos = self._bvh_reference_key_pos_targets[clip_id, frame_index]
         heading_world_to_local = self._heading_world_to_local(data)
         root_delta = (target_root_pos - data.qpos[:3]) @ heading_world_to_local.T
+        root_quat_delta = self._quat_mul(
+            self._quat_conjugate(data.qpos[3:7]),
+            target_root_quat,
+        )
         key_rel = (target_key_pos - target_root_pos) @ heading_world_to_local.T
         current_qpos = data.qpos[self._actuator_qpos_indices]
         current_qvel = data.qvel[self._actuator_dof_indices]
@@ -1260,7 +1270,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 0.0,
             ),
             root_delta,
-            target_root_quat,
+            root_quat_delta,
             key_rel.reshape(-1),
         ])
 
@@ -1374,6 +1384,27 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             self.REFERENCE_GAIT_REWARD_SCALE
             * self._get_reference_gait_reward(data, info)
         )
+        if (
+            bvh_mode
+            and self._config.get("deepmimic_reward_mode", "pure") == "pure"
+        ):
+            # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
+            # TYPE: REFERENCE_CODE_DERIVED
+            # Pure DeepMimic pretraining should not fight joystick progress,
+            # overspeed, old posture priors, or a large per-fall reward. The
+            # done flag still terminates the episode; terminal reward becomes 0.
+            reward = self.REWARD_MAX * self._get_bvh_deepmimic_reward(
+                data,
+                info,
+            )["total"]
+            reward = jp.clip(reward, 0.0, self.REWARD_MAX)
+            reward = jp.nan_to_num(
+                reward,
+                nan=0.0,
+                posinf=self.REWARD_MAX,
+                neginf=0.0,
+            )
+            return jp.where(self._get_done(data), jp.array(0.0), reward)
         reference_velocity_reward = (
             self.REFERENCE_VELOCITY_REWARD_SCALE
             * self._get_reference_velocity_reward(data, info)
@@ -1604,7 +1635,6 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         """DeepMimic-like imitation reward with a local temporal best-match."""
         # REF: PROJECT-BVH-MULTIFRAME-BESTMATCH
         # TYPE: ENGINEERING_DEFAULT
-        command_active = self._command_active(info)
         clip_id, center_frame = self._get_bvh_reference_frame(info)
         frame_count = self._bvh_reference_frame_counts[clip_id]
         window = int(self._config.get("bvh_multiclip_window", 30))
@@ -1621,10 +1651,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         totals = rewards["total"]
         best_index = jp.argmax(totals)
         best = jax.tree_util.tree_map(lambda value: value[best_index], rewards)
-        return {
-            key: jp.where(command_active, value, jp.array(0.0))
-            for key, value in best.items()
-        }
+        return best
 
     def _get_bvh_deepmimic_frame_reward(
         self,
@@ -1707,17 +1734,50 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         angle = 2.0 * jp.arccos(jp.clip(dot, -1.0 + 1e-6, 1.0 - 1e-6))
         return jp.square(angle)
 
+    def _quat_conjugate(self, quat: jax.Array) -> jax.Array:
+        """Quaternion conjugate in MuJoCo wxyz order."""
+        return jp.array([quat[0], -quat[1], -quat[2], -quat[3]])
+
+    def _quat_mul(self, left: jax.Array, right: jax.Array) -> jax.Array:
+        """Quaternion multiply in MuJoCo wxyz order."""
+        w1, x1, y1, z1 = left
+        w2, x2, y2, z2 = right
+        quat = jp.array([
+            w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+            w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+            w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+        ])
+        return quat / jp.maximum(jp.linalg.norm(quat), 1e-6)
+
     def _resolve_deepmimic_key_body_ids(self) -> np.ndarray:
-        """Return MimicKit key bodies that exist in this MuJoCo model."""
+        """Return configured key bodies that exist in this MuJoCo model."""
         # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
         # TYPE: REFERENCE_CODE_DERIVED
-        key_body_names = ("head", "right_hand", "left_hand", "right_foot", "left_foot")
+        configured = self._config.get(
+            "deepmimic_key_bodies",
+            ("right_foot", "left_foot"),
+        )
+        if isinstance(configured, str):
+            key_body_names = tuple(
+                body.strip()
+                for body in configured.split(",")
+                if body.strip()
+            )
+        else:
+            key_body_names = tuple(str(body) for body in configured)
         body_ids: list[int] = []
         for body_name in key_body_names:
             try:
                 body_ids.append(self._mj_model.body(body_name).id)
             except KeyError:
                 continue
+        if not body_ids:
+            for body_name in ("right_foot", "left_foot"):
+                try:
+                    body_ids.append(self._mj_model.body(body_name).id)
+                except KeyError:
+                    continue
         if not body_ids:
             body_ids = [self._head_body_id]
         return np.asarray(body_ids, dtype=np.int32)

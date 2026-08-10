@@ -1053,6 +1053,8 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         "command_profile": env_config.command_profile,
         "reference_gait": env_config.reference_gait,
         "reference_target_observation": env_config.reference_target_observation,
+        "deepmimic_reward_mode": env_config.deepmimic_reward_mode,
+        "deepmimic_key_bodies": env_config.deepmimic_key_bodies,
         "action_smoothing": env_config.action_smoothing,
         "legacy_action_prior": env_config.legacy_action_prior,
     }
@@ -1067,6 +1069,69 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
     return BiomechanicsJoystickEnv(
         env_version=env_config.env_version,
         config_overrides=config_overrides,
+    )
+
+
+def run_reference_playback_audit(
+    env_config: EnvConfig,
+    resets: int,
+    steps: int,
+    seed: int,
+) -> None:
+    """Play zero residual actions against the BVH reference without PPO."""
+    patch_jax_for_brax_compatibility()
+    if env_config.physics_backend == "mjx_warp":
+        env_config.playground_impl = "warp"
+        env_config.warp_num_worlds = 1
+        capacity_plan = resolve_warp_capacities(
+            env_config.warp_num_worlds,
+            env_config.warp_naconmax,
+            env_config.warp_njmax,
+        )
+        env_config.warp_naconmax = capacity_plan.naconmax
+        env_config.warp_njmax = capacity_plan.njmax
+
+    with logged_stage("reference_playback/make_environment"):
+        env = make_environment(env_config, enable_erfi=False)
+
+    total_resets = max(int(resets), 1)
+    max_steps = max(int(steps), 1)
+    valid = 0
+    failed = 0
+    low = 0
+    tipped = 0
+    invalid = 0
+    first_failure_steps: list[int] = []
+    zero_action = jnp.zeros(env.action_size)
+
+    for reset_index in range(total_resets):
+        rng = jax.random.PRNGKey(seed + reset_index)
+        state = env.reset(rng)
+        survived = True
+        for step_index in range(max_steps):
+            state = env.step(state, zero_action)
+            done = bool(jax.device_get(state.done))
+            if done:
+                failed += 1
+                survived = False
+                first_failure_steps.append(step_index + 1)
+                low += int(float(jax.device_get(state.metrics["done_low_height"])) > 0.5)
+                tipped += int(float(jax.device_get(state.metrics["done_tipped"])) > 0.5)
+                invalid += int(float(jax.device_get(state.metrics["done_invalid"])) > 0.5)
+                break
+        if survived:
+            valid += 1
+
+    avg_failure_step = (
+        sum(first_failure_steps) / len(first_failure_steps)
+        if first_failure_steps
+        else None
+    )
+    print(
+        "reference_playback_audit | "
+        f"valid={valid} | failed={failed} | resets={total_resets} | "
+        f"steps={max_steps} | low={low} | tipped={tipped} | invalid={invalid} | "
+        f"avg_failure_step={avg_failure_step}"
     )
 
 
@@ -1138,6 +1203,23 @@ def main() -> None:
         help=(
             "Text fajl sa jednim BVH path-om po liniji. Moze se navesti "
             "vise puta za tier1+tier2 curriculum run."
+        ),
+    )
+    parser.add_argument(
+        "--deepmimic-reward-mode",
+        choices=["pure", "mixed"],
+        default="pure",
+        help=(
+            "pure koristi MimicKit/DeepMimic imitation-only reward; mixed "
+            "vraca joystick task shaping preko imitacije."
+        ),
+    )
+    parser.add_argument(
+        "--deepmimic-key-bodies",
+        default="right_foot,left_foot",
+        help=(
+            "Comma-separated key bodies for key-position imitation. Default "
+            "je feet-only dok BVH retarget ne kontrolise ruke/glavu."
         ),
     )
     parser.add_argument(
@@ -1247,6 +1329,23 @@ def main() -> None:
         action="store_true",
         help="Use sim_dt=0.01 instead of the default accurate 0.005 setup.",
     )
+    parser.add_argument(
+        "--reference-playback-audit",
+        action="store_true",
+        help="Do not train; test BVH reference playback with zero residual action.",
+    )
+    parser.add_argument(
+        "--reference-playback-resets",
+        type=int,
+        default=8,
+        help="Number of resets for --reference-playback-audit.",
+    )
+    parser.add_argument(
+        "--reference-playback-steps",
+        type=int,
+        default=500,
+        help="Max steps per reset for --reference-playback-audit.",
+    )
     parser.add_argument("--out", type=Path, default=RUNS_DIR)
     args = parser.parse_args()
 
@@ -1269,6 +1368,12 @@ def main() -> None:
         reference_gait=args.reference_gait,
         reference_gait_file=reference_gait_file,
         reference_target_observation=args.reference_gait == "bvh",
+        deepmimic_reward_mode=args.deepmimic_reward_mode,
+        deepmimic_key_bodies=tuple(
+            body.strip()
+            for body in args.deepmimic_key_bodies.split(",")
+            if body.strip()
+        ),
         xml_path=str(args.xml_path) if args.xml_path is not None else None,
         legacy_action_prior=args.legacy_action_prior,
         action_smoothing=args.action_smoothing,
@@ -1277,6 +1382,15 @@ def main() -> None:
         ),
         accurate_physics=not args.fast_physics,
     )
+    if args.reference_playback_audit:
+        run_reference_playback_audit(
+            env_config,
+            resets=args.reference_playback_resets,
+            steps=args.reference_playback_steps,
+            seed=args.seed,
+        )
+        return
+
     debug_defaults = debug_run_defaults(args.debug_run)
     train_config = TrainConfig(
         seed=args.seed,

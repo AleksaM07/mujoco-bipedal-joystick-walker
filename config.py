@@ -582,6 +582,14 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # TYPE: ENGINEERING_DEFAULT
         tracking_sigma=0.25,
         tracking_yaw_sigma=0.35,
+        # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
+        # TYPE: REFERENCE_CODE_DERIVED
+        # Phase-1 starts as pure imitation. Joystick task terms can be mixed in
+        # later, after the reference controller can survive the motion.
+        deepmimic_reward_mode="pure",
+        # Our BVH bridge does not yet retarget arms/head, so the default key
+        # bodies are feet only. This keeps key-position reward physically honest.
+        deepmimic_key_bodies=("right_foot", "left_foot"),
         # REF: PROJECT-BVH-MULTIFRAME-BESTMATCH
         # TYPE: ENGINEERING_DEFAULT
         bvh_multiclip_window=30,
@@ -714,6 +722,8 @@ class EnvConfig:
     )
     reference_target_observation: bool = True
     bvh_target_observation_steps: tuple[int, ...] = (0, 1, 2, 3)
+    deepmimic_reward_mode: str = "pure"
+    deepmimic_key_bodies: tuple[str, ...] = ("right_foot", "left_foot")
 
     # Evaluator postavlja ovu vrednost iz checkpoint metadata-e. Env zatim
     # automatski rekonstruiše stari/novi policy observation layout.
