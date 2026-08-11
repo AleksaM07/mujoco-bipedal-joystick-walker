@@ -588,13 +588,20 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # later, after the reference controller can survive the motion.
         deepmimic_reward_mode="pure",
         # Our BVH bridge does not yet retarget arms/head, so the default key
-        # bodies are feet only. This keeps key-position reward physically honest.
-        deepmimic_key_bodies=("right_foot", "left_foot"),
-        # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
-        # TYPE: REFERENCE_CODE_DERIVED
-        pose_termination=True,
+        # markers stay on the feet. Use metatarsal sites instead of foot body
+        # origins because they are a better locomotion endpoint for this XML.
+        deepmimic_key_bodies=("metatarsal_midpoint_right", "metatarsal_midpoint_left"),
+        # REF: PROJECT-POSE-TERMINATION-STAGED
+        # TYPE: ENGINEERING_DEFAULT
+        # Keep pose termination opt-in for now. Our current BVH bridge still
+        # under-constrains root/key-body spatial fidelity, so an always-on
+        # MimicKit-style pose kill-switch ends otherwise informative runs too
+        # early. Re-enable once retargeted wrap playback is spatially stable.
+        pose_termination=False,
         pose_termination_dist=1.0,
         bvh_target_observation_steps=(0, 1, 2, 3),
+        reset_sample_attempts=8,
+        reset_projection_levels=(1.0, 0.7, 0.45, 0.25),
         action_noise_std=0.03,
         episode_bias_std=0.02,
         rfi_torque_limit=2.0,
@@ -605,9 +612,9 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # TYPE: REFERENCE_CODE_DERIVED
         impl="warp",
         physics_backend="mjx_warp",
-        # REF: PROJECT-DEFAULT-WARP-10240
+        # REF: PROJECT-DEFAULT-WARP-4096
         # TYPE: EXPERIMENTALLY_SELECTED
-        warp_num_worlds=10240,
+        warp_num_worlds=4096,
         warp_naconmax=None,
         warp_njmax=None,
         warp_graph_mode="warp",
@@ -628,9 +635,9 @@ def default_biomechanics_ppo_config() -> config_dict.ConfigDict:
     return config_dict.create(
         num_timesteps=50_000_000,
         num_evals=10,
-        # REF: PROJECT-DEFAULT-WARP-10240
+        # REF: PROJECT-DEFAULT-WARP-4096
         # TYPE: EXPERIMENTALLY_SELECTED
-        num_envs=10240,
+        num_envs=4096,
         num_eval_envs=32,
         episode_length=500,
         action_repeat=1,
@@ -642,16 +649,16 @@ def default_biomechanics_ppo_config() -> config_dict.ConfigDict:
         # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
         # TYPE: REFERENCE_CODE_DERIVED
         discounting=0.99,
-        # REF: PROJECT-DEFAULT-WARP-10240
+        # REF: PROJECT-DEFAULT-WARP-4096
         # TYPE: EXPERIMENTALLY_SELECTED
         unroll_length=5,
-        # REF: PROJECT-DEFAULT-WARP-10240
+        # REF: PROJECT-DEFAULT-WARP-4096
         # TYPE: EXPERIMENTALLY_SELECTED
-        batch_size=10240,
-        # REF: PROJECT-DEFAULT-WARP-10240
+        batch_size=4096,
+        # REF: PROJECT-DEFAULT-WARP-4096
         # TYPE: EXPERIMENTALLY_SELECTED
         num_minibatches=1,
-        # REF: PROJECT-DEFAULT-WARP-10240
+        # REF: PROJECT-DEFAULT-WARP-4096
         # TYPE: EXPERIMENTALLY_SELECTED
         num_updates_per_batch=1,
         normalize_observations=True,
@@ -704,7 +711,7 @@ class EnvConfig:
     playground_impl: str = "warp"
 
     physics_backend: str = "mjx_warp"
-    warp_num_worlds: int = 10240
+    warp_num_worlds: int = 4096
     warp_naconmax: int | None = None
     warp_njmax: int | None = None
     warp_graph_mode: str = "warp"
@@ -724,9 +731,14 @@ class EnvConfig:
     reference_target_observation: bool = True
     bvh_target_observation_steps: tuple[int, ...] = (0, 1, 2, 3)
     deepmimic_reward_mode: str = "pure"
-    deepmimic_key_bodies: tuple[str, ...] = ("right_foot", "left_foot")
-    pose_termination: bool = True
+    deepmimic_key_bodies: tuple[str, ...] = (
+        "metatarsal_midpoint_right",
+        "metatarsal_midpoint_left",
+    )
+    pose_termination: bool = False
     pose_termination_dist: float = 1.0
+    reset_sample_attempts: int = 8
+    reset_projection_levels: tuple[float, ...] = (1.0, 0.7, 0.45, 0.25)
 
     # Evaluator postavlja ovu vrednost iz checkpoint metadata-e. Env zatim
     # automatski rekonstruiše stari/novi policy observation layout.

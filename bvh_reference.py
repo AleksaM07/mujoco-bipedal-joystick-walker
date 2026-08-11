@@ -156,20 +156,21 @@ class BvhMotionLibrary:
         for source_path in expand_motion_paths(paths):
             bvh = _parse_bvh(source_path)
             segments = _motion_segments_for_bvh(source_path, bvh)
-            for segment in segments:
-                clips.append(
-                    _retarget_segment(
-                        source_path=source_path,
-                        bvh=bvh,
-                        segment=segment,
-                        actuator_joint_names=actuator_joint_names,
-                        default_ctrl=default_ctrl,
-                        lower_limits=lower_limits,
-                        upper_limits=upper_limits,
-                        initial_root_pos=initial_root_pos,
-                        initial_root_quat=initial_root_quat,
-                    )
+            candidate_clips = [
+                _retarget_segment(
+                    source_path=source_path,
+                    bvh=bvh,
+                    segment=segment,
+                    actuator_joint_names=actuator_joint_names,
+                    default_ctrl=default_ctrl,
+                    lower_limits=lower_limits,
+                    upper_limits=upper_limits,
+                    initial_root_pos=initial_root_pos,
+                    initial_root_quat=initial_root_quat,
                 )
+                for segment in segments
+            ]
+            clips.extend(_select_motion_clips_for_bvh(candidate_clips))
         return cls(tuple(clips))
 
     def to_reference_batch(self) -> BvhReferenceBatch:
@@ -442,11 +443,24 @@ def _quat_angular_velocities(quats: np.ndarray, frame_time: float) -> np.ndarray
     if quats.shape[0] < 2:
         return np.zeros((quats.shape[0], 3), dtype=np.float32)
     velocities = np.zeros((quats.shape[0], 3), dtype=np.float32)
-    for index in range(quats.shape[0] - 1):
-        delta = _quat_mul(_quat_conjugate(quats[index]), quats[index + 1])
-        velocities[index] = _quat_to_expmap(delta) / max(frame_time, 1e-6)
-    velocities[-1] = velocities[-2]
+    dt = max(frame_time, 1e-6)
+    velocities[0] = _quat_pair_angular_velocity(quats[0], quats[1], dt)
+    for index in range(1, quats.shape[0] - 1):
+        prev_velocity = _quat_pair_angular_velocity(quats[index - 1], quats[index], dt)
+        next_velocity = _quat_pair_angular_velocity(quats[index], quats[index + 1], dt)
+        velocities[index] = 0.5 * (prev_velocity + next_velocity)
+    velocities[-1] = _quat_pair_angular_velocity(quats[-2], quats[-1], dt)
     return velocities
+
+
+def _quat_pair_angular_velocity(
+    quat0: np.ndarray,
+    quat1: np.ndarray,
+    frame_time: float,
+) -> np.ndarray:
+    """Angular velocity from one quaternion interval in MuJoCo wxyz order."""
+    delta = _quat_mul(_quat_conjugate(quat0), quat1)
+    return _quat_to_expmap(delta) / max(frame_time, 1e-6)
 
 
 def _motion_wrap_delta(root_pos: np.ndarray) -> np.ndarray:
@@ -499,6 +513,81 @@ def _resolve_loop_mode(
         and root_rot_err < 0.35
     )
     return LoopMode.WRAP if seam_ok else LoopMode.CLAMP
+
+
+def _select_motion_clips_for_bvh(
+    candidate_clips: list[MotionClip],
+    max_wrap: int = 4,
+    max_clamp: int = 2,
+) -> tuple[MotionClip, ...]:
+    """Rank per-source candidate clips in a more MimicKit-like locomotion spirit."""
+    if not candidate_clips:
+        return ()
+
+    wrap_clips = [clip for clip in candidate_clips if clip.loop_mode == LoopMode.WRAP]
+    clamp_clips = [clip for clip in candidate_clips if clip.loop_mode == LoopMode.CLAMP]
+
+    if wrap_clips:
+        ranked_wrap = sorted(
+            wrap_clips,
+            key=_motion_clip_rank_key,
+            reverse=True,
+        )
+        return tuple(ranked_wrap[:max_wrap])
+
+    ranked_clamp = sorted(
+        clamp_clips,
+        key=_motion_clip_rank_key,
+        reverse=True,
+    )
+    return tuple(ranked_clamp[:max_clamp])
+
+
+def _motion_clip_rank_key(clip: MotionClip) -> tuple[float, float, float, float]:
+    """Prefer forward-moving, smooth, sufficiently long clips."""
+    duration = max((clip.frame_count - 1) * clip.frame_time, clip.frame_time)
+    horizontal_delta = clip.root_pos_targets[-1, :2] - clip.root_pos_targets[0, :2]
+    travel_distance = float(np.linalg.norm(horizontal_delta))
+    mean_speed = travel_distance / max(duration, 1e-6)
+    seam_score = -_loop_seam_error(clip)
+    height_stability = -float(
+        np.max(np.abs(clip.root_pos_targets[:, 2] - clip.root_pos_targets[0, 2]))
+    )
+    return (
+        seam_score,
+        mean_speed,
+        float(duration),
+        height_stability,
+    )
+
+
+def _loop_seam_error(clip: MotionClip) -> float:
+    """Aggregate seam mismatch into one score for ranking candidates."""
+    pose_err = float(np.sqrt(np.mean(np.square(clip.qpos_targets[-1] - clip.qpos_targets[0]))))
+    vel_err = float(np.sqrt(np.mean(np.square(clip.qvel_targets[-1] - clip.qvel_targets[0]))))
+    root_vel_err = float(np.linalg.norm(clip.root_vel_targets[-1] - clip.root_vel_targets[0]))
+    root_angvel_err = float(
+        np.linalg.norm(clip.root_angvel_targets[-1] - clip.root_angvel_targets[0])
+    )
+    root_height_err = float(abs(clip.root_pos_targets[-1, 2] - clip.root_pos_targets[0, 2]))
+    root_rot_err = float(
+        np.linalg.norm(
+            _quat_to_expmap(
+                _quat_mul(
+                    _quat_conjugate(clip.root_quat_targets[0]),
+                    clip.root_quat_targets[-1],
+                )
+            )
+        )
+    )
+    return (
+        pose_err
+        + 0.5 * vel_err
+        + 0.5 * root_vel_err
+        + 0.25 * root_angvel_err
+        + 2.0 * root_height_err
+        + root_rot_err
+    )
 
 
 def _joint_hinge_angles(
@@ -714,15 +803,112 @@ def _parse_bvh(path: Path) -> ParsedBvh:
 
 
 def _motion_segments_for_bvh(path: Path, bvh: ParsedBvh) -> tuple[MotionSegment, ...]:
+    """Build a MimicKit-style candidate library instead of trusting one cut source.
+
+    Marina's CSV step boundaries are useful hints, but a locomotion motion
+    library needs multiple candidate windows per source clip: full-stride
+    cycles, longer same-foot cycles, and occasionally a broad fallback window.
+    """
+    candidates: list[MotionSegment] = []
     csv_segments = _read_step_segments(path.parent / "steps.csv", bvh.frames)
-    if csv_segments:
-        return csv_segments
-    # REF: MARINA-BVH-STEP-SEGMENTATION
-    # TYPE: PROJECT_COLLABORATOR_DERIVED
     detected = _detect_step_segments(bvh)
+
+    if csv_segments:
+        candidates.extend(csv_segments)
+        candidates.extend(_promote_stride_cycles(csv_segments, bvh.frames))
+        candidates.extend(_long_cycle_segments(csv_segments, bvh.frames))
+
     if detected:
-        return detected
+        candidates.extend(detected)
+        candidates.extend(_promote_stride_cycles(detected, bvh.frames))
+        candidates.extend(_long_cycle_segments(detected, bvh.frames))
+
+    # MimicKit-style fallback: keep a broad locomotion window too, so clip
+    # ranking can still salvage useful motion when event segmentation is weak.
+    full_clip = _valid_segment(0, bvh.frames, bvh.frames, "")
+    if full_clip is not None:
+        candidates.append(full_clip)
+
+    deduped = _dedupe_segments(candidates)
+    if deduped:
+        return deduped
     return (MotionSegment(0, bvh.frames, ""),)
+
+
+def _promote_stride_cycles(
+    segments: tuple[MotionSegment, ...],
+    frame_count: int,
+) -> tuple[MotionSegment, ...]:
+    """Prefer full gait cycles over half-steps when segmentation allows it.
+
+    MimicKit-style locomotion looping works much better on full stride cycles
+    (same-foot strike to next same-foot strike) than on individual half-steps.
+    """
+    if len(segments) < 3:
+        return ()
+    cycles: list[MotionSegment] = []
+    for index in range(len(segments) - 2):
+        first = segments[index]
+        third = segments[index + 2]
+        if (
+            first.support_foot
+            and third.support_foot
+            and first.support_foot == third.support_foot
+        ):
+            cycle = _valid_segment(
+                first.start_frame,
+                third.end_frame,
+                frame_count,
+                first.support_foot,
+            )
+            if cycle is not None:
+                cycles.append(cycle)
+    return tuple(cycles)
+
+
+def _long_cycle_segments(
+    segments: tuple[MotionSegment, ...],
+    frame_count: int,
+) -> tuple[MotionSegment, ...]:
+    """Build longer same-foot locomotion cycles when available.
+
+    These are often more loopable than single-stride cycles because seam pose
+    and root velocity line up better over a more complete gait phrase.
+    """
+    if len(segments) < 5:
+        return ()
+    cycles: list[MotionSegment] = []
+    for index in range(len(segments) - 4):
+        first = segments[index]
+        fifth = segments[index + 4]
+        if (
+            first.support_foot
+            and fifth.support_foot
+            and first.support_foot == fifth.support_foot
+        ):
+            cycle = _valid_segment(
+                first.start_frame,
+                fifth.end_frame,
+                frame_count,
+                first.support_foot,
+            )
+            if cycle is not None:
+                cycles.append(cycle)
+    return tuple(cycles)
+
+
+def _dedupe_segments(segments: list[MotionSegment]) -> tuple[MotionSegment, ...]:
+    """Keep unique frame windows only."""
+    unique: dict[tuple[int, int, str], MotionSegment] = {}
+    for segment in segments:
+        key = (segment.start_frame, segment.end_frame, segment.support_foot)
+        unique[key] = segment
+    return tuple(
+        sorted(
+            unique.values(),
+            key=lambda segment: (segment.start_frame, segment.end_frame, segment.support_foot),
+        )
+    )
 
 
 def _read_step_segments(path: Path, frame_count: int) -> tuple[MotionSegment, ...]:
@@ -867,17 +1053,53 @@ def _root_motion_targets(
         axis=0,
     )
     raw_root_quat = _continuous_quat_sequence(raw_root_quat)
+    # Keep only heading on the free root. In CMU BVH, root pitch/roll often
+    # encode upper-body lean that this MuJoCo model already expresses through
+    # pelvis/abdomen joints. Copying full root tilt into the free joint makes
+    # reset states fail immediately even when joint targets are otherwise good.
+    raw_root_heading_quat = _continuous_quat_sequence(
+        np.stack([_yaw_only_quat(quat) for quat in raw_root_quat], axis=0)
+    )
 
     initial_root_quat = _normalize_quat(initial_root_quat)
-    alignment_quat = _quat_mul(initial_root_quat, _quat_conjugate(raw_root_quat[0]))
+    alignment_quat = _heading_alignment_quat(
+        initial_root_quat,
+        raw_root_heading_quat[0],
+    )
     alignment_rot = _quat_to_matrix(alignment_quat)
     root_pos = root_pos_local @ alignment_rot.T
     root_pos += initial_root_pos[None, :]
     root_quat = np.stack(
-        [_quat_mul(alignment_quat, quat) for quat in raw_root_quat],
+        [_quat_mul(alignment_quat, quat) for quat in raw_root_heading_quat],
         axis=0,
     )
     return root_pos.astype(np.float32), root_quat.astype(np.float32)
+
+
+def _heading_alignment_quat(
+    target_root_quat: np.ndarray,
+    source_root_quat: np.ndarray,
+) -> np.ndarray:
+    """Align only the heading/yaw component of the source root orientation."""
+    target_heading = _yaw_only_quat(target_root_quat)
+    source_heading = _yaw_only_quat(source_root_quat)
+    return _quat_mul(target_heading, _quat_conjugate(source_heading))
+
+
+def _yaw_only_quat(quat: np.ndarray) -> np.ndarray:
+    """Quaternion containing only the projected heading of the given pose."""
+    rotation = _quat_to_matrix(_normalize_quat(quat))
+    forward = np.array([rotation[0, 0], rotation[1, 0], 0.0], dtype=np.float32)
+    forward_norm = float(np.linalg.norm(forward))
+    if not np.isfinite(forward_norm) or forward_norm < 1e-8:
+        return np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
+    forward /= forward_norm
+    yaw = float(np.arctan2(forward[1], forward[0]))
+    half_yaw = 0.5 * yaw
+    return np.array(
+        [np.cos(half_yaw), 0.0, 0.0, np.sin(half_yaw)],
+        dtype=np.float32,
+    )
 
 
 def _bvh_positions_to_mujoco(positions: np.ndarray) -> np.ndarray:

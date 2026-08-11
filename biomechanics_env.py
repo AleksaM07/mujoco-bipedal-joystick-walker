@@ -191,6 +191,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
     # Mirrors MimicKit deepmimic_humanoid_env.yaml pose_termination_dist.
     POSE_TERMINATION_DIST = 1.0
     RESET_SAMPLE_ATTEMPTS = 8
+    RESET_PROJECTION_LEVELS = (1.0, 0.7, 0.45, 0.25)
     CONTACT_FORCE_COST_SCALE = 1e-4
     CONTACT_FORCE_COST_CLIP = 1000.0
     STUCK_COMMAND_THRESHOLD = 0.10
@@ -291,6 +292,14 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             else self.INIT_LEG_NOISE
             for joint_name in actuator_joint_names
         ])
+        self._reset_pose_projection_weights = jp.array([
+            self._reset_pose_projection_weight(joint_name)
+            for joint_name in actuator_joint_names
+        ])
+        self._reset_velocity_projection_weights = jp.array([
+            self._reset_velocity_projection_weight(joint_name)
+            for joint_name in actuator_joint_names
+        ])
         self._torque_injection_scale = jp.array([
             0.2 if joint_name in TRUNK_ACTUATED_JOINTS else 1.0
             for joint_name in actuator_joint_names
@@ -354,6 +363,10 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self._n_substeps = int(round(self._ctrl_dt / self._sim_dt))
         self._torso_body_id = self._mj_model.body("thorax").id
         self._head_body_id = self._mj_model.body("head").id
+        try:
+            self._reference_anchor_body_id = self._mj_model.body("pelvis").id
+        except KeyError:
+            self._reference_anchor_body_id = self._torso_body_id
         self._floor_geom_id = self._mj_model.geom("floor").id
         self._left_foot_sole_geom_id = self._mj_model.geom("left_foot_sole").id
         self._right_foot_sole_geom_id = self._mj_model.geom("right_foot_sole").id
@@ -364,11 +377,24 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self._foot_geom_ids = jp.array(self._foot_geom_ids_np)
         self._deepmimic_body_ids_np = np.arange(1, self._mj_model.nbody)
         self._deepmimic_body_ids = jp.array(self._deepmimic_body_ids_np)
+        anchor_local_indices = np.where(
+            self._deepmimic_body_ids_np == self._reference_anchor_body_id
+        )[0]
+        self._reference_anchor_body_local_index = int(
+            anchor_local_indices[0] if anchor_local_indices.size else 0
+        )
         body_mass = np.asarray(self._mj_model.body_mass)[self._deepmimic_body_ids_np]
         self._deepmimic_body_weights_np = body_mass / max(float(body_mass.sum()), 1e-6)
         self._deepmimic_body_weights = jp.array(self._deepmimic_body_weights_np)
-        self._deepmimic_key_body_ids_np = self._resolve_deepmimic_key_body_ids()
+        (
+            self._deepmimic_key_body_ids_np,
+            self._deepmimic_key_site_ids_np,
+            self._deepmimic_key_is_site_np,
+        ) = self._resolve_deepmimic_key_marker_ids()
         self._deepmimic_key_body_ids = jp.array(self._deepmimic_key_body_ids_np)
+        self._deepmimic_key_site_ids = jp.array(self._deepmimic_key_site_ids_np)
+        self._deepmimic_key_is_site = jp.array(self._deepmimic_key_is_site_np)
+        self._deepmimic_key_count = len(self._deepmimic_key_is_site_np)
         self._bvh_target_observation_steps = tuple(
             int(step)
             for step in self._config.get(
@@ -480,6 +506,34 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         return float(self._config.action_scale)
 
     @classmethod
+    def _reset_pose_projection_weight(cls, joint_name: str) -> float:
+        """How much of the retargeted joint offset to preserve at reset time."""
+        if joint_name in TRUNK_ACTUATED_JOINTS:
+            return 0.0
+        if joint_name in {"left_hip_x", "right_hip_x", "left_knee_z", "right_knee_z"}:
+            return 1.0
+        if joint_name in {"left_ankle_y", "right_ankle_y"}:
+            return 0.9
+        if joint_name in {"left_hip_z", "right_hip_z"}:
+            return 0.25
+        if joint_name in {"left_ankle_z", "right_ankle_z"}:
+            return 0.15
+        if joint_name in {"left_hip_y", "right_hip_y"}:
+            return 0.10
+        return 0.0
+
+    @classmethod
+    def _reset_velocity_projection_weight(cls, joint_name: str) -> float:
+        """How much retargeted joint velocity to preserve at reset time."""
+        if joint_name in TRUNK_ACTUATED_JOINTS:
+            return 0.0
+        if joint_name in {"left_hip_x", "right_hip_x", "left_knee_z", "right_knee_z"}:
+            return 0.15
+        if joint_name in {"left_ankle_y", "right_ankle_y"}:
+            return 0.10
+        return 0.0
+
+    @classmethod
     def _variable_posture_std_pair(cls, joint_name: str) -> tuple[float, float]:
         """Vrati standing/walking toleranciju za promenljivi posture prior."""
         if joint_name in TRUNK_ACTUATED_JOINTS:
@@ -528,6 +582,18 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self._bvh_reference_loop_modes = jp.array(references.loop_modes)
         self._bvh_reference_weights = jp.array(references.weights, dtype=jp.float32)
         self._bvh_reference_clip_count = len(references.source_paths)
+        self._bvh_reference_source_paths = tuple(
+            str(path) for path in references.source_paths
+        )
+        self._bvh_reference_source_start_frames = np.asarray(
+            references.source_start_frames,
+            dtype=np.int32,
+        )
+        self._bvh_reference_source_end_frames = np.asarray(
+            references.source_end_frames,
+            dtype=np.int32,
+        )
+        self._bvh_reference_support_feet = tuple(references.support_feet)
         self._bvh_reference_root_pos_targets_np = references.root_pos_targets
         self._bvh_reference_root_quat_targets_np = references.root_quat_targets
         self._bvh_reference_root_vel_targets_np = references.root_vel_targets
@@ -553,6 +619,9 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self._standing_reference_qpos_targets = jp.array(self._bvh_reference_qpos_targets)
         self._standing_reference_qvel_targets = jp.array(self._bvh_reference_qvel_targets)
         self._standing_reference_key_pos_targets = jp.array(self._bvh_reference_key_pos_targets)
+        self._standing_reference_key_rel_local_targets = jp.array(
+            self._bvh_reference_key_rel_local_targets
+        )
         self._standing_reference_root_pos_targets = jp.array(self._bvh_reference_root_pos_targets)
         self._standing_reference_root_quat_targets = jp.array(self._bvh_reference_root_quat_targets)
         self._standing_reference_root_vel_targets = jp.array(self._bvh_reference_root_vel_targets)
@@ -604,8 +673,12 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         body_pos = np.zeros((clip_count, max_frames, body_count, 3), dtype=np.float32)
         body_quat = np.zeros((clip_count, max_frames, body_count, 4), dtype=np.float32)
         body_cvel = np.zeros((clip_count, max_frames, body_count, 6), dtype=np.float32)
-        key_body_count = len(self._deepmimic_key_body_ids_np)
+        key_body_count = self._deepmimic_key_count
         key_pos = np.zeros((clip_count, max_frames, key_body_count, 3), dtype=np.float32)
+        key_rel_local = np.zeros(
+            (clip_count, max_frames, key_body_count, 3),
+            dtype=np.float32,
+        )
         root_pos = np.zeros((clip_count, max_frames, 3), dtype=np.float32)
         root_quat = np.zeros((clip_count, max_frames, 4), dtype=np.float32)
         root_vel = np.zeros((clip_count, max_frames, 3), dtype=np.float32)
@@ -638,16 +711,34 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 body_pos[clip_id, frame_id] = data.xpos[self._deepmimic_body_ids_np]
                 body_quat[clip_id, frame_id] = data.xquat[self._deepmimic_body_ids_np]
                 body_cvel[clip_id, frame_id] = data.cvel[self._deepmimic_body_ids_np]
-                key_pos[clip_id, frame_id] = data.xpos[
-                    self._deepmimic_key_body_ids_np
-                ]
-                root_pos[clip_id, frame_id] = root_pos_targets[clip_id, frame_id]
-                root_quat[clip_id, frame_id] = root_quat_targets[clip_id, frame_id]
-                root_vel[clip_id, frame_id] = root_vel_targets[clip_id, frame_id]
-                root_angvel[clip_id, frame_id] = root_angvel_targets[
+                key_pos[clip_id, frame_id] = self._key_marker_positions_host(data)
+                anchor_pos = body_pos[
                     clip_id,
                     frame_id,
+                    self._reference_anchor_body_local_index,
                 ]
+                anchor_quat = body_quat[
+                    clip_id,
+                    frame_id,
+                    self._reference_anchor_body_local_index,
+                ]
+                anchor_cvel = body_cvel[
+                    clip_id,
+                    frame_id,
+                    self._reference_anchor_body_local_index,
+                ]
+                heading = np.asarray(
+                    self._heading_world_to_local_from_quat(
+                        jp.array(anchor_quat, dtype=jp.float32)
+                    )
+                )
+                key_rel_local[clip_id, frame_id] = (
+                    key_pos[clip_id, frame_id] - anchor_pos
+                ) @ heading.T
+                root_pos[clip_id, frame_id] = anchor_pos
+                root_quat[clip_id, frame_id] = anchor_quat
+                root_vel[clip_id, frame_id] = anchor_cvel[3:6]
+                root_angvel[clip_id, frame_id] = anchor_cvel[:3]
                 current_com = np.average(
                     data.xpos[self._deepmimic_body_ids_np],
                     axis=0,
@@ -665,6 +756,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self._bvh_reference_body_quat_targets = jp.array(body_quat)
         self._bvh_reference_body_cvel_targets = jp.array(body_cvel)
         self._bvh_reference_key_pos_targets = jp.array(key_pos)
+        self._bvh_reference_key_rel_local_targets = jp.array(key_rel_local)
         self._bvh_reference_root_pos_targets = jp.array(root_pos)
         self._bvh_reference_root_quat_targets = jp.array(root_quat)
         self._bvh_reference_root_vel_targets = jp.array(root_vel)
@@ -800,8 +892,22 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         bvh_time_offset = jp.array(0.0, dtype=jp.float32)
         sampled_valid = jp.array(False)
         rejected_count = jp.array(0.0, dtype=jp.float32)
+        rejected_low_count = jp.array(0.0, dtype=jp.float32)
+        rejected_tipped_count = jp.array(0.0, dtype=jp.float32)
+        rejected_invalid_count = jp.array(0.0, dtype=jp.float32)
 
-        for _ in range(self.RESET_SAMPLE_ATTEMPTS):
+        reset_sample_attempts = int(
+            self._config.get("reset_sample_attempts", self.RESET_SAMPLE_ATTEMPTS)
+        )
+        reset_projection_levels = tuple(
+            float(level)
+            for level in self._config.get(
+                "reset_projection_levels",
+                self.RESET_PROJECTION_LEVELS,
+            )
+        )
+
+        for _ in range(reset_sample_attempts):
             bvh_key, clip_key, sample_time_key, pose_key = jax.random.split(
                 bvh_key,
                 4,
@@ -811,51 +917,73 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 sample_time_key,
                 candidate_clip_id,
             )
-            candidate_qpos, candidate_qvel, candidate_ctrl, candidate_last_action = (
-                self._sample_initial_state_from_reference(
+            for projection_level in reset_projection_levels:
+                (
+                    candidate_qpos,
+                    candidate_qvel,
+                    candidate_ctrl,
+                    candidate_last_action,
+                ) = self._sample_initial_state_from_reference(
                     candidate_clip_id,
                     candidate_time_offset,
+                    projection_level=projection_level,
                 )
-            )
-            pose_noise = (
-                jax.random.uniform(
-                    pose_key,
-                    shape=(self.action_size,),
-                    minval=-1.0,
-                    maxval=1.0,
+                pose_noise = (
+                    jax.random.uniform(
+                        pose_key,
+                        shape=(self.action_size,),
+                        minval=-1.0,
+                        maxval=1.0,
+                    )
+                    * self._reference_reset_noise_scale(projection_level)
                 )
-                * self._init_actuator_noise
-            )
-            candidate_qpos = candidate_qpos.at[self._actuator_qpos_indices].add(
-                pose_noise
-            )
-            candidate_data = self._fresh_reset_data().replace(
-                qpos=candidate_qpos,
-                qvel=candidate_qvel,
-                ctrl=candidate_ctrl,
-            )
-            candidate_data = mjx.forward(self._mjx_model, candidate_data)
-            candidate_terminal = self._get_done(candidate_data)
-            take_candidate = (~sampled_valid) & (~candidate_terminal)
-            rejected_count = rejected_count + (
-                ((~sampled_valid) & candidate_terminal).astype(jp.float32)
-            )
-            data = select_data(
-                data,
-                take_candidate,
-                candidate_data,
-                self._physics_backend,
-            )
-            qpos = jp.where(take_candidate, candidate_qpos, qpos)
-            ctrl = jp.where(take_candidate, candidate_ctrl, ctrl)
-            last_action = jp.where(take_candidate, candidate_last_action, last_action)
-            bvh_clip_id = jp.where(take_candidate, candidate_clip_id, bvh_clip_id)
-            bvh_time_offset = jp.where(
-                take_candidate,
-                candidate_time_offset,
-                bvh_time_offset,
-            )
-            sampled_valid = sampled_valid | (~candidate_terminal)
+                candidate_qpos = candidate_qpos.at[self._actuator_qpos_indices].add(
+                    pose_noise
+                )
+                candidate_data = self._fresh_reset_data().replace(
+                    qpos=candidate_qpos,
+                    qvel=candidate_qvel,
+                    ctrl=candidate_ctrl,
+                )
+                candidate_data = mjx.forward(self._mjx_model, candidate_data)
+                (
+                    candidate_low,
+                    candidate_tipped,
+                    candidate_invalid,
+                ) = self._get_done_reasons(candidate_data)
+                candidate_terminal = self._get_done(candidate_data)
+                candidate_rejected = (~sampled_valid) & candidate_terminal
+                take_candidate = (~sampled_valid) & (~candidate_terminal)
+                rejected_count = rejected_count + candidate_rejected.astype(jp.float32)
+                rejected_low_count = rejected_low_count + (
+                    candidate_rejected & candidate_low
+                ).astype(jp.float32)
+                rejected_tipped_count = rejected_tipped_count + (
+                    candidate_rejected & candidate_tipped
+                ).astype(jp.float32)
+                rejected_invalid_count = rejected_invalid_count + (
+                    candidate_rejected & candidate_invalid
+                ).astype(jp.float32)
+                data = select_data(
+                    data,
+                    take_candidate,
+                    candidate_data,
+                    self._physics_backend,
+                )
+                qpos = jp.where(take_candidate, candidate_qpos, qpos)
+                ctrl = jp.where(take_candidate, candidate_ctrl, ctrl)
+                last_action = jp.where(
+                    take_candidate,
+                    candidate_last_action,
+                    last_action,
+                )
+                bvh_clip_id = jp.where(take_candidate, candidate_clip_id, bvh_clip_id)
+                bvh_time_offset = jp.where(
+                    take_candidate,
+                    candidate_time_offset,
+                    bvh_time_offset,
+                )
+                sampled_valid = sampled_valid | (~candidate_terminal)
 
         command = self.sample_command(command_key)
         info = {
@@ -878,6 +1006,9 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "init_motion_count": sampled_valid.astype(jp.float32),
             "init_fallback_count": (~sampled_valid).astype(jp.float32),
             "init_rejected_count": rejected_count,
+            "init_rejected_low_count": rejected_low_count,
+            "init_rejected_tipped_count": rejected_tipped_count,
+            "init_rejected_invalid_count": rejected_invalid_count,
             "warp_world_id": jp.array(0, dtype=jp.int32),
             "last_foot_xy": self._foot_xy(data),
         }
@@ -912,14 +1043,26 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "deepmimic_root_pose": jp.array(0.0),
             "deepmimic_root_velocity": jp.array(0.0),
             "deepmimic_key_position": jp.array(0.0),
+            "deepmimic_pose_error": jp.array(0.0),
+            "deepmimic_velocity_error": jp.array(0.0),
+            "deepmimic_root_xy_error": jp.array(0.0),
+            "deepmimic_root_height_error": jp.array(0.0),
+            "deepmimic_root_vel_error": jp.array(0.0),
+            "deepmimic_root_angvel_error": jp.array(0.0),
+            "deepmimic_key_pos_error": jp.array(0.0),
+            "deepmimic_max_key_dist": jp.array(0.0),
             "init_motion_count": sampled_valid.astype(jp.float32),
             "init_fallback_count": (~sampled_valid).astype(jp.float32),
             "init_rejected_count": rejected_count,
+            "init_rejected_low_count": rejected_low_count,
+            "init_rejected_tipped_count": rejected_tipped_count,
+            "init_rejected_invalid_count": rejected_invalid_count,
             "contact_force": jp.array(0.0),
             "done_low_height": jp.array(0.0),
             "done_tipped": jp.array(0.0),
             "done_invalid": jp.array(0.0),
             "done_motion_over": jp.array(0.0),
+            "done_pose_termination": jp.array(0.0),
             "done": jp.array(0.0),
             "terminated": jp.array(0.0),
             "truncated": jp.array(0.0),
@@ -992,6 +1135,9 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         done = self._get_done(data, info)
         done_low_height, done_tipped, done_invalid = self._get_done_reasons(data)
         done_motion_over = self._get_bvh_motion_over(info).astype(reward.dtype)
+        done_pose_termination = self._get_pose_termination(data, info).astype(
+            reward.dtype
+        )
         foot_slip = self._get_foot_slip_cost(data, info)
         swing_drag = self._get_swing_foot_drag_cost(data, info)
         swing_clearance = self._get_swing_clearance(data, info)
@@ -1013,6 +1159,14 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 "root_pose": jp.array(0.0),
                 "root_velocity": jp.array(0.0),
                 "key_position": jp.array(0.0),
+                "pose_error": jp.array(0.0),
+                "velocity_error": jp.array(0.0),
+                "root_xy_error": jp.array(0.0),
+                "root_height_error": jp.array(0.0),
+                "root_vel_error": jp.array(0.0),
+                "root_angvel_error": jp.array(0.0),
+                "key_pos_error": jp.array(0.0),
+                "max_key_dist": jp.array(0.0),
             }
         contact_force = self._get_contact_force_cost(data)
         metrics = dict(state.metrics)
@@ -1045,11 +1199,20 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         metrics["deepmimic_root_pose"] = deepmimic["root_pose"]
         metrics["deepmimic_root_velocity"] = deepmimic["root_velocity"]
         metrics["deepmimic_key_position"] = deepmimic["key_position"]
+        metrics["deepmimic_pose_error"] = deepmimic["pose_error"]
+        metrics["deepmimic_velocity_error"] = deepmimic["velocity_error"]
+        metrics["deepmimic_root_xy_error"] = deepmimic["root_xy_error"]
+        metrics["deepmimic_root_height_error"] = deepmimic["root_height_error"]
+        metrics["deepmimic_root_vel_error"] = deepmimic["root_vel_error"]
+        metrics["deepmimic_root_angvel_error"] = deepmimic["root_angvel_error"]
+        metrics["deepmimic_key_pos_error"] = deepmimic["key_pos_error"]
+        metrics["deepmimic_max_key_dist"] = deepmimic["max_key_dist"]
         metrics["contact_force"] = contact_force
         metrics["done_low_height"] = done_low_height.astype(reward.dtype)
         metrics["done_tipped"] = done_tipped.astype(reward.dtype)
         metrics["done_invalid"] = done_invalid.astype(reward.dtype)
         metrics["done_motion_over"] = done_motion_over
+        metrics["done_pose_termination"] = done_pose_termination
         metrics["done"] = done.astype(reward.dtype)
         info["last_foot_xy"] = self._foot_xy(data)
 
@@ -1324,13 +1487,15 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         target_root_pos = reference["root_pos"]
         target_root_quat = reference["root_quat"]
         target_key_pos = reference["key_pos"]
-        sim_heading = self._heading_world_to_local_from_quat(data.qpos[3:7])
+        sim_root_pos = self._reference_anchor_pos(data)
+        sim_root_quat = self._reference_anchor_quat(data)
+        sim_heading = self._heading_world_to_local_from_quat(sim_root_quat)
         ref_heading = self._heading_world_to_local_from_quat(target_root_quat)
-        root_delta = (target_root_pos - data.qpos[:3]) @ sim_heading.T
+        root_delta = (target_root_pos - sim_root_pos) @ sim_heading.T
         # Local-root mode: XY progress is still useful to the policy, but height
         # is the only root position term used by the DeepMimic reward.
         root_quat_delta = self._quat_mul(
-            self._quat_conjugate(self._heading_localize_quat(data.qpos[3:7])),
+            self._quat_conjugate(self._heading_localize_quat(sim_root_quat)),
             self._heading_localize_quat(target_root_quat),
         )
         key_rel = (target_key_pos - target_root_pos) @ ref_heading.T
@@ -1354,7 +1519,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             2 * self.action_size
             + 3
             + 4
-            + 3 * len(self._deepmimic_key_body_ids_np)
+            + 3 * self._deepmimic_key_count
         )
         return per_frame * len(self._bvh_target_observation_steps)
 
@@ -1589,13 +1754,12 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             return jp.array(False)
         if not bool(self._config.get("pose_termination", True)):
             return jp.array(False)
-        if self._reference_fallback_active(info):
-            return jp.array(False)
+        fallback_active = self._reference_fallback_active(info)
 
         reference = self._query_bvh_reference(info, 0)
         root_pos = data.qpos[:3]
         ref_root_pos = reference["root_pos"]
-        key_pos = data.xpos[self._deepmimic_key_body_ids]
+        key_pos = self._key_marker_positions(data)
         ref_key_pos = reference["key_pos"]
         key_rel = key_pos - root_pos
         ref_key_rel = ref_key_pos - ref_root_pos
@@ -1606,7 +1770,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 dtype=jp.float32,
             )
         )
-        return jp.max(body_pos_dist) > threshold
+        pose_termination = jp.max(body_pos_dist) > threshold
+        return jp.where(fallback_active, jp.array(False), pose_termination)
 
     def _get_bvh_motion_over(self, info: dict) -> jax.Array:
         """Terminate CLAMP clips when motion time reaches the last frame."""
@@ -1789,11 +1954,11 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         ref_root_angvel = reference["root_angvel"]
         qpos = data.qpos[self._actuator_qpos_indices]
         qvel = data.qvel[self._actuator_dof_indices]
-        key_pos = data.xpos[self._deepmimic_key_body_ids]
-        root_pos = data.qpos[:3]
-        root_quat = data.qpos[3:7]
-        root_vel = data.qvel[:3]
-        root_angvel = data.qvel[3:6]
+        key_pos = self._key_marker_positions(data)
+        root_pos = self._reference_anchor_pos(data)
+        root_quat = self._reference_anchor_quat(data)
+        root_vel = self._reference_anchor_linvel(data)
+        root_angvel = self._reference_anchor_angvel(data)
 
         pose_error = jp.mean(jp.square(qpos - ref_qpos))
         velocity_error = jp.mean(jp.square(qvel - ref_qvel))
@@ -1802,10 +1967,16 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         ref_heading = self._heading_world_to_local_from_quat(ref_root_quat)
         key_rel = (key_pos - root_pos) @ sim_heading.T
         ref_key_rel = (ref_key_pos - ref_root_pos) @ ref_heading.T
-        key_position_error = jp.sum(jp.square(key_rel - ref_key_rel))
+        key_delta = key_rel - ref_key_rel
+        key_position_error = jp.sum(jp.square(key_delta))
+        key_distances = jp.linalg.norm(key_delta, axis=-1)
+        key_pos_error = jp.mean(key_distances)
+        max_key_dist = jp.max(key_distances)
 
         # Local-root mode: ignore absolute XY. Height still matters.
         root_pos_diff = root_pos - ref_root_pos
+        root_xy_error = jp.linalg.norm(root_pos_diff[:2])
+        root_height_error = jp.abs(root_pos_diff[2])
         root_pos_diff = root_pos_diff.at[:2].set(0.0)
         root_pos_error = jp.sum(jp.square(root_pos_diff))
 
@@ -1817,10 +1988,12 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         local_ref_root_vel = ref_heading @ ref_root_vel
         local_root_angvel = sim_heading @ root_angvel
         local_ref_root_angvel = ref_heading @ ref_root_angvel
-        root_vel_error = jp.sum(jp.square(local_root_vel - local_ref_root_vel))
-        root_angvel_error = jp.sum(
-            jp.square(local_root_angvel - local_ref_root_angvel)
-        )
+        root_vel_delta = local_root_vel - local_ref_root_vel
+        root_angvel_delta = local_root_angvel - local_ref_root_angvel
+        root_vel_error = jp.sum(jp.square(root_vel_delta))
+        root_angvel_error = jp.sum(jp.square(root_angvel_delta))
+        root_vel_error_norm = jp.linalg.norm(root_vel_delta)
+        root_angvel_error_norm = jp.linalg.norm(root_angvel_delta)
         root_pose_error = root_pos_error + 0.1 * root_rot_error
         root_velocity_error = root_vel_error + 0.1 * root_angvel_error
 
@@ -1853,7 +2026,31 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "root_pose": root_pose_reward,
             "root_velocity": root_velocity_reward,
             "key_position": key_position_reward,
+            "pose_error": pose_error,
+            "velocity_error": velocity_error,
+            "root_xy_error": root_xy_error,
+            "root_height_error": root_height_error,
+            "root_vel_error": root_vel_error_norm,
+            "root_angvel_error": root_angvel_error_norm,
+            "key_pos_error": key_pos_error,
+            "max_key_dist": max_key_dist,
         }
+
+    def _reference_anchor_pos(self, data: mjx.Data) -> jax.Array:
+        """World position of the locomotion anchor body used for imitation."""
+        return data.xpos[self._reference_anchor_body_id]
+
+    def _reference_anchor_linvel(self, data: mjx.Data) -> jax.Array:
+        """World linear velocity of the locomotion anchor body."""
+        return data.cvel[self._reference_anchor_body_id, 3:6]
+
+    def _reference_anchor_angvel(self, data: mjx.Data) -> jax.Array:
+        """World angular velocity of the locomotion anchor body."""
+        return data.cvel[self._reference_anchor_body_id, :3]
+
+    def _reference_anchor_quat(self, data: mjx.Data) -> jax.Array:
+        """World quaternion of the locomotion anchor body from its xmat."""
+        return self._xmat_to_quat(data.xmat[self._reference_anchor_body_id])
 
     def _quat_distance(self, quat_a: jax.Array, quat_b: jax.Array) -> jax.Array:
         """Quaternion orientation distance, invariant to q and -q."""
@@ -1901,13 +2098,29 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         spherical = spherical / jp.maximum(jp.linalg.norm(spherical), 1e-6)
         return jp.where(dot > 0.9995, linear, spherical)
 
-    def _resolve_deepmimic_key_body_ids(self) -> np.ndarray:
-        """Return configured key bodies that exist in this MuJoCo model."""
+    def _xmat_to_quat(self, xmat: jax.Array) -> jax.Array:
+        """Convert MuJoCo 3x3/9-body matrix into a normalized wxyz quaternion."""
+        matrix = xmat.reshape((3, 3))
+        trace = matrix[0, 0] + matrix[1, 1] + matrix[2, 2]
+        r = jp.sqrt(jp.maximum(1.0 + trace, 1e-6))
+        w = 0.5 * r
+        denom = 0.5 / jp.maximum(r, 1e-6)
+        x = (matrix[2, 1] - matrix[1, 2]) * denom
+        y = (matrix[0, 2] - matrix[2, 0]) * denom
+        z = (matrix[1, 0] - matrix[0, 1]) * denom
+        quat = jp.array([w, x, y, z], dtype=matrix.dtype)
+        quat = quat / jp.maximum(jp.linalg.norm(quat), 1e-6)
+        return jp.where(quat[0] < 0.0, -quat, quat)
+
+    def _resolve_deepmimic_key_marker_ids(
+        self,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Resolve key markers as body or site ids, preferring locomotion sites."""
         # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
         # TYPE: REFERENCE_CODE_DERIVED
         configured = self._config.get(
             "deepmimic_key_bodies",
-            ("right_foot", "left_foot"),
+            ("metatarsal_midpoint_right", "metatarsal_midpoint_left"),
         )
         if isinstance(configured, str):
             key_body_names = tuple(
@@ -1918,20 +2131,74 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         else:
             key_body_names = tuple(str(body) for body in configured)
         body_ids: list[int] = []
+        site_ids: list[int] = []
+        is_site: list[bool] = []
         for body_name in key_body_names:
             try:
+                site_ids.append(self._mj_model.site(body_name).id)
+                body_ids.append(0)
+                is_site.append(True)
+                continue
+            except KeyError:
+                pass
+            try:
                 body_ids.append(self._mj_model.body(body_name).id)
+                site_ids.append(0)
+                is_site.append(False)
             except KeyError:
                 continue
-        if not body_ids:
-            for body_name in ("right_foot", "left_foot"):
+        if not body_ids and not site_ids:
+            for body_name in (
+                "metatarsal_midpoint_right",
+                "metatarsal_midpoint_left",
+                "right_foot",
+                "left_foot",
+            ):
+                try:
+                    site_ids.append(self._mj_model.site(body_name).id)
+                    body_ids.append(0)
+                    is_site.append(True)
+                    continue
+                except KeyError:
+                    pass
                 try:
                     body_ids.append(self._mj_model.body(body_name).id)
+                    site_ids.append(0)
+                    is_site.append(False)
                 except KeyError:
                     continue
-        if not body_ids:
+        if not body_ids and not site_ids:
             body_ids = [self._head_body_id]
-        return np.asarray(body_ids, dtype=np.int32)
+            site_ids = [0]
+            is_site = [False]
+        return (
+            np.asarray(body_ids, dtype=np.int32),
+            np.asarray(site_ids, dtype=np.int32),
+            np.asarray(is_site, dtype=bool),
+        )
+
+    def _key_marker_positions_host(self, data: mujoco.MjData) -> np.ndarray:
+        """Return configured key marker positions from host MuJoCo data."""
+        body_positions = np.asarray(data.xpos[self._deepmimic_key_body_ids_np], dtype=np.float32)
+        site_positions = np.asarray(
+            data.site_xpos[self._deepmimic_key_site_ids_np],
+            dtype=np.float32,
+        )
+        return np.where(
+            self._deepmimic_key_is_site_np[:, None],
+            site_positions,
+            body_positions,
+        )
+
+    def _key_marker_positions(self, data: mjx.Data) -> jax.Array:
+        """Return configured key marker positions from MJX data."""
+        body_positions = data.xpos[self._deepmimic_key_body_ids]
+        site_positions = data.site_xpos[self._deepmimic_key_site_ids]
+        return jp.where(
+            self._deepmimic_key_is_site[:, None],
+            site_positions,
+            body_positions,
+        )
 
     def _center_of_mass(self, data: mjx.Data) -> jax.Array:
         """Mass-weighted body center in world coordinates."""
@@ -2060,18 +2327,22 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         root_quat1 = self._bvh_reference_root_quat_targets[clip_id, frame_index1]
         root_vel0 = self._bvh_reference_root_vel_targets[clip_id, frame_index0]
         root_vel1 = self._bvh_reference_root_vel_targets[clip_id, frame_index1]
-        root_angvel0 = self._bvh_reference_root_angvel_targets[clip_id, frame_index0]
-        root_angvel1 = self._bvh_reference_root_angvel_targets[clip_id, frame_index1]
-        key_pos0 = self._bvh_reference_key_pos_targets[clip_id, frame_index0]
-        key_pos1 = self._bvh_reference_key_pos_targets[clip_id, frame_index1]
+        key_rel0 = self._bvh_reference_key_rel_local_targets[clip_id, frame_index0]
+        key_rel1 = self._bvh_reference_key_rel_local_targets[clip_id, frame_index1]
 
         qpos = qpos0 + alpha * (qpos1 - qpos0)
         qvel = qvel0 + alpha * (qvel1 - qvel0)
         root_pos = root_pos0 + alpha * (root_pos1 - root_pos0) + root_offset
         root_quat = self._quat_slerp(root_quat0, root_quat1, alpha)
         root_vel = root_vel0 + alpha * (root_vel1 - root_vel0)
-        root_angvel = root_angvel0 + alpha * (root_angvel1 - root_angvel0)
-        key_pos = key_pos0 + alpha * (key_pos1 - key_pos0) + root_offset[None, :]
+        root_angvel = self._quat_interval_angular_velocity(
+            root_quat0,
+            root_quat1,
+            self._bvh_reference_frame_times[clip_id],
+        )
+        ref_heading = self._heading_world_to_local_from_quat(root_quat)
+        key_rel = key_rel0 + alpha * (key_rel1 - key_rel0)
+        key_pos = root_pos + key_rel @ ref_heading
         return {
             "clip_id": clip_id,
             "frame_index0": frame_index0,
@@ -2118,10 +2389,35 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             for key in queried
         }
 
+    def _quat_interval_angular_velocity(
+        self,
+        quat0: jax.Array,
+        quat1: jax.Array,
+        dt: jax.Array,
+    ) -> jax.Array:
+        """Angular velocity implied by one quaternion interval."""
+        delta = self._quat_mul(self._quat_conjugate(quat0), quat1)
+        return self._quat_to_rotvec(delta) / jp.maximum(dt, 1e-6)
+
+    def _quat_to_rotvec(self, quat: jax.Array) -> jax.Array:
+        """Quaternion logarithm map in MuJoCo wxyz order."""
+        quat = quat / jp.maximum(jp.linalg.norm(quat), 1e-6)
+        quat = jp.where(quat[0] < 0.0, -quat, quat)
+        xyz = quat[1:]
+        xyz_norm = jp.linalg.norm(xyz)
+        angle = 2.0 * jp.arctan2(xyz_norm, jp.maximum(quat[0], 1e-6))
+        axis = xyz / jp.maximum(xyz_norm, 1e-6)
+        return jp.where(
+            xyz_norm > 1e-6,
+            axis * angle,
+            jp.zeros(3, dtype=quat.dtype),
+        )
+
     def _sample_initial_state_from_reference(
         self,
         clip_id: jax.Array,
         motion_time: jax.Array,
+        projection_level: float = 1.0,
     ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
         """DeepMimic-style reset into one coherent reference frame."""
         if self._config.get("reference_gait", "none") != "bvh":
@@ -2132,14 +2428,133 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         reference = self._query_bvh_reference_clip(clip_id, motion_time)
         target_qpos = reference["qpos"]
         target_qvel = reference["qvel"]
-        qpos = self._init_q.at[:3].set(reference["root_pos"])
-        qpos = qpos.at[3:7].set(reference["root_quat"])
-        qpos = qpos.at[self._actuator_qpos_indices].set(target_qpos)
+        projected_ctrl = self._project_reference_reset_ctrl(
+            target_qpos,
+            projection_level,
+        )
+        qpos = self._init_q
+        qpos = qpos.at[3:7].set(
+            self._project_reference_reset_root_quat(
+                reference["root_quat"],
+                projection_level,
+            )
+        )
+        qpos = qpos.at[self._actuator_qpos_indices].set(projected_ctrl)
         qvel = jp.zeros(self._mjx_model.nv)
-        qvel = qvel.at[:3].set(reference["root_vel"])
-        qvel = qvel.at[3:6].set(reference["root_angvel"])
-        qvel = qvel.at[self._actuator_dof_indices].set(target_qvel)
-        return qpos, qvel, target_qpos, jp.zeros(self.action_size)
+        qvel = qvel.at[:3].set(
+            self._project_reference_reset_root_vel(
+                reference["root_vel"],
+                projection_level,
+            )
+        )
+        qvel = qvel.at[3:6].set(
+            self._project_reference_reset_root_angvel(
+                reference["root_angvel"],
+                projection_level,
+            )
+        )
+        qvel = qvel.at[self._actuator_dof_indices].set(
+            self._project_reference_reset_qvel(
+                target_qvel,
+                projection_level,
+            )
+        )
+        qpos = self._align_sampled_reference_reset_height(qpos, qvel, projected_ctrl)
+        return qpos, qvel, projected_ctrl, jp.zeros(self.action_size)
+
+    def _project_reference_reset_ctrl(
+        self,
+        target_qpos: jax.Array,
+        projection_level: float,
+    ) -> jax.Array:
+        """Blend retargeted actuator pose toward stable neutral locomotion pose."""
+        level = jp.array(projection_level, dtype=target_qpos.dtype)
+        weights = jp.clip(self._reset_pose_projection_weights * level, 0.0, 1.0)
+        projected = self._default_ctrl + weights * (target_qpos - self._default_ctrl)
+        return jp.clip(
+            projected,
+            self._actuator_qpos_lower_limits,
+            self._actuator_qpos_upper_limits,
+        )
+
+    def _project_reference_reset_qvel(
+        self,
+        target_qvel: jax.Array,
+        projection_level: float,
+    ) -> jax.Array:
+        """Attenuate retargeted joint velocities for a physically valid reset."""
+        level = jp.array(projection_level, dtype=target_qvel.dtype)
+        return self._reset_velocity_projection_weights * level * target_qvel
+
+    def _project_reference_reset_root_vel(
+        self,
+        root_vel: jax.Array,
+        projection_level: float,
+    ) -> jax.Array:
+        """Keep only a reduced horizontal COM drift at reset time."""
+        del projection_level
+        del root_vel
+        return jp.zeros(3, dtype=jp.float32)
+
+    def _project_reference_reset_root_quat(
+        self,
+        root_quat: jax.Array,
+        projection_level: float,
+    ) -> jax.Array:
+        """Use the known-valid standing root orientation for sampled resets."""
+        del root_quat
+        del projection_level
+        return self._init_q[3:7]
+
+    def _project_reference_reset_root_angvel(
+        self,
+        root_angvel: jax.Array,
+        projection_level: float,
+    ) -> jax.Array:
+        """Reset with yaw-only angular velocity; suppress pitch/roll spin."""
+        del projection_level
+        del root_angvel
+        return jp.zeros(3, dtype=jp.float32)
+
+    def _reference_reset_noise_scale(self, projection_level: float) -> jax.Array:
+        """Reference resets should stay close to the sampled frame, unlike fallback init."""
+        if self._config.get("reference_gait", "none") != "bvh":
+            return self._init_actuator_noise
+        del projection_level
+        return jp.zeros_like(self._init_actuator_noise)
+
+    def _align_sampled_reference_reset_height(
+        self,
+        qpos: jax.Array,
+        qvel: jax.Array,
+        ctrl: jax.Array,
+    ) -> jax.Array:
+        """Shift sampled reference resets so the lowest foot starts near the floor.
+
+        The BVH/root retarget can still be spatially coherent while carrying a
+        global vertical offset that does not match this MuJoCo humanoid. For
+        reset validation we want the sampled frame to start in contact-ready
+        stance instead of being rejected purely for root-height mismatch.
+        """
+        data = self._fresh_reset_data().replace(
+            qpos=qpos,
+            qvel=qvel,
+            ctrl=ctrl,
+        )
+        data = mjx.forward(self._mjx_model, data)
+        foot_heights = self._foot_heights(data)
+        desired_lowest_height = jp.array(
+            self.FOOT_CONTACT_HEIGHT,
+            dtype=qpos.dtype,
+        )
+        lowest_foot_height = jp.min(foot_heights)
+        z_offset = desired_lowest_height - lowest_foot_height
+        qpos = qpos.at[2].add(z_offset)
+        minimum_reset_height = (
+            self.MIN_STANDING_HEIGHT_RATIO * self._standing_height()
+            + jp.array(0.05, dtype=qpos.dtype)
+        )
+        return qpos.at[2].set(jp.maximum(qpos[2], minimum_reset_height))
 
     def _get_variable_posture_reward(
         self,
