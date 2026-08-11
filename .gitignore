@@ -50,6 +50,7 @@ Thumbs.db
 # .temp
 .temp/*
 .tmp_*/
+temp_/
 recovery/
 
 # Miscellaneous

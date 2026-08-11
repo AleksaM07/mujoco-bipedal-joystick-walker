@@ -20,19 +20,19 @@ from config import (
     resolve_project_path,
 )
 
-
 # REF: MIMICKIT-MOTION-LIBRARY
 # TYPE: REFERENCE_CODE_DERIVED
 """BVH-to-motion-reference helpers.
 
-The runtime path now follows the small, practical part of MimicKit's motion
-library design: load many motion clips, keep per-clip fps/loop/frame counts,
-derive velocities, and expose one padded static tensor batch for JAX/MJX.
+The runtime path follows MimicKit's motion-library shape: load many clips, keep
+per-clip fps/loop/frame counts, derive velocities, and expose one padded static
+tensor batch for JAX/MJX.
 
-Deprecated behavior: older project code treated each BVH file as one monolithic
-actuator-space target and used that directly in imitation rewards.  The actuator
-targets are now only the retargeting bridge.  The env turns them into
-DeepMimic-style body orientation, velocity, end-effector, root, and COM targets.
+Absolute joint targets are built in DeepMimic/MimicKit spirit: each frame is an
+absolute character-DOF pose. CMU BVH is converted to MuJoCo-frame hinge angles,
+then mapped by role onto this humanoid's actuators (sagittal flexion → hip_z /
+knee_z). Marina's step segmentation supplies clip boundaries; it is not a
+skeleton retargeter.
 """
 
 
@@ -304,98 +304,98 @@ def _retarget_segment(
         targets[:, index] = np.clip(values, lower_limits[index], upper_limits[index])
 
     # REF: MIMICKIT-MOTION-LIBRARY
-    # TYPE: ENGINEERING_DEFAULT
-    # MimicKit consumes motions in character-local joint rotation space.
-    # We do not have a full offline retargeter yet, but we can still stay in
-    # that spirit: convert each BVH joint's local rotation into the MuJoCo
-    # character frame, measure the delta from the clip's first frame, and use
-    # those local rotation deltas as actuator targets. This is far more
-    # coherent than reading a few raw Euler channels and centering them by
-    # clip mean/percentile.
-    pelvis_delta = _joint_local_rotation_delta(
+    # TYPE: REFERENCE_CODE_DERIVED
+    # MimicKit/DeepMimic motions store absolute character DOFs, not deltas from
+    # frame 0. Until GMR is wired, build absolute hinge angles from BVH local
+    # rotations (MuJoCo frame), then map by ROLE onto this XML's actuators.
+    #
+    # Empirically, after Y-up→Z-up conversion, CMU walking flexion lives on
+    # MuJoCo hinge-Y for both XYZ and ZYX BVH channel orders. This biomechanics
+    # humanoid puts sagittal flexion on *_z hinges (hip_z, knee_z), so we map
+    # flexion→hip_z/knee_z rather than world-axis-i → joint_*i.
+    pelvis = _joint_hinge_angles(segment_bvh, ("Hips",), allow_missing=True)
+    lowerback = _joint_hinge_angles(
         segment_bvh,
-        ("Hips",),
+        ("lowerback", "Spine", "Spine1"),
         allow_missing=True,
     )
-    lowerback_delta = _joint_local_rotation_delta(
+    chest = _joint_hinge_angles(
         segment_bvh,
-        ("lowerback",),
+        ("Chest", "Spine1", "Spine2"),
         allow_missing=True,
     )
-    chest_delta = _joint_local_rotation_delta(
-        segment_bvh,
-        ("Chest",),
-        allow_missing=True,
-    )
-    abdomen_delta = 0.7 * lowerback_delta + 0.3 * chest_delta
-    if not np.any(abdomen_delta):
-        abdomen_delta = 0.5 * pelvis_delta
+    abdomen = 0.7 * lowerback + 0.3 * chest
+    if not np.any(abdomen):
+        abdomen = 0.5 * pelvis
 
-    left_hip_delta = _joint_local_rotation_delta(
+    left_hip = _joint_hinge_angles(
         segment_bvh,
         ("LeftUpLeg", "LeftHip"),
         allow_missing=True,
     )
-    right_hip_delta = _joint_local_rotation_delta(
+    right_hip = _joint_hinge_angles(
         segment_bvh,
         ("RightUpLeg", "RightHip"),
         allow_missing=True,
     )
-    left_knee_delta = _joint_local_rotation_delta(
+    left_knee = _joint_hinge_angles(
         segment_bvh,
         ("LeftLeg", "LeftKnee"),
         allow_missing=True,
     )
-    right_knee_delta = _joint_local_rotation_delta(
+    right_knee = _joint_hinge_angles(
         segment_bvh,
         ("RightLeg", "RightKnee"),
         allow_missing=True,
     )
-    left_ankle_delta = _joint_local_rotation_delta(
+    left_ankle = _joint_hinge_angles(
         segment_bvh,
         ("LeftFoot", "LeftAnkle"),
         allow_missing=True,
     )
-    right_ankle_delta = _joint_local_rotation_delta(
+    right_ankle = _joint_hinge_angles(
         segment_bvh,
         ("RightFoot", "RightAnkle"),
         allow_missing=True,
     )
 
-    def assign_expmap_axis(
-        joint_name: str,
-        rotation_delta: np.ndarray,
-        axis: int,
-        scale: float,
-        sign: float = 1.0,
-    ) -> None:
+    # Absolute DOF series in this character's actuator semantics.
+    # Indices of hinge_angles: 0=X, 1=Y(flexion), 2=Z.
+    absolute = {
+        "abdomen_x": abdomen[:, 0],
+        "abdomen_y": abdomen[:, 1],
+        "abdomen_z": abdomen[:, 2],
+        "pelvis_x": pelvis[:, 0],
+        "pelvis_y": pelvis[:, 1],
+        "pelvis_z": pelvis[:, 2],
+        "left_hip_x": left_hip[:, 0],
+        "left_hip_y": left_hip[:, 2],
+        "left_hip_z": left_hip[:, 1],
+        "right_hip_x": right_hip[:, 0],
+        "right_hip_y": right_hip[:, 2],
+        "right_hip_z": right_hip[:, 1],
+        # BVH knee flexion is >=0 when bent; this XML knee_z is <=0 when bent.
+        "left_knee_z": -left_knee[:, 1],
+        "right_knee_z": -right_knee[:, 1],
+        "left_ankle_y": left_ankle[:, 1],
+        "right_ankle_y": right_ankle[:, 1],
+        "left_ankle_z": left_ankle[:, 2],
+        "right_ankle_z": right_ankle[:, 2],
+    }
+
+    # Bind-pose offset only: pick a standing-like frame (Marina foot-speed idea)
+    # so absolute walking amplitudes stay, but rest pose matches default_ctrl.
+    bind_frame = _standing_like_frame_index(
+        segment_bvh,
+        left_knee_flex=left_knee[:, 1],
+        right_knee_flex=right_knee[:, 1],
+    )
+    for joint_name, values in absolute.items():
         if joint_name not in actuator_joint_names:
-            return
+            continue
         index = actuator_joint_names.index(joint_name)
-        assign_target(
-            joint_name,
-            default_ctrl[index] + sign * scale * rotation_delta[:, axis],
-        )
-
-    assign_expmap_axis("abdomen_x", abdomen_delta, 0, 0.85)
-    assign_expmap_axis("abdomen_y", abdomen_delta, 1, 0.75)
-    assign_expmap_axis("abdomen_z", abdomen_delta, 2, 0.75)
-    assign_expmap_axis("pelvis_x", pelvis_delta, 0, 0.60)
-    assign_expmap_axis("pelvis_y", pelvis_delta, 1, 0.55)
-    assign_expmap_axis("pelvis_z", pelvis_delta, 2, 0.55)
-
-    assign_expmap_axis("left_hip_x", left_hip_delta, 0, 1.00)
-    assign_expmap_axis("right_hip_x", right_hip_delta, 0, 1.00)
-    assign_expmap_axis("left_hip_y", left_hip_delta, 1, 0.85)
-    assign_expmap_axis("right_hip_y", right_hip_delta, 1, 0.85)
-    assign_expmap_axis("left_hip_z", left_hip_delta, 2, 0.85)
-    assign_expmap_axis("right_hip_z", right_hip_delta, 2, 0.85)
-    assign_expmap_axis("left_knee_z", left_knee_delta, 0, 1.10, sign=-1.0)
-    assign_expmap_axis("right_knee_z", right_knee_delta, 0, 1.10, sign=-1.0)
-    assign_expmap_axis("left_ankle_y", left_ankle_delta, 0, 0.90)
-    assign_expmap_axis("right_ankle_y", right_ankle_delta, 0, 0.90)
-    assign_expmap_axis("left_ankle_z", left_ankle_delta, 2, 0.60)
-    assign_expmap_axis("right_ankle_z", right_ankle_delta, 2, 0.60)
+        bind_offset = float(default_ctrl[index] - values[bind_frame])
+        assign_target(joint_name, values + bind_offset)
 
     root_pos, root_quat = _root_motion_targets(
         segment_bvh,
@@ -501,38 +501,107 @@ def _resolve_loop_mode(
     return LoopMode.WRAP if seam_ok else LoopMode.CLAMP
 
 
-def _joint_local_rotation_delta(
+def _joint_hinge_angles(
     bvh: ParsedBvh,
     joint_names: tuple[str, ...],
     allow_missing: bool = False,
 ) -> np.ndarray:
-    """Return MuJoCo-frame local joint rotation deltas as exp-map vectors."""
+    """Absolute MuJoCo-frame hinge angles (X,Y,Z) for one BVH joint.
+
+    This mirrors MimicKit/DeepMimic absolute DOF series more closely than
+    frame-0 relative exp-maps: each frame is an absolute local rotation,
+    converted into the MuJoCo frame, then projected onto cardinal hinge axes.
+    """
+    rotations = _joint_mujoco_rotations(bvh, joint_names, allow_missing=allow_missing)
+    angles = np.zeros((bvh.frames, 3), dtype=np.float32)
+    axes = np.eye(3, dtype=np.float32)
+    for frame_index, rotation in enumerate(rotations):
+        for axis_index, axis in enumerate(axes):
+            angles[frame_index, axis_index] = _hinge_angle_from_matrix(rotation, axis)
+    return _unwrap_angle_series(angles)
+
+
+def _joint_mujoco_rotations(
+    bvh: ParsedBvh,
+    joint_names: tuple[str, ...],
+    allow_missing: bool = False,
+) -> np.ndarray:
+    """Local joint rotations in the MuJoCo frame, shape (frames, 3, 3)."""
     joint_name = _first_existing_joint(bvh, joint_names)
     if joint_name is None:
         if allow_missing:
-            return np.zeros((bvh.frames, 3), dtype=np.float32)
+            return np.repeat(np.eye(3, dtype=np.float32)[None, :, :], bvh.frames, axis=0)
         joined = ", ".join(joint_names)
         raise ValueError(f"BVH nema nijedan trazeni joint: {joined}.")
 
     joint = bvh.joints[joint_name]
-    local_quats = np.zeros((bvh.frames, 4), dtype=np.float32)
+    rotations = np.zeros((bvh.frames, 3, 3), dtype=np.float32)
     for frame_index in range(bvh.frames):
         rotation = np.eye(3, dtype=np.float32)
         channel_values = bvh.motion[frame_index, list(joint.channel_indices)]
         for channel, value in zip(joint.channels, channel_values, strict=True):
             if channel.endswith("rotation"):
                 rotation = rotation @ _axis_rotation(channel[0], float(value))
-        local_quats[frame_index] = _matrix_to_quat(_bvh_rotation_to_mujoco(rotation))
+        rotations[frame_index] = _bvh_rotation_to_mujoco(rotation)
+    return rotations
 
-    local_quats = _continuous_quat_sequence(local_quats)
-    baseline_inv = _quat_conjugate(local_quats[0])
-    return np.stack(
+
+def _hinge_angle_from_matrix(rotation: np.ndarray, axis: np.ndarray) -> float:
+    """Extract signed rotation about a known hinge axis from a rotation matrix.
+
+    Same geometric idea MimicKit uses when converting joint rotations to hinge
+    DOFs: recover θ from R ≈ Rot(axis, θ).
+    """
+    axis = np.asarray(axis, dtype=np.float64)
+    axis_norm = float(np.linalg.norm(axis))
+    if axis_norm < 1e-8:
+        return 0.0
+    axis = axis / axis_norm
+    skew = 0.5 * np.array(
         [
-            _quat_to_expmap(_quat_mul(baseline_inv, local_quat))
-            for local_quat in local_quats
+            rotation[2, 1] - rotation[1, 2],
+            rotation[0, 2] - rotation[2, 0],
+            rotation[1, 0] - rotation[0, 1],
         ],
-        axis=0,
-    ).astype(np.float32)
+        dtype=np.float64,
+    )
+    sin_theta = float(np.dot(axis, skew))
+    cos_theta = 0.5 * (float(np.trace(rotation)) - 1.0)
+    return float(np.arctan2(sin_theta, cos_theta))
+
+
+def _unwrap_angle_series(angles: np.ndarray) -> np.ndarray:
+    """Remove 2π jumps so absolute hinge series stay continuous over a clip."""
+    unwrapped = np.unwrap(angles, axis=0)
+    return unwrapped.astype(np.float32)
+
+
+def _standing_like_frame_index(
+    bvh: ParsedBvh,
+    left_knee_flex: np.ndarray,
+    right_knee_flex: np.ndarray,
+) -> int:
+    """Pick a bind/rest frame using Marina-style low foot speed when possible.
+
+    REF: MARINA-BVH-STEP-SEGMENTATION
+    TYPE: PROJECT_COLLABORATOR_DERIVED
+    """
+    left_name = _first_existing_joint(bvh, ("LeftFoot", "LeftAnkle"))
+    right_name = _first_existing_joint(bvh, ("RightFoot", "RightAnkle"))
+    if left_name is not None and right_name is not None and bvh.frames >= 3:
+        positions = _global_joint_positions(bvh)
+        left_speed = _foot_speed(positions[left_name], bvh.frame_time)
+        right_speed = _foot_speed(positions[right_name], bvh.frame_time)
+        both_slow = left_speed + right_speed
+        # Prefer double-support-ish frames with relatively straight knees.
+        knee_bend = np.abs(left_knee_flex) + np.abs(right_knee_flex)
+        score = both_slow + 0.25 * knee_bend
+        return int(np.argmin(score))
+
+    knee_bend = np.abs(left_knee_flex) + np.abs(right_knee_flex)
+    if np.any(np.isfinite(knee_bend)):
+        return int(np.argmin(knee_bend))
+    return 0
 
 
 def _parse_bvh(path: Path) -> ParsedBvh:

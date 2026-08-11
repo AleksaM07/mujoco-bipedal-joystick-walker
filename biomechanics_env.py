@@ -186,6 +186,10 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
     DEEPMIMIC_ROOT_POSE_SCALE = 5.0
     DEEPMIMIC_ROOT_VELOCITY_SCALE = 1.0
     DEEPMIMIC_KEY_POSITION_SCALE = 10.0
+    # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
+    # TYPE: REFERENCE_CODE_DERIVED
+    # Mirrors MimicKit deepmimic_humanoid_env.yaml pose_termination_dist.
+    POSE_TERMINATION_DIST = 1.0
     RESET_SAMPLE_ATTEMPTS = 8
     CONTACT_FORCE_COST_SCALE = 1e-4
     CONTACT_FORCE_COST_CLIP = 1000.0
@@ -1559,6 +1563,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         done = too_low | tipped_over | invalid
         if info is not None:
             done = done | self._get_bvh_motion_over(info)
+            done = done | self._get_pose_termination(data, info)
         return done
 
     def _get_done_reasons(
@@ -1574,6 +1579,34 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         tipped_over = self._torso_up(data) < 0.25
         invalid = jp.isnan(data.qpos).any() | jp.isnan(data.qvel).any()
         return too_low, tipped_over, invalid
+
+    def _get_pose_termination(self, data: mjx.Data, info: dict) -> jax.Array:
+        """Terminate when key bodies drift too far from the reference pose."""
+        # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
+        # TYPE: REFERENCE_CODE_DERIVED
+        # Copied from MimicKit compute_done pose_termination on key/body positions.
+        if self._config.get("reference_gait", "none") != "bvh":
+            return jp.array(False)
+        if not bool(self._config.get("pose_termination", True)):
+            return jp.array(False)
+        if self._reference_fallback_active(info):
+            return jp.array(False)
+
+        reference = self._query_bvh_reference(info, 0)
+        root_pos = data.qpos[:3]
+        ref_root_pos = reference["root_pos"]
+        key_pos = data.xpos[self._deepmimic_key_body_ids]
+        ref_key_pos = reference["key_pos"]
+        key_rel = key_pos - root_pos
+        ref_key_rel = ref_key_pos - ref_root_pos
+        body_pos_dist = jp.sum(jp.square(key_rel - ref_key_rel), axis=-1)
+        threshold = jp.square(
+            jp.array(
+                float(self._config.get("pose_termination_dist", self.POSE_TERMINATION_DIST)),
+                dtype=jp.float32,
+            )
+        )
+        return jp.max(body_pos_dist) > threshold
 
     def _get_bvh_motion_over(self, info: dict) -> jax.Array:
         """Terminate CLAMP clips when motion time reaches the last frame."""

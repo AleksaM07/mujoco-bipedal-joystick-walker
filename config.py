@@ -590,6 +590,10 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # Our BVH bridge does not yet retarget arms/head, so the default key
         # bodies are feet only. This keeps key-position reward physically honest.
         deepmimic_key_bodies=("right_foot", "left_foot"),
+        # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
+        # TYPE: REFERENCE_CODE_DERIVED
+        pose_termination=True,
+        pose_termination_dist=1.0,
         bvh_target_observation_steps=(0, 1, 2, 3),
         action_noise_std=0.03,
         episode_bias_std=0.02,
@@ -721,6 +725,8 @@ class EnvConfig:
     bvh_target_observation_steps: tuple[int, ...] = (0, 1, 2, 3)
     deepmimic_reward_mode: str = "pure"
     deepmimic_key_bodies: tuple[str, ...] = ("right_foot", "left_foot")
+    pose_termination: bool = True
+    pose_termination_dist: float = 1.0
 
     # Evaluator postavlja ovu vrednost iz checkpoint metadata-e. Env zatim
     # automatski rekonstruiše stari/novi policy observation layout.

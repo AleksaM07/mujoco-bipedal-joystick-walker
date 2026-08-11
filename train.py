@@ -1078,8 +1078,13 @@ def run_reference_playback_audit(
     steps: int,
     seed: int,
     physics_backend: str = "mjx_jax",
-) -> None:
-    """Play zero residual actions against the BVH reference without PPO."""
+    out_dir: Path | None = None,
+) -> Path:
+    """Play zero residual actions against the BVH reference without PPO.
+
+    Optimized path: JIT reset/step and one packed device sync per episode via
+    ``lax.while_loop``. Writes a detailed log under ``runs/``.
+    """
     patch_jax_for_brax_compatibility()
     env_config.physics_backend = physics_backend
     env_config.playground_impl = "warp" if physics_backend == "mjx_warp" else "jax"
@@ -1093,11 +1098,119 @@ def run_reference_playback_audit(
         env_config.warp_naconmax = capacity_plan.naconmax
         env_config.warp_njmax = capacity_plan.njmax
 
+    base_dir = Path(out_dir) if out_dir is not None else RUNS_DIR
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_dir = base_dir / f"{stamp}_reference_playback_{physics_backend}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    log_path = run_dir / "playback.log"
+    summary_path = run_dir / "playback_summary.json"
+
+    logger.remove()
+    logger.add(lambda msg: print(msg, end=""), level="INFO")
+    logger.add(log_path, level="DEBUG", encoding="utf-8", mode="w")
+    logger.info("reference playback audit start | run_dir={}", run_dir)
+    logger.info(
+        "playback config | resets={} | steps={} | seed={} | backend={} | "
+        "reference_gait={} | reference_gait_file={}",
+        resets,
+        steps,
+        seed,
+        physics_backend,
+        env_config.reference_gait,
+        env_config.reference_gait_file,
+    )
+
     with logged_stage("reference_playback/make_environment"):
         env = make_environment(env_config, enable_erfi=False)
+    log_environment_summary(env, label="playback env")
+    _log_reference_library_summary(env)
 
     total_resets = max(int(resets), 1)
-    max_steps = max(int(steps), 1)
+    max_steps = int(max(int(steps), 1))
+    metric_keys = (
+        "reward",
+        "reference_gait",
+        "deepmimic_pose",
+        "deepmimic_velocity",
+        "deepmimic_root_pose",
+        "deepmimic_root_velocity",
+        "deepmimic_key_position",
+        "height",
+        "torso_up",
+    )
+    done_keys = (
+        "done_low_height",
+        "done_tipped",
+        "done_invalid",
+        "done_motion_over",
+    )
+
+    zero_action = jnp.zeros(env.action_size, dtype=jnp.float32)
+    max_steps_jax = jnp.asarray(max_steps, dtype=jnp.int32)
+
+    def _episode(rng: jax.Array):
+        state = env.reset(rng)
+        init_stats = jnp.stack(
+            [
+                state.metrics["init_motion_count"],
+                state.metrics["init_fallback_count"],
+                state.metrics["init_rejected_count"],
+            ]
+        ).astype(jnp.float32)
+        metric_sum = jnp.zeros(len(metric_keys), dtype=jnp.float32)
+
+        def cond(carry):
+            current_state, step_index, _, _ = carry
+            return (step_index < max_steps_jax) & (current_state.done < 0.5)
+
+        def body(carry):
+            current_state, step_index, current_sum, _ = carry
+            next_state = env.step(current_state, zero_action)
+            step_vals = jnp.stack(
+                [next_state.metrics[key] for key in metric_keys]
+            ).astype(jnp.float32)
+            return (
+                next_state,
+                step_index + jnp.asarray(1, dtype=jnp.int32),
+                current_sum + step_vals,
+                next_state.done,
+            )
+
+        state, steps_taken, metric_sum, _ = jax.lax.while_loop(
+            cond,
+            body,
+            (state, jnp.asarray(0, dtype=jnp.int32), metric_sum, state.done),
+        )
+        done_flags = jnp.stack(
+            [state.metrics[key] for key in done_keys]
+        ).astype(jnp.float32)
+        return {
+            "steps_taken": steps_taken,
+            "done": state.done.astype(jnp.float32),
+            "metric_sum": metric_sum,
+            "done_flags": done_flags,
+            "init_stats": init_stats,
+            "clip_id": state.info["bvh_reference_clip_id"].astype(jnp.int32),
+            "height": state.metrics["height"].astype(jnp.float32),
+            "reward": state.metrics["reward"].astype(jnp.float32),
+            "deepmimic_pose": state.metrics["deepmimic_pose"].astype(jnp.float32),
+            "deepmimic_key_position": state.metrics[
+                "deepmimic_key_position"
+            ].astype(jnp.float32),
+        }
+
+    with logged_stage("reference_playback/jit_compile"):
+        episode_fn = jax.jit(_episode)
+        warm_rng = jax.random.PRNGKey(seed)
+        warm = episode_fn(warm_rng)
+        jax.block_until_ready(warm["steps_taken"])
+        logger.info(
+            "jit warmup done | steps_taken={} | done={} | clip_id={}",
+            int(jax.device_get(warm["steps_taken"])),
+            float(jax.device_get(warm["done"])),
+            int(jax.device_get(warm["clip_id"])),
+        )
+
     valid = 0
     failed = 0
     low = 0
@@ -1108,46 +1221,87 @@ def run_reference_playback_audit(
     init_fallback = 0.0
     init_rejected = 0.0
     first_failure_steps: list[int] = []
-    metric_sums = {
-        "reward": 0.0,
-        "reference_gait": 0.0,
-        "deepmimic_pose": 0.0,
-        "deepmimic_velocity": 0.0,
-        "deepmimic_root_pose": 0.0,
-        "deepmimic_root_velocity": 0.0,
-        "deepmimic_key_position": 0.0,
-    }
+    metric_sums = {key: 0.0 for key in metric_keys}
     metric_steps = 0
-    zero_action = jnp.zeros(env.action_size)
+    episode_rows: list[dict] = []
+    audit_start = time.perf_counter()
 
     for reset_index in range(total_resets):
+        episode_start = time.perf_counter()
         rng = jax.random.PRNGKey(seed + reset_index)
-        state = env.reset(rng)
-        init_motion += float(jax.device_get(state.metrics["init_motion_count"]))
-        init_fallback += float(jax.device_get(state.metrics["init_fallback_count"]))
-        init_rejected += float(jax.device_get(state.metrics["init_rejected_count"]))
-        survived = True
-        for step_index in range(max_steps):
-            state = env.step(state, zero_action)
-            for metric_name in metric_sums:
-                metric_sums[metric_name] += float(
-                    jax.device_get(state.metrics[metric_name])
-                )
-            metric_steps += 1
-            done = bool(jax.device_get(state.done))
-            if done:
-                failed += 1
-                survived = False
-                first_failure_steps.append(step_index + 1)
-                low += int(float(jax.device_get(state.metrics["done_low_height"])) > 0.5)
-                tipped += int(float(jax.device_get(state.metrics["done_tipped"])) > 0.5)
-                invalid += int(float(jax.device_get(state.metrics["done_invalid"])) > 0.5)
-                motion_over += int(
-                    float(jax.device_get(state.metrics["done_motion_over"])) > 0.5
-                )
-                break
-        if survived:
+        # Skip re-running seed episode already used for warmup compile.
+        result = episode_fn(rng)
+        jax.block_until_ready(result["steps_taken"])
+        host = jax.tree_util.tree_map(lambda value: jax.device_get(value), result)
+        steps_taken = int(host["steps_taken"])
+        done = float(host["done"]) > 0.5
+        init_stats = np.asarray(host["init_stats"], dtype=np.float64)
+        init_motion += float(init_stats[0])
+        init_fallback += float(init_stats[1])
+        init_rejected += float(init_stats[2])
+        metric_sum = np.asarray(host["metric_sum"], dtype=np.float64)
+        for key, value in zip(metric_keys, metric_sum, strict=True):
+            metric_sums[key] += float(value)
+        metric_steps += max(steps_taken, 0)
+        done_flags = np.asarray(host["done_flags"], dtype=np.float64)
+        episode_seconds = time.perf_counter() - episode_start
+
+        row = {
+            "reset_index": reset_index,
+            "clip_id": int(host["clip_id"]),
+            "steps_taken": steps_taken,
+            "done": done,
+            "init_motion": float(init_stats[0]),
+            "init_fallback": float(init_stats[1]),
+            "init_rejected": float(init_stats[2]),
+            "done_low_height": float(done_flags[0]),
+            "done_tipped": float(done_flags[1]),
+            "done_invalid": float(done_flags[2]),
+            "done_motion_over": float(done_flags[3]),
+            "final_height": float(host["height"]),
+            "final_reward": float(host["reward"]),
+            "final_pose": float(host["deepmimic_pose"]),
+            "final_key": float(host["deepmimic_key_position"]),
+            "seconds": episode_seconds,
+        }
+        episode_rows.append(row)
+
+        if done:
+            failed += 1
+            first_failure_steps.append(steps_taken)
+            low += int(done_flags[0] > 0.5)
+            tipped += int(done_flags[1] > 0.5)
+            invalid += int(done_flags[2] > 0.5)
+            motion_over += int(done_flags[3] > 0.5)
+            logger.info(
+                "episode fail | reset={} | clip={} | steps={} | "
+                "low={} tipped={} invalid={} motion_over={} | "
+                "height={:.3f} pose={:.3f} key={:.3f} | {:.2f}s",
+                reset_index,
+                row["clip_id"],
+                steps_taken,
+                row["done_low_height"] > 0.5,
+                row["done_tipped"] > 0.5,
+                row["done_invalid"] > 0.5,
+                row["done_motion_over"] > 0.5,
+                row["final_height"],
+                row["final_pose"],
+                row["final_key"],
+                episode_seconds,
+            )
+        else:
             valid += 1
+            logger.info(
+                "episode ok | reset={} | clip={} | steps={} | "
+                "height={:.3f} pose={:.3f} key={:.3f} | {:.2f}s",
+                reset_index,
+                row["clip_id"],
+                steps_taken,
+                row["final_height"],
+                row["final_pose"],
+                row["final_key"],
+                episode_seconds,
+            )
 
     avg_failure_step = (
         sum(first_failure_steps) / len(first_failure_steps)
@@ -1158,7 +1312,33 @@ def run_reference_playback_audit(
         name: (value / metric_steps if metric_steps else None)
         for name, value in metric_sums.items()
     }
-    print(
+    total_seconds = time.perf_counter() - audit_start
+    summary = {
+        "run_dir": str(run_dir),
+        "log_path": str(log_path),
+        "physics_backend": env_config.physics_backend,
+        "reference_gait": env_config.reference_gait,
+        "reference_gait_file": env_config.reference_gait_file,
+        "resets": total_resets,
+        "max_steps": max_steps,
+        "seed": seed,
+        "valid": valid,
+        "failed": failed,
+        "low": low,
+        "tipped": tipped,
+        "invalid": invalid,
+        "motion_over": motion_over,
+        "init_motion": init_motion,
+        "init_fallback": init_fallback,
+        "avg_init_rejected": init_rejected / total_resets,
+        "avg_failure_step": avg_failure_step,
+        "metric_means": metric_means,
+        "total_seconds": total_seconds,
+        "episodes": episode_rows,
+    }
+    summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+
+    summary_line = (
         "reference_playback_audit | "
         f"physics_backend={env_config.physics_backend} | "
         f"valid={valid} | failed={failed} | resets={total_resets} | "
@@ -1173,7 +1353,49 @@ def run_reference_playback_audit(
         f"avg_root_pose={metric_means['deepmimic_root_pose']} | "
         f"avg_root_vel={metric_means['deepmimic_root_velocity']} | "
         f"avg_key_pos={metric_means['deepmimic_key_position']} | "
-        f"avg_failure_step={avg_failure_step}"
+        f"avg_failure_step={avg_failure_step} | "
+        f"total_seconds={total_seconds:.2f} | "
+        f"log={log_path}"
+    )
+    logger.info(summary_line)
+    logger.info("playback summary json | {}", summary_path)
+    print(summary_line)
+    close_file_logger()
+    return run_dir
+
+
+def _log_reference_library_summary(env) -> None:
+    """Log BVH clip library stats that dominate playback startup cost."""
+    clip_count = int(getattr(env, "_bvh_reference_clip_count", 0))
+    frame_counts = getattr(env, "_bvh_reference_frame_counts", None)
+    motion_lengths = getattr(env, "_bvh_reference_motion_lengths", None)
+    loop_modes = getattr(env, "_bvh_reference_loop_modes", None)
+    if frame_counts is None:
+        logger.info("reference library | clip_count={}", clip_count)
+        return
+    counts = np.asarray(frame_counts)
+    lengths = (
+        np.asarray(motion_lengths)
+        if motion_lengths is not None
+        else np.zeros_like(counts, dtype=np.float32)
+    )
+    modes = (
+        np.asarray(loop_modes)
+        if loop_modes is not None
+        else np.zeros_like(counts, dtype=np.int32)
+    )
+    logger.info(
+        "reference library | clips={} | frames_total={} | "
+        "frames_min={} | frames_max={} | frames_mean={:.1f} | "
+        "duration_sum_s={:.2f} | wrap_clips={} | clamp_clips={}",
+        clip_count,
+        int(counts.sum()),
+        int(counts.min()) if counts.size else 0,
+        int(counts.max()) if counts.size else 0,
+        float(counts.mean()) if counts.size else 0.0,
+        float(lengths.sum()) if lengths.size else 0.0,
+        int(np.sum(modes == 1)),
+        int(np.sum(modes == 0)),
     )
 
 
@@ -1374,19 +1596,22 @@ def main() -> None:
     parser.add_argument(
         "--reference-playback-audit",
         action="store_true",
-        help="Do not train; test BVH reference playback with zero residual action.",
+        help=(
+            "Do not train; JIT zero-action BVH reference playback audit. "
+            "Writes playback.log + playback_summary.json under --out."
+        ),
     )
     parser.add_argument(
         "--reference-playback-resets",
         type=int,
         default=8,
-        help="Number of resets for --reference-playback-audit.",
+        help="Number of resets for --reference-playback-audit (smoke: 2).",
     )
     parser.add_argument(
         "--reference-playback-steps",
         type=int,
         default=500,
-        help="Max steps per reset for --reference-playback-audit.",
+        help="Max steps per reset for --reference-playback-audit (smoke: 50).",
     )
     parser.add_argument(
         "--reference-playback-backend",
@@ -1435,13 +1660,15 @@ def main() -> None:
         accurate_physics=not args.fast_physics,
     )
     if args.reference_playback_audit:
-        run_reference_playback_audit(
+        run_dir = run_reference_playback_audit(
             env_config,
             resets=args.reference_playback_resets,
             steps=args.reference_playback_steps,
             seed=args.seed,
             physics_backend=args.reference_playback_backend,
+            out_dir=args.out,
         )
+        print(f"reference playback logs: {run_dir}")
         return
 
     debug_defaults = debug_run_defaults(args.debug_run)

@@ -89,6 +89,39 @@ MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG:
       Professor-facing Phase 1 experiments should use the same reward-group
       semantics and published-code hyperparameter scale as DeepMimic/MimicKit.
 
+PROJECT-ABSOLUTE-HINGE-RETARGET:
+  type: REFERENCE_CODE_DERIVED
+  source:
+    title: "Absolute BVH hinge-to-actuator DOF retarget for this biomechanics humanoid"
+    date: "2026-08-11"
+    files:
+      - "bvh_reference.py"
+      - "marina_bvh_parse/bvh_parse.py"
+    url: null
+    related_code:
+      - repository: "https://github.com/xbpeng/MimicKit"
+        file: "mimickit/anim/motion.py"
+        note: "absolute character DOF frames, not frame-0 deltas"
+      - repository: "https://github.com/xbpeng/DeepMimic"
+        file: "data/motions/humanoid3d_walk.txt"
+        note: "motion already stores absolute joint-local DOFs"
+  used_in:
+    - "bvh_reference.py"
+  adaptation:
+    original: >
+      DeepMimic/MimicKit consume motions already expressed as absolute DOFs of
+      the simulated character. Marina's local tools detect step boundaries from
+      BVH foot speed but do not retarget onto a MuJoCo humanoid.
+    project: >
+      Convert each BVH local rotation into the MuJoCo frame, extract absolute
+      cardinal hinge angles, map flexion (hinge-Y after conversion) onto this
+      XML's sagittal actuators (hip_z, knee_z), and apply one standing-like bind
+      offset so rest pose matches default_ctrl while walking amplitudes stay
+      absolute. Marina foot-speed logic selects the bind frame.
+    reason: >
+      Frame-0 relative exp-map axis dumps were not character-space motions and
+      made DeepMimic imitation physically impossible on this skeleton.
+
 PROJECT-DEEPMIMIC-REWARD-LOCAL-ROOT:
   type: ENGINEERING_DEFAULT
   source:
@@ -172,11 +205,13 @@ MARINA-BVH-STEP-SEGMENTATION:
     original: >
       The prototype computes BVH global foot positions, filters foot speeds,
       detects contact/heel-strike events, writes step boundaries to CSV, and can
-      split a BVH into per-step files.
+      split a BVH into per-step files. It does not retarget onto the MuJoCo
+      humanoid DOFs.
     project: >
-      The runtime loader reads sibling steps.csv files when present, and also
-      embeds the same lightweight foot-speed heel-strike idea as an automatic
-      fallback segmenter before building MimicKit-style clips.
+      The runtime loader reads sibling steps.csv files when present, embeds the
+      same foot-speed heel-strike idea as an automatic segmenter, and reuses the
+      low foot-speed idea to choose a standing-like bind frame for absolute DOF
+      alignment. Skeleton retarget itself is PROJECT-ABSOLUTE-HINGE-RETARGET.
     reason: >
       Step-sized walking clips are cleaner imitation targets than treating a
       long BVH file as one monolithic reference trajectory.
