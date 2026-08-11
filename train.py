@@ -8,6 +8,7 @@ import sys
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -496,16 +497,30 @@ def run_training(
 
     env_name = env_display_name(env_config)
     rl_config = make_ppo_config(train_config)
+    user_warp_naconmax = env_config.warp_naconmax
+    user_warp_njmax = env_config.warp_njmax
     if env_config.physics_backend == "mjx_warp":
         env_config.playground_impl = "warp"
         env_config.warp_num_worlds = int(rl_config.num_envs)
         capacity_plan = resolve_warp_capacities(
             env_config.warp_num_worlds,
-            env_config.warp_naconmax,
-            env_config.warp_njmax,
+            user_warp_naconmax,
+            user_warp_njmax,
         )
         env_config.warp_naconmax = capacity_plan.naconmax
         env_config.warp_njmax = capacity_plan.njmax
+    eval_env_config = replace(env_config)
+    if eval_env_config.physics_backend == "mjx_warp":
+        eval_env_config.playground_impl = "warp"
+        eval_worlds = int(rl_config.get("num_eval_envs", 1) or 1)
+        eval_env_config.warp_num_worlds = eval_worlds
+        eval_capacity_plan = resolve_warp_capacities(
+            eval_env_config.warp_num_worlds,
+            user_warp_naconmax,
+            user_warp_njmax,
+        )
+        eval_env_config.warp_naconmax = eval_capacity_plan.naconmax
+        eval_env_config.warp_njmax = eval_capacity_plan.njmax
     run_dir = make_run_dir(
         out_dir,
         run_source_name(env_config, train_config),
@@ -539,7 +554,7 @@ def run_training(
     )
     with logged_stage("make_environment"):
         env = make_environment(env_config, enable_erfi=enable_erfi)
-        eval_env = make_environment(env_config, enable_erfi=False)
+        eval_env = make_environment(eval_env_config, enable_erfi=False)
     validate_resume_xml_guard(restore_checkpoint, env)
     write_xml_manifest(run_dir, env)
     log_environment_summary(env, label="train env")
@@ -953,8 +968,13 @@ def log_environment_summary(env, label: str = "env") -> None:
 def log_eval_environment_summary(env) -> None:
     """Ispise najbitniju razliku eval env-a."""
     logger.info(
-        "eval env | erfi_enabled={} | rfi_limit={} | rao_limit={}",
+        "eval env | erfi_enabled={} | physics_backend={} | warp_worlds={} | "
+        "warp_naconmax={} | warp_njmax={} | rfi_limit={} | rao_limit={}",
         getattr(env._config, "enable_erfi", None),
+        getattr(env._config, "physics_backend", None),
+        getattr(env._config, "warp_num_worlds", None),
+        getattr(env._config, "warp_naconmax", None),
+        getattr(env._config, "warp_njmax", None),
         getattr(env._config, "rfi_torque_limit", None),
         getattr(env._config, "rao_torque_limit", None),
     )
