@@ -434,6 +434,18 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             (1, 1, 3),
             dtype=np.float32,
         )
+        self._bvh_reference_reset_root_pos_targets = jp.array(
+            self._bvh_reference_root_pos_targets_np
+        )
+        self._bvh_reference_reset_root_quat_targets = jp.array(
+            self._bvh_reference_root_quat_targets_np
+        )
+        self._bvh_reference_reset_root_vel_targets = jp.array(
+            self._bvh_reference_root_vel_targets_np
+        )
+        self._bvh_reference_reset_root_angvel_targets = jp.array(
+            self._bvh_reference_root_angvel_targets_np
+        )
         self._bvh_reference_wrap_deltas_np = np.zeros((1, 3), dtype=np.float32)
         self._configure_default_deepmimic_reference()
         self._cache_standing_reference()
@@ -599,6 +611,18 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self._bvh_reference_root_vel_targets_np = references.root_vel_targets
         self._bvh_reference_root_angvel_targets_np = references.root_angvel_targets
         self._bvh_reference_wrap_deltas_np = references.wrap_deltas
+        self._bvh_reference_reset_root_pos_targets = jp.array(
+            references.root_pos_targets
+        )
+        self._bvh_reference_reset_root_quat_targets = jp.array(
+            references.root_quat_targets
+        )
+        self._bvh_reference_reset_root_vel_targets = jp.array(
+            references.root_vel_targets
+        )
+        self._bvh_reference_reset_root_angvel_targets = jp.array(
+            references.root_angvel_targets
+        )
         self._configure_deepmimic_reference_from_qpos(
             references.qpos_targets,
             references.qvel_targets,
@@ -627,6 +651,18 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self._standing_reference_root_vel_targets = jp.array(self._bvh_reference_root_vel_targets)
         self._standing_reference_root_angvel_targets = jp.array(
             self._bvh_reference_root_angvel_targets
+        )
+        self._standing_reference_reset_root_pos_targets = jp.array(
+            self._bvh_reference_reset_root_pos_targets
+        )
+        self._standing_reference_reset_root_quat_targets = jp.array(
+            self._bvh_reference_reset_root_quat_targets
+        )
+        self._standing_reference_reset_root_vel_targets = jp.array(
+            self._bvh_reference_reset_root_vel_targets
+        )
+        self._standing_reference_reset_root_angvel_targets = jp.array(
+            self._bvh_reference_reset_root_angvel_targets
         )
         self._standing_reference_wrap_deltas = jp.zeros((1, 3), dtype=jp.float32)
 
@@ -2449,6 +2485,30 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         root_quat1 = self._bvh_reference_root_quat_targets[clip_id, frame_index1]
         root_vel0 = self._bvh_reference_root_vel_targets[clip_id, frame_index0]
         root_vel1 = self._bvh_reference_root_vel_targets[clip_id, frame_index1]
+        reset_root_pos0 = self._bvh_reference_reset_root_pos_targets[
+            clip_id,
+            frame_index0,
+        ]
+        reset_root_pos1 = self._bvh_reference_reset_root_pos_targets[
+            clip_id,
+            frame_index1,
+        ]
+        reset_root_quat0 = self._bvh_reference_reset_root_quat_targets[
+            clip_id,
+            frame_index0,
+        ]
+        reset_root_quat1 = self._bvh_reference_reset_root_quat_targets[
+            clip_id,
+            frame_index1,
+        ]
+        reset_root_vel0 = self._bvh_reference_reset_root_vel_targets[
+            clip_id,
+            frame_index0,
+        ]
+        reset_root_vel1 = self._bvh_reference_reset_root_vel_targets[
+            clip_id,
+            frame_index1,
+        ]
         key_rel0 = self._bvh_reference_key_rel_local_targets[clip_id, frame_index0]
         key_rel1 = self._bvh_reference_key_rel_local_targets[clip_id, frame_index1]
 
@@ -2460,6 +2520,22 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         root_angvel = self._quat_interval_angular_velocity(
             root_quat0,
             root_quat1,
+            self._bvh_reference_frame_times[clip_id],
+        )
+        reset_root_pos = (
+            reset_root_pos0 + alpha * (reset_root_pos1 - reset_root_pos0) + root_offset
+        )
+        reset_root_quat = self._quat_slerp(
+            reset_root_quat0,
+            reset_root_quat1,
+            alpha,
+        )
+        reset_root_vel = reset_root_vel0 + alpha * (
+            reset_root_vel1 - reset_root_vel0
+        )
+        reset_root_angvel = self._quat_interval_angular_velocity(
+            reset_root_quat0,
+            reset_root_quat1,
             self._bvh_reference_frame_times[clip_id],
         )
         ref_heading = self._heading_world_to_local_from_quat(root_quat)
@@ -2477,6 +2553,10 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "root_quat": root_quat,
             "root_vel": root_vel,
             "root_angvel": root_angvel,
+            "reset_root_pos": reset_root_pos,
+            "reset_root_quat": reset_root_quat,
+            "reset_root_vel": reset_root_vel,
+            "reset_root_angvel": reset_root_angvel,
             "key_pos": key_pos,
         }
 
@@ -2502,6 +2582,13 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "root_quat": self._standing_reference_root_quat_targets[0, 0],
             "root_vel": self._standing_reference_root_vel_targets[0, 0],
             "root_angvel": self._standing_reference_root_angvel_targets[0, 0],
+            "reset_root_pos": self._standing_reference_reset_root_pos_targets[0, 0],
+            "reset_root_quat": self._standing_reference_reset_root_quat_targets[0, 0],
+            "reset_root_vel": self._standing_reference_reset_root_vel_targets[0, 0],
+            "reset_root_angvel": self._standing_reference_reset_root_angvel_targets[
+                0,
+                0,
+            ],
             "key_pos": self._standing_reference_key_pos_targets[0, 0],
         }
         return {
@@ -2553,12 +2640,12 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         target_qvel = reference["qvel"]
         if exact:
             qpos = self._init_q
-            qpos = qpos.at[:3].set(reference["root_pos"])
-            qpos = qpos.at[3:7].set(reference["root_quat"])
+            qpos = qpos.at[:3].set(reference["reset_root_pos"])
+            qpos = qpos.at[3:7].set(reference["reset_root_quat"])
             qpos = qpos.at[self._actuator_qpos_indices].set(target_qpos)
             qvel = jp.zeros(self._mjx_model.nv)
-            qvel = qvel.at[:3].set(reference["root_vel"])
-            qvel = qvel.at[3:6].set(reference["root_angvel"])
+            qvel = qvel.at[:3].set(reference["reset_root_vel"])
+            qvel = qvel.at[3:6].set(reference["reset_root_angvel"])
             qvel = qvel.at[self._actuator_dof_indices].set(target_qvel)
             qpos = self._align_sampled_reference_reset_height(qpos, qvel, target_qpos)
             return qpos, qvel, target_qpos, jp.zeros(self.action_size)
@@ -2570,13 +2657,13 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         qpos = self._init_q
         qpos = qpos.at[:3].set(
             self._project_reference_reset_root_pos(
-                reference["root_pos"],
+                reference["reset_root_pos"],
                 projection_level,
             )
         )
         qpos = qpos.at[3:7].set(
             self._project_reference_reset_root_quat(
-                reference["root_quat"],
+                reference["reset_root_quat"],
                 projection_level,
             )
         )
@@ -2584,13 +2671,13 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         qvel = jp.zeros(self._mjx_model.nv)
         qvel = qvel.at[:3].set(
             self._project_reference_reset_root_vel(
-                reference["root_vel"],
+                reference["reset_root_vel"],
                 projection_level,
             )
         )
         qvel = qvel.at[3:6].set(
             self._project_reference_reset_root_angvel(
-                reference["root_angvel"],
+                reference["reset_root_angvel"],
                 projection_level,
             )
         )

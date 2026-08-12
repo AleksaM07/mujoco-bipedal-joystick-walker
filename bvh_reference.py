@@ -1062,6 +1062,11 @@ def _root_motion_targets(
     )
 
     initial_root_quat = _normalize_quat(initial_root_quat)
+    initial_root_heading_quat = _yaw_only_quat(initial_root_quat)
+    initial_root_local_quat = _quat_mul(
+        _quat_conjugate(initial_root_heading_quat),
+        initial_root_quat,
+    )
     alignment_quat = _heading_alignment_quat(
         initial_root_quat,
         raw_root_heading_quat[0],
@@ -1070,7 +1075,13 @@ def _root_motion_targets(
     root_pos = root_pos_local @ alignment_rot.T
     root_pos += initial_root_pos[None, :]
     root_quat = np.stack(
-        [_quat_mul(alignment_quat, quat) for quat in raw_root_heading_quat],
+        [
+            _quat_mul(
+                _quat_mul(alignment_quat, quat),
+                initial_root_local_quat,
+            )
+            for quat in raw_root_heading_quat
+        ],
         axis=0,
     )
     return root_pos.astype(np.float32), root_quat.astype(np.float32)
