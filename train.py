@@ -80,6 +80,25 @@ class TrainingProgressLogger:
             if value is not None:
                 diagnostics.append(f"{label}={float(value):.3f}")
 
+        if episode_length is not None and float(episode_length) > 1e-6:
+            length = float(episode_length)
+            per_step_metrics = (
+                ("eval/episode_reward", "reward_step"),
+                ("eval/episode_deepmimic_pose", "dm_pose_step"),
+                ("eval/episode_deepmimic_velocity", "dm_vel_step"),
+                ("eval/episode_deepmimic_root_pose", "dm_root_step"),
+                ("eval/episode_deepmimic_root_velocity", "dm_root_vel_step"),
+                ("eval/episode_deepmimic_key_position", "dm_key_step"),
+                ("eval/episode_tracking_lin", "track_lin_step"),
+                ("eval/episode_command_progress", "progress_step"),
+                ("eval/episode_height", "height_step"),
+                ("eval/episode_torso_up", "torso_step"),
+            )
+            for key, label in per_step_metrics:
+                value = metrics.get(key)
+                if value is not None:
+                    diagnostics.append(f"{label}={float(value) / length:.3f}")
+
         logger.info(
             "eval | step={} | reward={} | episode_length={}{}",
             step,
@@ -1152,6 +1171,8 @@ def run_reference_playback_audit(
     seed: int,
     physics_backend: str = "mjx_jax",
     clip_mode: str = "all",
+    trace_resets: int = 0,
+    trace_steps: int = 0,
     out_dir: Path | None = None,
 ) -> Path:
     """Play zero residual actions against the BVH reference without PPO.
@@ -1184,6 +1205,7 @@ def run_reference_playback_audit(
     run_dir.mkdir(parents=True, exist_ok=True)
     log_path = run_dir / "playback.log"
     summary_path = run_dir / "playback_summary.json"
+    trace_path = run_dir / "playback_trace.jsonl"
 
     logger.remove()
     logger.add(lambda msg: print(msg, end=""), level="INFO")
@@ -1193,7 +1215,7 @@ def run_reference_playback_audit(
         "playback config | resets={} | steps={} | seed={} | backend={} | "
         "requested_clip_mode={} | reference_gait={} | reference_gait_file={} | "
         "audit_target_obs={} | audit_reset_attempts={} | "
-        "audit_projection_levels={}",
+        "audit_projection_levels={} | trace_resets={} | trace_steps={}",
         resets,
         steps,
         seed,
@@ -1204,6 +1226,8 @@ def run_reference_playback_audit(
         env_config.reference_target_observation,
         env_config.reset_sample_attempts,
         env_config.reset_projection_levels,
+        trace_resets,
+        trace_steps,
     )
 
     with logged_stage("reference_playback/make_environment"):
@@ -1243,6 +1267,87 @@ def run_reference_playback_audit(
 
     zero_action = jnp.zeros(env.action_size, dtype=jnp.float32)
     max_steps_jax = jnp.asarray(max_steps, dtype=jnp.int32)
+
+    trace_metric_keys = (
+        "reward",
+        "height",
+        "torso_up",
+        "head_up",
+        "reference_gait",
+        "deepmimic_pose",
+        "deepmimic_velocity",
+        "deepmimic_root_pose",
+        "deepmimic_root_velocity",
+        "deepmimic_key_position",
+        "deepmimic_pose_error",
+        "deepmimic_velocity_error",
+        "deepmimic_root_xy_error",
+        "deepmimic_root_height_error",
+        "deepmimic_root_vel_error",
+        "deepmimic_root_angvel_error",
+        "deepmimic_key_pos_error",
+        "deepmimic_max_key_dist",
+        "reference_motion_time",
+        "done_low_height",
+        "done_tipped",
+        "done_invalid",
+        "done_motion_over",
+        "done_pose_termination",
+        "done",
+    )
+
+    def _trace_episode(reset_index: int, max_trace_steps: int) -> None:
+        rng = jax.random.PRNGKey(seed + reset_index)
+        state = env.reset(rng)
+        trace_limit = min(max_trace_steps, max_steps)
+        rows = []
+        for step_index in range(trace_limit + 1):
+            metrics = {
+                key: float(jax.device_get(state.metrics[key]))
+                for key in trace_metric_keys
+                if key in state.metrics
+            }
+            row = {
+                "reset_index": reset_index,
+                "step": step_index,
+                "clip_id": int(jax.device_get(state.info["bvh_reference_clip_id"])),
+                "loop_mode": _loop_mode_name(
+                    env,
+                    int(jax.device_get(state.info["bvh_reference_clip_id"])),
+                ),
+                "fallback": bool(
+                    jax.device_get(state.info["reference_fallback_standing"])
+                ),
+                **metrics,
+            }
+            rows.append(row)
+            if bool(float(jax.device_get(state.done)) > 0.5):
+                break
+            if step_index >= trace_limit:
+                break
+            state = env.step(state, zero_action)
+
+        with trace_path.open("a", encoding="utf-8") as trace_file:
+            for row in rows:
+                trace_file.write(json.dumps(row, sort_keys=True) + "\n")
+        last = rows[-1]
+        logger.info(
+            "trace episode | reset={} | rows={} | final_step={} | clip={} | "
+            "mode={} | done={} | low={} | tipped={} | motion_over={} | "
+            "height={:.3f} | reward={:.3f} | trace={}",
+            reset_index,
+            len(rows),
+            last["step"],
+            last["clip_id"],
+            last["loop_mode"],
+            bool(last.get("done", 0.0) > 0.5),
+            bool(last.get("done_low_height", 0.0) > 0.5),
+            bool(last.get("done_tipped", 0.0) > 0.5),
+            bool(last.get("done_motion_over", 0.0) > 0.5),
+            last.get("height", 0.0),
+            last.get("reward", 0.0),
+            trace_path,
+        )
 
     def _episode(rng: jax.Array):
         state = env.reset(rng)
@@ -1382,6 +1487,8 @@ def run_reference_playback_audit(
         clip_id = int(host["clip_id"])
         loop_mode = _loop_mode_name(env, clip_id)
         mode_counts[loop_mode] = mode_counts.get(loop_mode, 0) + 1
+        if reset_index < max(int(trace_resets), 0) and int(trace_steps) > 0:
+            _trace_episode(reset_index, int(trace_steps))
         is_motion_over = bool(done_flags[3] > 0.5)
         is_pose_termination = bool(done_flags[4] > 0.5)
         is_physical_fail = bool(
@@ -1590,6 +1697,9 @@ def run_reference_playback_audit(
         "reference_gait_file": env_config.reference_gait_file,
         "resets": total_resets,
         "max_steps": max_steps,
+        "trace_path": str(trace_path) if trace_resets > 0 and trace_steps > 0 else None,
+        "trace_resets": int(trace_resets),
+        "trace_steps": int(trace_steps),
         "seed": seed,
         "valid": valid,
         "failed": failed,
@@ -2022,6 +2132,24 @@ def main() -> None:
             "library coverage issues."
         ),
     )
+    parser.add_argument(
+        "--reference-playback-trace-resets",
+        type=int,
+        default=0,
+        help=(
+            "For playback audit, also write per-step JSONL traces for this "
+            "many reset seeds."
+        ),
+    )
+    parser.add_argument(
+        "--reference-playback-trace-steps",
+        type=int,
+        default=0,
+        help=(
+            "Max per-step rows per traced playback episode. Use with "
+            "--reference-playback-trace-resets."
+        ),
+    )
     parser.add_argument("--out", type=Path, default=RUNS_DIR)
     args = parser.parse_args()
 
@@ -2078,6 +2206,8 @@ def main() -> None:
             seed=args.seed,
             physics_backend=args.reference_playback_backend,
             clip_mode=args.reference_playback_clip_mode,
+            trace_resets=args.reference_playback_trace_resets,
+            trace_steps=args.reference_playback_trace_steps,
             out_dir=args.out,
         )
         print(f"reference playback logs: {run_dir}")
