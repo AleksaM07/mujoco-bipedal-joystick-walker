@@ -1799,7 +1799,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--deepmimic-key-bodies",
-        default="right_foot,left_foot",
+        default="metatarsal_midpoint_right,metatarsal_midpoint_left",
         help=(
             "Comma-separated key bodies for key-position imitation. Default "
             "je feet-only dok BVH retarget ne kontrolise ruke/glavu."
@@ -1995,7 +1995,9 @@ def main() -> None:
         command_profile=args.command_profile,
         reference_gait=args.reference_gait,
         reference_gait_file=reference_gait_file,
-        reference_target_observation=args.reference_gait == "bvh",
+        reference_target_observation=(
+            args.reference_gait == "bvh" and EnvConfig.reference_target_observation
+        ),
         deepmimic_reward_mode=args.deepmimic_reward_mode,
         deepmimic_key_bodies=tuple(
             body.strip()

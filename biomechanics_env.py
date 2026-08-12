@@ -1089,7 +1089,10 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             + (1.0 - self._config.action_smoothing) * previous_action
         )
         if self._config.get("reference_gait", "none") == "bvh":
-            reference_ctrl = self._get_bvh_reference_gait_target(info)
+            # state_t produces controls that will be integrated over one env
+            # step, so the baseline controller should aim at the next reference
+            # frame instead of the frame already encoded in obs_t.
+            reference_ctrl = self._query_bvh_reference(info, 1)["qpos"]
         else:
             reference_ctrl = self._default_ctrl
         motor_targets = reference_ctrl + (smoothed_action * self._action_scale)
@@ -2133,7 +2136,20 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         body_ids: list[int] = []
         site_ids: list[int] = []
         is_site: list[bool] = []
+        marker_aliases = {
+            "right_foot": "metatarsal_midpoint_right",
+            "left_foot": "metatarsal_midpoint_left",
+        }
         for body_name in key_body_names:
+            preferred_name = marker_aliases.get(body_name, body_name)
+            if preferred_name != body_name:
+                try:
+                    site_ids.append(self._mj_model.site(preferred_name).id)
+                    body_ids.append(0)
+                    is_site.append(True)
+                    continue
+                except KeyError:
+                    pass
             try:
                 site_ids.append(self._mj_model.site(body_name).id)
                 body_ids.append(0)

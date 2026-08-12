@@ -599,9 +599,13 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # early. Re-enable once retargeted wrap playback is spatially stable.
         pose_termination=False,
         pose_termination_dist=1.0,
-        bvh_target_observation_steps=(0, 1, 2, 3),
-        reset_sample_attempts=8,
-        reset_projection_levels=(1.0, 0.7, 0.45, 0.25),
+        # Start Phase-1 with the current target frame only. Future frames can be
+        # reintroduced after single-frame imitation becomes stable.
+        bvh_target_observation_steps=(0,),
+        # Match the conservative reset policy used by the playback audit so
+        # training and audit exercise the same valid-init regime.
+        reset_sample_attempts=2,
+        reset_projection_levels=(1.0, 0.7, 0.45),
         action_noise_std=0.03,
         episode_bias_std=0.02,
         rfi_torque_limit=2.0,
@@ -729,7 +733,7 @@ class EnvConfig:
         ]
     )
     reference_target_observation: bool = True
-    bvh_target_observation_steps: tuple[int, ...] = (0, 1, 2, 3)
+    bvh_target_observation_steps: tuple[int, ...] = (0,)
     deepmimic_reward_mode: str = "pure"
     deepmimic_key_bodies: tuple[str, ...] = (
         "metatarsal_midpoint_right",
@@ -737,8 +741,8 @@ class EnvConfig:
     )
     pose_termination: bool = False
     pose_termination_dist: float = 1.0
-    reset_sample_attempts: int = 8
-    reset_projection_levels: tuple[float, ...] = (1.0, 0.7, 0.45, 0.25)
+    reset_sample_attempts: int = 2
+    reset_projection_levels: tuple[float, ...] = (1.0, 0.7, 0.45)
 
     # Evaluator postavlja ovu vrednost iz checkpoint metadata-e. Env zatim
     # automatski rekonstruiše stari/novi policy observation layout.
