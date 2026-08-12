@@ -32,7 +32,6 @@ generated_models/*
 *.ckpt
 *.pt
 *.pth
-*.npz
 *.mp4
 *.csv
 artifacts/
