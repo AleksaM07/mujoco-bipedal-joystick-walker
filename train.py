@@ -559,6 +559,9 @@ def run_training(
     write_xml_manifest(run_dir, env)
     log_environment_summary(env, label="train env")
     log_eval_environment_summary(eval_env)
+    if getattr(env._config, "reference_gait", "none") == "bvh":
+        with logged_stage("reference reset diagnostics"):
+            log_reference_reset_diagnostics(env.reset(jax.random.PRNGKey(train_config.seed)))
     logger.info(
         "trening start | env={} | impl={} | run_dir={}",
         env_name,
@@ -1006,6 +1009,7 @@ def debug_preflight(env, seed: int) -> None:
             state.reward.dtype,
             state.done.dtype,
         )
+        log_reference_reset_diagnostics(state)
 
     with logged_stage("preflight eager step"):
         action = jnp.zeros(env.action_size)
@@ -1025,6 +1029,50 @@ def debug_preflight(env, seed: int) -> None:
             float(compiled_state.reward),
             float(compiled_state.done),
         )
+
+
+def log_reference_reset_diagnostics(state: mjx_env.State) -> None:
+    """Log reset-time imitation diagnostics so bad starts are obvious in train.log."""
+    metrics = jax.device_get(state.metrics)
+    info = jax.device_get(state.info)
+    logger.info(
+        "reference reset | clip_id={} | motion_time={:.3f} | fallback={} | "
+        "init_motion={} | init_fallback={} | init_rejected={} | "
+        "init_exact={} | init_exact_rejected={} | "
+        "done_low={} | done_tipped={} | done_invalid={} | "
+        "done_motion_over={} | done_pose={} | "
+        "dm_pose={:.3f} | dm_vel={:.3f} | dm_root_pose={:.3f} | "
+        "dm_root_vel={:.3f} | dm_key={:.3f} | "
+        "pose_err={:.3f} | vel_err={:.3f} | root_xy_err={:.3f} | "
+        "root_h_err={:.3f} | root_vel_err={:.3f} | root_angvel_err={:.3f} | "
+        "key_err={:.3f} | max_key={:.3f}",
+        int(info.get("bvh_reference_clip_id", 0)),
+        float(info.get("bvh_reference_time_offset", 0.0)),
+        bool(info.get("reference_fallback_standing", False)),
+        float(metrics.get("init_motion_count", 0.0)),
+        float(metrics.get("init_fallback_count", 0.0)),
+        float(metrics.get("init_rejected_count", 0.0)),
+        float(metrics.get("init_exact_count", 0.0)),
+        float(metrics.get("init_exact_rejected_count", 0.0)),
+        bool(metrics.get("done_low_height", 0.0)),
+        bool(metrics.get("done_tipped", 0.0)),
+        bool(metrics.get("done_invalid", 0.0)),
+        bool(metrics.get("done_motion_over", 0.0)),
+        bool(metrics.get("done_pose_termination", 0.0)),
+        float(metrics.get("deepmimic_pose", 0.0)),
+        float(metrics.get("deepmimic_velocity", 0.0)),
+        float(metrics.get("deepmimic_root_pose", 0.0)),
+        float(metrics.get("deepmimic_root_velocity", 0.0)),
+        float(metrics.get("deepmimic_key_position", 0.0)),
+        float(metrics.get("deepmimic_pose_error", 0.0)),
+        float(metrics.get("deepmimic_velocity_error", 0.0)),
+        float(metrics.get("deepmimic_root_xy_error", 0.0)),
+        float(metrics.get("deepmimic_root_height_error", 0.0)),
+        float(metrics.get("deepmimic_root_vel_error", 0.0)),
+        float(metrics.get("deepmimic_root_angvel_error", 0.0)),
+        float(metrics.get("deepmimic_key_pos_error", 0.0)),
+        float(metrics.get("deepmimic_max_key_dist", 0.0)),
+    )
 
 
 def env_display_name(env_config: EnvConfig) -> str:
