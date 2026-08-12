@@ -74,6 +74,12 @@ TRAIN_DIAGNOSTIC_METRICS: Final[tuple[tuple[str, str], ...]] = (
     ("eval/episode_torso_up", "torso_up"),
     ("eval/episode_head_up", "head_up"),
     ("eval/episode_height", "height"),
+    ("eval/episode_com_height", "com_h"),
+    ("eval/episode_root_vertical_velocity", "root_vz"),
+    ("eval/episode_pelvis_vertical_velocity", "pelvis_vz"),
+    ("eval/episode_left_foot_height", "lfoot_h"),
+    ("eval/episode_right_foot_height", "rfoot_h"),
+    ("eval/episode_action_magnitude", "act_mag"),
     ("eval/episode_foot_slip", "foot_slip"),
     ("eval/episode_swing_drag", "swing_drag"),
     ("eval/episode_swing_clearance", "swing_clear"),
@@ -85,6 +91,7 @@ TRAIN_DIAGNOSTIC_METRICS: Final[tuple[tuple[str, str], ...]] = (
     ("eval/episode_reference_fallback", "ref_fallback"),
     ("eval/episode_deepmimic_pose", "dm_pose"),
     ("eval/episode_deepmimic_velocity", "dm_vel"),
+    ("eval/episode_deepmimic_total_no_root_velocity", "dm_no_rootv"),
     ("eval/episode_deepmimic_end_effector", "dm_ee"),
     ("eval/episode_deepmimic_root", "dm_root"),
     ("eval/episode_deepmimic_com", "dm_com"),
@@ -99,6 +106,9 @@ TRAIN_DIAGNOSTIC_METRICS: Final[tuple[tuple[str, str], ...]] = (
     ("eval/episode_deepmimic_root_angvel_error", "dm_root_w"),
     ("eval/episode_deepmimic_key_pos_error", "dm_key_err"),
     ("eval/episode_deepmimic_max_key_dist", "dm_key_max"),
+    ("eval/episode_deepmimic_root_pose_raw", "dm_root_raw"),
+    ("eval/episode_deepmimic_root_velocity_raw", "dm_rootv_raw"),
+    ("eval/episode_deepmimic_key_position_raw", "dm_key_raw"),
     ("eval/episode_init_motion_count", "init_motion"),
     ("eval/episode_init_fallback_count", "init_fallback"),
     ("eval/episode_init_rejected_count", "init_reject"),
@@ -536,7 +546,12 @@ def expand_reference_gait_files(
 
 
 def read_reference_gait_list(list_path: Path) -> list[str]:
-    """Read BVH paths from a text list, ignoring blank and comment lines."""
+    """Read reference paths from a text list, ignoring blank/comment lines.
+
+    Supports both:
+    - simple one-path-per-line lists
+    - tab-separated manifest rows where column 2 is the relative media path
+    """
     resolved_list_path = resolve_project_path(list_path)
     paths: list[str] = []
     raw_text = resolved_list_path.read_text(encoding="utf-8")
@@ -544,13 +559,18 @@ def read_reference_gait_list(list_path: Path) -> list[str]:
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
-        paths.append(normalize_reference_path(line, resolved_list_path))
+        path_text = line
+        columns = line.split("\t")
+        if len(columns) >= 2:
+            path_text = columns[1].strip()
+        paths.append(normalize_reference_path(path_text, resolved_list_path))
     return paths
 
 
 def normalize_reference_path(raw_path: str, list_path: Path | None = None) -> str:
     """Keep repo-relative BVH paths stable, with list-relative fallback."""
-    candidate = Path(raw_path).expanduser()
+    normalized_raw_path = raw_path.replace("\\", "/")
+    candidate = Path(normalized_raw_path).expanduser()
     if candidate.is_absolute():
         return str(candidate)
     if (PROJECT_ROOT / candidate).exists():
@@ -559,6 +579,11 @@ def normalize_reference_path(raw_path: str, list_path: Path | None = None) -> st
         list_relative = list_path.parent / candidate
         if list_relative.exists():
             return relative_to_project_or_absolute(list_relative)
+        # Manifest reports often live in `<dataset>/_walking_filter_report/`
+        # while storing media paths relative to `<dataset>/`.
+        dataset_relative = list_path.parent.parent / candidate
+        if list_path.parent.name == "_walking_filter_report" and dataset_relative.exists():
+            return relative_to_project_or_absolute(dataset_relative)
     return candidate.as_posix()
 
 
@@ -589,6 +614,8 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
             DEFAULT_BVH_REFERENCE_LIST.relative_to(PROJECT_ROOT).as_posix()
         ],
         reference_target_observation=True,
+        reference_replay_target_step=1,
+        deepmimic_root_velocity_weight_scale=0.15,
         policy_observation_size=None,
         policy_observation_dict=True,
         xml_path=None,
@@ -750,6 +777,8 @@ class EnvConfig:
     )
     reference_target_observation: bool = True
     bvh_target_observation_steps: tuple[int, ...] = (0,)
+    reference_replay_target_step: int = 1
+    deepmimic_root_velocity_weight_scale: float = 0.15
     deepmimic_reward_mode: str = "pure"
     deepmimic_key_bodies: tuple[str, ...] = (
         "metatarsal_midpoint_right",

@@ -1,0 +1,231 @@
+07_12	07\07_12_poses.npz	non_strict_walk_description	brisk walk
+08_05	08\08_05_poses.npz	non_strict_walk_description	walk/stride
+08_07	08\08_07_poses.npz	non_strict_walk_description	walk, exaggerated stride
+08_11	08\08_11_poses.npz	non_strict_walk_description	slow walk/stride
+09_12	09\09_12_poses.npz	non_strict_walk_description	navigate - walk forward, backward, sideways
+103_07	103\103_07_poses.npz	non_strict_walk_description	Casual Walk
+105_01	105\105_01_poses.npz	non_strict_walk_description	WalkDigital8
+105_02	105\105_02_poses.npz	non_strict_walk_description	WalkStraight
+105_36	105\105_36_poses.npz	non_strict_walk_description	WalkStraight
+105_57	105\105_57_poses.npz	non_strict_walk_description	WalkForward
+105_62	105\105_62_poses.npz	non_strict_walk_description	walkFigure8
+111_01	111\111_01_poses.npz	non_strict_walk_description	Walk backwards
+111_26	111\111_26_poses.npz	non_strict_walk_description	Walk sideways
+113_01	113\113_01_poses.npz	non_strict_walk_description	Walk backwards
+113_05	113\113_05_poses.npz	non_strict_walk_description	Walk digital 8
+113_06	113\113_06_poses.npz	non_strict_walk_description	Walk figure 8
+113_10	113\113_10_poses.npz	non_strict_walk_description	Walk, mope around
+113_17	113\113_17_poses.npz	non_strict_walk_description	Walk sideway
+113_18	113\113_18_poses.npz	non_strict_walk_description	Walk sideways
+120_08	120\120_08_poses.npz	non_strict_walk_description	Mickey sneaky walk
+120_09	120\120_09_poses.npz	non_strict_walk_description	Mickey sneaking walk
+120_11	120\120_11_poses.npz	non_strict_walk_description	Mickey sneaking walk
+120_12	120\120_12_poses.npz	non_strict_walk_description	Mickey sneaking walk
+120_13	120\120_13_poses.npz	non_strict_walk_description	Mickey sneaking walk
+120_14	120\120_14_poses.npz	non_strict_walk_description	Mickey sneaking walk
+120_18	120\120_18_poses.npz	non_strict_walk_description	Mickey Walk
+131_01	131\131_01_poses.npz	non_strict_walk_description	Start Walk Stop
+131_02	131\131_02_poses.npz	non_strict_walk_description	Start Walk Stop
+131_09	131\131_09_poses.npz	non_strict_walk_description	Start Walk Left
+131_10	131\131_10_poses.npz	non_strict_walk_description	Start Walk Left
+131_11	131\131_11_poses.npz	non_strict_walk_description	Start Walk Left
+131_12	131\131_12_poses.npz	non_strict_walk_description	Start Walk Right
+131_13	131\131_13_poses.npz	non_strict_walk_description	Start Walk Right
+131_14	131\131_14_poses.npz	non_strict_walk_description	Start Walk Right
+132_01	132\132_01_poses.npz	non_strict_walk_description	Walk With Arms Out,  balancing
+132_02	132\132_02_poses.npz	non_strict_walk_description	Walk With Arms Out,  balancing
+132_03	132\132_03_poses.npz	non_strict_walk_description	Walk With Arms Out,  balancing
+132_04	132\132_04_poses.npz	non_strict_walk_description	Walk With Arms Out,  balancing
+132_05	132\132_05_poses.npz	non_strict_walk_description	Walk With Arms Out,  balancing
+132_06	132\132_06_poses.npz	non_strict_walk_description	Walk With Arms Out,  balancing
+132_07	132\132_07_poses.npz	non_strict_walk_description	Walk With Arms Out,  balancing
+132_08	132\132_08_poses.npz	non_strict_walk_description	Walk With Arms Out,  balancing
+132_09	132\132_09_poses.npz	non_strict_walk_description	Walk With Arms Out,  balancing
+132_10	132\132_10_poses.npz	non_strict_walk_description	Walk With Arms Out,  balancing
+132_11	132\132_11_poses.npz	non_strict_walk_description	Walk With Arms Out,  balancing
+132_12	132\132_12_poses.npz	non_strict_walk_description	Walk With Arms Out,  balancing
+132_15	132\132_15_poses.npz	non_strict_walk_description	Walk With Knees Bent
+132_17	132\132_17_poses.npz	non_strict_walk_description	Walk Fast
+132_18	132\132_18_poses.npz	non_strict_walk_description	Walk Fast
+132_19	132\132_19_poses.npz	non_strict_walk_description	Walk Fast
+132_20	132\132_20_poses.npz	non_strict_walk_description	Walk Fast
+132_21	132\132_21_poses.npz	non_strict_walk_description	Walk Fast
+132_22	132\132_22_poses.npz	non_strict_walk_description	Walk Fast
+132_29	132\132_29_poses.npz	non_strict_walk_description	Bouncy Walk
+132_30	132\132_30_poses.npz	non_strict_walk_description	Bouncy Walk
+132_31	132\132_31_poses.npz	non_strict_walk_description	Bouncy Walk
+132_32	132\132_32_poses.npz	non_strict_walk_description	Bouncy Walk
+132_33	132\132_33_poses.npz	non_strict_walk_description	Bouncy Walk
+132_34	132\132_34_poses.npz	non_strict_walk_description	Bouncy Walk
+132_35	132\132_35_poses.npz	non_strict_walk_description	Walk Leaning To The Right
+132_36	132\132_36_poses.npz	non_strict_walk_description	Walk Leaning To The Right
+132_39	132\132_39_poses.npz	non_strict_walk_description	Pigeon Toed Walking
+132_40	132\132_40_poses.npz	non_strict_walk_description	Walk With Stiff Arms
+132_41	132\132_41_poses.npz	non_strict_walk_description	Walk With Stiff Arms
+132_42	132\132_42_poses.npz	non_strict_walk_description	Walk Swinging Shoulders
+132_43	132\132_43_poses.npz	non_strict_walk_description	Walk Swinging Shoulders
+132_44	132\132_44_poses.npz	non_strict_walk_description	Walk Swinging Shoulders
+132_53	132\132_53_poses.npz	non_strict_walk_description	Walk With Legs Apart
+132_54	132\132_54_poses.npz	non_strict_walk_description	Walk With Wild Arms
+132_55	132\132_55_poses.npz	non_strict_walk_description	Walk With Wild Legs
+133_11	133\133_11_poses.npz	non_strict_walk_description	Walk Stop Walk
+133_12	133\133_12_poses.npz	non_strict_walk_description	Walk Stop Walk
+133_13	133\133_13_poses.npz	non_strict_walk_description	Walk Stop Walk
+133_14	133\133_14_poses.npz	non_strict_walk_description	Walk Left
+133_15	133\133_15_poses.npz	non_strict_walk_description	Walk Left
+133_16	133\133_16_poses.npz	non_strict_walk_description	Walk Left
+133_17	133\133_17_poses.npz	non_strict_walk_description	Walk Right
+133_18	133\133_18_poses.npz	non_strict_walk_description	Walk Right
+133_19	133\133_19_poses.npz	non_strict_walk_description	Walk Right
+133_20	133\133_20_poses.npz	non_strict_walk_description	Walk Right
+133_24	133\133_24_poses.npz	non_strict_walk_description	Walk ZigZag
+136_01	136\136_01_poses.npz	non_strict_walk_description	Walk Bent Forward
+136_02	136\136_02_poses.npz	non_strict_walk_description	Walk Bent Forward
+136_03	136\136_03_poses.npz	non_strict_walk_description	Walk Backwards Bent Forward
+136_04	136\136_04_poses.npz	non_strict_walk_description	Walk Backwards Bent Forward
+136_05	136\136_05_poses.npz	non_strict_walk_description	Walk on Toes Bent Forward
+136_06	136\136_06_poses.npz	non_strict_walk_description	Walk on Toes Bent Forward
+136_07	136\136_07_poses.npz	non_strict_walk_description	Walk Backward on Toes Bent Forward
+136_08	136\136_08_poses.npz	non_strict_walk_description	Walk Backward on Toes Bent Forward
+136_09	136\136_09_poses.npz	non_strict_walk_description	Walk Crouched
+136_11	136\136_11_poses.npz	non_strict_walk_description	Walk Backwards Crouched
+136_12	136\136_12_poses.npz	non_strict_walk_description	Walk Backwards Crouched
+136_13	136\136_13_poses.npz	non_strict_walk_description	Walk on Toes Crouched
+136_14	136\136_14_poses.npz	non_strict_walk_description	Walk on Toes Crouched
+136_15	136\136_15_poses.npz	non_strict_walk_description	Walk Backwards on Toes Crouched
+136_16	136\136_16_poses.npz	non_strict_walk_description	Walk Backwards on Toes Crouched
+136_20	136\136_20_poses.npz	non_strict_walk_description	Normal Walk
+136_21	136\136_21_poses.npz	non_strict_walk_description	Normal Walk
+136_22	136\136_22_poses.npz	non_strict_walk_description	Normal Walk
+136_23	136\136_23_poses.npz	non_strict_walk_description	Normal Walk
+136_24	136\136_24_poses.npz	non_strict_walk_description	Normal Walk
+136_25	136\136_25_poses.npz	non_strict_walk_description	Normal Walk Backwards
+136_26	136\136_26_poses.npz	non_strict_walk_description	Normal Walk Backwards
+136_27	136\136_27_poses.npz	non_strict_walk_description	Walk on Toes
+136_29	136\136_29_poses.npz	non_strict_walk_description	Walk Backwards on Toes
+136_30	136\136_30_poses.npz	non_strict_walk_description	Walk Backwards on Toes
+137_04	137\137_04_poses.npz	non_strict_walk_description	Cat Walk
+137_08	137\137_08_poses.npz	non_strict_walk_description	Chicken Walk
+137_12	137\137_12_poses.npz	non_strict_walk_description	Dinosaur Walk
+137_16	137\137_16_poses.npz	non_strict_walk_description	Drunk Walk
+137_20	137\137_20_poses.npz	non_strict_walk_description	Gangly Teen Walk
+137_24	137\137_24_poses.npz	non_strict_walk_description	Graceful Lady Walk
+137_29	137\137_29_poses.npz	non_strict_walk_description	Normal Walk
+137_33	137\137_33_poses.npz	non_strict_walk_description	Old Man Walk
+137_38	137\137_38_poses.npz	non_strict_walk_description	Sexy Lady Walk
+137_42	137\137_42_poses.npz	non_strict_walk_description	Strong Man Walk
+141_08	141\141_08_poses.npz	non_strict_walk_description	Steop On Walk Down
+141_29	141\141_29_poses.npz	non_strict_walk_description	Random Walk
+141_30	141\141_30_poses.npz	non_strict_walk_description	Random Walk
+141_31	141\141_31_poses.npz	non_strict_walk_description	Walk Backwards
+141_32	141\141_32_poses.npz	non_strict_walk_description	Walk Sideways, Cross Legs
+141_33	141\141_33_poses.npz	non_strict_walk_description	Walk Sideways, Foot to Foot
+143_38	143\143_38_poses.npz	non_strict_walk_description	Walk Digital 8
+143_39	143\143_39_poses.npz	non_strict_walk_description	Walk Backwards
+143_40	143\143_40_poses.npz	non_strict_walk_description	Walk Sideways
+15_01	15\15_01_poses.npz	non_strict_walk_description	walk/wander
+15_03	15\15_03_poses.npz	non_strict_walk_description	walk/wander
+15_09	15\15_09_poses.npz	non_strict_walk_description	walk/wander
+15_14	15\15_14_poses.npz	non_strict_walk_description	walk/wander
+16_34	16\16_34_poses.npz	non_strict_walk_description	slow walk, stop
+17_01	17\17_01_poses.npz	non_strict_walk_description	walk with anger, frustration
+17_03	17\17_03_poses.npz	non_strict_walk_description	walk stealthily
+17_04	17\17_04_poses.npz	non_strict_walk_description	walk stealthily
+17_05	17\17_05_poses.npz	non_strict_walk_description	walk/hobble
+17_06	17\17_06_poses.npz	non_strict_walk_description	whistle, walk jauntily
+17_07	17\17_07_poses.npz	non_strict_walk_description	whistle, walk jauntily
+17_08	17\17_08_poses.npz	non_strict_walk_description	muscular, heavyset person's walk
+17_09	17\17_09_poses.npz	non_strict_walk_description	muscular, heavyset person's walk
+36_01	36\36_01_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_02	36\36_02_poses.npz	non_strict_walk_description	walk forward, turn around, walk back
+36_03	36\36_03_poses.npz	non_strict_walk_description	walk forward, turn around, walk back
+36_04	36\36_04_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_05	36\36_05_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_06	36\36_06_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_07	36\36_07_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_08	36\36_08_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_09	36\36_09_poses.npz	non_strict_walk_description	walk forward, turn around, walk back
+36_10	36\36_10_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_11	36\36_11_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_12	36\36_12_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_13	36\36_13_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_14	36\36_14_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_15	36\36_15_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_16	36\36_16_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_17	36\36_17_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_18	36\36_18_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_19	36\36_19_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_20	36\36_20_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_21	36\36_21_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_22	36\36_22_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_23	36\36_23_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_24	36\36_24_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_25	36\36_25_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_26	36\36_26_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_27	36\36_27_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_28	36\36_28_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_29	36\36_29_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_30	36\36_30_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_31	36\36_31_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_32	36\36_32_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_33	36\36_33_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_34	36\36_34_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_35	36\36_35_poses.npz	non_strict_walk_description	walk on uneven terrain
+36_36	36\36_36_poses.npz	non_strict_walk_description	walk on uneven terrain
+38_04	38\38_04_poses.npz	non_strict_walk_description	walk around, frequent turns, cyclic walk along a line
+39_11	39\39_11_poses.npz	non_strict_walk_description	walk forward, turn around, walk back
+40_02	40\40_02_poses.npz	non_strict_walk_description	navigate - walk forward, backward, on a diagonal
+40_03	40\40_03_poses.npz	non_strict_walk_description	navigate - walk forward, backward, on a diagonal
+40_04	40\40_04_poses.npz	non_strict_walk_description	navigate - walk forward, backward, on a diagonal
+40_05	40\40_05_poses.npz	non_strict_walk_description	navigate - walk forward, backward, on a diagonal
+41_02	41\41_02_poses.npz	non_strict_walk_description	navigate - walk forward, backward, sideways, on a diagonal
+41_03	41\41_03_poses.npz	non_strict_walk_description	navigate - walk forward, backward, sideways, on a diagonal
+41_04	41\41_04_poses.npz	non_strict_walk_description	navigate - walk forward, backward, on a diagonal
+41_05	41\41_05_poses.npz	non_strict_walk_description	navigate - walk forward, backward, on a diagonal
+41_06	41\41_06_poses.npz	non_strict_walk_description	navigate - walk forward, backward, on a diagonal
+47_01	47\47_01_poses.npz	non_strict_walk_description	walk forward, turn around, walk back
+54_20	54\54_20_poses.npz	non_strict_walk_description	follow path, walk around obstacles
+54_21	54\54_21_poses.npz	non_strict_walk_description	follow path, walk around obstacles
+54_22	54\54_22_poses.npz	non_strict_walk_description	follow path, walk around obstacles
+56_01	56\56_01_poses.npz	non_strict_walk_description	walk around
+74_01	74\74_01_poses.npz	non_strict_walk_description	stiff walk
+74_02	74\74_02_poses.npz	non_strict_walk_description	stiff walk
+74_20	74\74_20_poses.npz	non_strict_walk_description	stiff walk
+76_09	76\76_09_poses.npz	non_strict_walk_description	walking backwards
+77_28	77\77_28_poses.npz	non_strict_walk_description	careful walk
+77_29	77\77_29_poses.npz	non_strict_walk_description	creeping walk
+77_30	77\77_30_poses.npz	non_strict_walk_description	creeping walk
+77_31	77\77_31_poses.npz	non_strict_walk_description	silent walk
+77_32	77\77_32_poses.npz	non_strict_walk_description	creeping walk
+82_09	82\82_09_poses.npz	non_strict_walk_description	confident walk forward
+82_10	82\82_10_poses.npz	non_strict_walk_description	sad walk forward
+82_11	82\82_11_poses.npz	non_strict_walk_description	normal walk forward
+82_12	82\82_12_poses.npz	non_strict_walk_description	happy or fast walk forward
+82_13	82\82_13_poses.npz	non_strict_walk_description	normal walk forward
+82_14	82\82_14_poses.npz	non_strict_walk_description	walk forward and slow down
+82_15	82\82_15_poses.npz	non_strict_walk_description	walk forward and turn sideways
+83_36	83\83_36_poses.npz	non_strict_walk_description	walk forward turn 90 degrees left walk forward
+83_37	83\83_37_poses.npz	non_strict_walk_description	walk forward turn 90 degrees right walk forward
+83_38	83\83_38_poses.npz	non_strict_walk_description	walk forward turn 90 degrees left walk forward
+83_39	83\83_39_poses.npz	non_strict_walk_description	walk forward turn 90 degrees right walk forward
+86_03	86\86_03_poses.npz	non_strict_walk_description	walking, running, jumping, kicking, and stretching
+86_04	86\86_04_poses.npz	non_strict_walk_description	walking, stretching, punching, chopping, and drinking
+86_05	86\86_05_poses.npz	non_strict_walk_description	walking, jumping, jumping jacks,  jumping on one foot, punching, chopping,
+86_06	86\86_06_poses.npz	non_strict_walk_description	walking, running, kicking, punching, knee kicking, and stretching
+86_07	86\86_07_poses.npz	non_strict_walk_description	walking, swinging arms, stretching, jumping on one leg, and jumping
+86_08	86\86_08_poses.npz	non_strict_walk_description	walking, squats, stretching, kicking, and punching
+86_09	86\86_09_poses.npz	non_strict_walk_description	walking, sitting, looking, stand up
+86_11	86\86_11_poses.npz	non_strict_walk_description	walking, stretching, walking and turning
+90_22	90\90_22_poses.npz	non_strict_walk_description	straight walk
+90_23	90\90_23_poses.npz	non_strict_walk_description	straight walk
+90_25	90\90_25_poses.npz	non_strict_walk_description	fwd ball walk
+90_26	90\90_26_poses.npz	non_strict_walk_description	fwd ball walk
+90_27	90\90_27_poses.npz	non_strict_walk_description	bwk ball walk
+91_01	91\91_01_poses.npz	non_strict_walk_description	Walk digital figure eight
+91_02	91\91_02_poses.npz	non_strict_walk_description	WalkStraight
+91_03	91\91_03_poses.npz	non_strict_walk_description	Walk figure eight
+91_05	91\91_05_poses.npz	non_strict_walk_description	Mummy Walk
+91_36	91\91_36_poses.npz	non_strict_walk_description	WalkStraight
+91_57	91\91_57_poses.npz	non_strict_walk_description	WalkForward
+91_62	91\91_62_poses.npz	non_strict_walk_description	walkFigure8
+93_07	93\93_07_poses.npz	non_strict_walk_description	Casual Walk

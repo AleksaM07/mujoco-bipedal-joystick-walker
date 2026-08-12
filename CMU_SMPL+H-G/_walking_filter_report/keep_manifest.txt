@@ -1,0 +1,96 @@
+02_01	02\02_01_poses.npz	strict_flat_walk_description	walk
+02_02	02\02_02_poses.npz	strict_flat_walk_description	walk
+05_01	05\05_01_poses.npz	strict_flat_walk_description	walk
+06_01	06\06_01_poses.npz	strict_flat_walk_description	walk
+07_01	07\07_01_poses.npz	strict_flat_walk_description	walk
+07_02	07\07_02_poses.npz	strict_flat_walk_description	walk
+07_03	07\07_03_poses.npz	strict_flat_walk_description	walk
+07_04	07\07_04_poses.npz	strict_flat_walk_description	slow walk
+07_05	07\07_05_poses.npz	strict_flat_walk_description	slow walk
+07_06	07\07_06_poses.npz	strict_flat_walk_description	walk
+07_07	07\07_07_poses.npz	strict_flat_walk_description	walk
+07_08	07\07_08_poses.npz	strict_flat_walk_description	walk
+07_09	07\07_09_poses.npz	strict_flat_walk_description	walk
+07_10	07\07_10_poses.npz	strict_flat_walk_description	walk
+07_11	07\07_11_poses.npz	strict_flat_walk_description	walk
+08_01	08\08_01_poses.npz	strict_flat_walk_description	walk
+08_02	08\08_02_poses.npz	strict_flat_walk_description	walk
+08_03	08\08_03_poses.npz	strict_flat_walk_description	walk
+08_04	08\08_04_poses.npz	strict_flat_walk_description	slow walk
+08_06	08\08_06_poses.npz	strict_flat_walk_description	walk
+08_08	08\08_08_poses.npz	strict_flat_walk_description	walk
+08_09	08\08_09_poses.npz	strict_flat_walk_description	walk
+10_04	10\10_04_poses.npz	strict_flat_walk_description	walk
+111_34	111\111_34_poses.npz	strict_flat_walk_description	Walk
+111_35	111\111_35_poses.npz	strict_flat_walk_description	Walk
+113_25	113\113_25_poses.npz	strict_flat_walk_description	Walk
+114_13	114\114_13_poses.npz	strict_flat_walk_description	Walk
+114_14	114\114_14_poses.npz	strict_flat_walk_description	Walk
+114_15	114\114_15_poses.npz	strict_flat_walk_description	Walk
+12_01	12\12_01_poses.npz	strict_flat_walk_description	walk
+12_02	12\12_02_poses.npz	strict_flat_walk_description	walk
+12_03	12\12_03_poses.npz	strict_flat_walk_description	walk
+120_19	120\120_19_poses.npz	strict_flat_walk_description	Walk slow
+120_20	120\120_20_poses.npz	strict_flat_walk_description	Walk
+132_45	132\132_45_poses.npz	strict_flat_walk_description	Walk Slow
+132_46	132\132_46_poses.npz	strict_flat_walk_description	Walk Slow
+132_47	132\132_47_poses.npz	strict_flat_walk_description	Walk Slow
+132_48	132\132_48_poses.npz	strict_flat_walk_description	Walk Slow
+132_50	132\132_50_poses.npz	strict_flat_walk_description	Walk Slow
+133_21	133\133_21_poses.npz	strict_flat_walk_description	Walk
+133_22	133\133_22_poses.npz	strict_flat_walk_description	Walk
+133_23	133\133_23_poses.npz	strict_flat_walk_description	Walk
+139_30	139\139_30_poses.npz	strict_flat_walk_description	Walking
+141_19	141\141_19_poses.npz	strict_flat_walk_description	Walk
+141_25	141\141_25_poses.npz	strict_flat_walk_description	Walk
+143_32	143\143_32_poses.npz	strict_flat_walk_description	Walk
+26_01	26\26_01_poses.npz	strict_flat_walk_description	walk
+27_01	27\27_01_poses.npz	strict_flat_walk_description	walk
+29_01	29\29_01_poses.npz	strict_flat_walk_description	walk
+32_01	32\32_01_poses.npz	strict_flat_walk_description	walk
+32_02	32\32_02_poses.npz	strict_flat_walk_description	walk
+35_01	35\35_01_poses.npz	strict_flat_walk_description	walk
+35_02	35\35_02_poses.npz	strict_flat_walk_description	walk
+35_03	35\35_03_poses.npz	strict_flat_walk_description	walk
+35_04	35\35_04_poses.npz	strict_flat_walk_description	walk
+35_05	35\35_05_poses.npz	strict_flat_walk_description	walk
+35_06	35\35_06_poses.npz	strict_flat_walk_description	walk
+35_07	35\35_07_poses.npz	strict_flat_walk_description	walk
+35_08	35\35_08_poses.npz	strict_flat_walk_description	walk
+35_09	35\35_09_poses.npz	strict_flat_walk_description	walk
+35_10	35\35_10_poses.npz	strict_flat_walk_description	walk
+35_11	35\35_11_poses.npz	strict_flat_walk_description	walk
+35_12	35\35_12_poses.npz	strict_flat_walk_description	walk
+35_13	35\35_13_poses.npz	strict_flat_walk_description	walk
+35_14	35\35_14_poses.npz	strict_flat_walk_description	walk
+35_15	35\35_15_poses.npz	strict_flat_walk_description	walk
+35_16	35\35_16_poses.npz	strict_flat_walk_description	walk
+35_28	35\35_28_poses.npz	strict_flat_walk_description	walk
+35_29	35\35_29_poses.npz	strict_flat_walk_description	walk
+35_30	35\35_30_poses.npz	strict_flat_walk_description	walk
+35_31	35\35_31_poses.npz	strict_flat_walk_description	walk
+35_32	35\35_32_poses.npz	strict_flat_walk_description	walk
+35_33	35\35_33_poses.npz	strict_flat_walk_description	walk
+35_34	35\35_34_poses.npz	strict_flat_walk_description	walk
+37_01	37\37_01_poses.npz	strict_flat_walk_description	slow walk
+38_01	38\38_01_poses.npz	strict_flat_walk_description	walk
+38_02	38\38_02_poses.npz	strict_flat_walk_description	walk
+39_01	39\39_01_poses.npz	strict_flat_walk_description	walk
+39_02	39\39_02_poses.npz	strict_flat_walk_description	walk
+39_03	39\39_03_poses.npz	strict_flat_walk_description	walk
+39_04	39\39_04_poses.npz	strict_flat_walk_description	walk
+39_05	39\39_05_poses.npz	strict_flat_walk_description	walk
+39_06	39\39_06_poses.npz	strict_flat_walk_description	walk
+39_07	39\39_07_poses.npz	strict_flat_walk_description	walk
+39_08	39\39_08_poses.npz	strict_flat_walk_description	walk
+39_09	39\39_09_poses.npz	strict_flat_walk_description	walk
+39_10	39\39_10_poses.npz	strict_flat_walk_description	walk
+39_12	39\39_12_poses.npz	strict_flat_walk_description	walk
+39_13	39\39_13_poses.npz	strict_flat_walk_description	walk
+39_14	39\39_14_poses.npz	strict_flat_walk_description	walk
+43_01	43\43_01_poses.npz	strict_flat_walk_description	walk
+45_01	45\45_01_poses.npz	strict_flat_walk_description	walk
+46_01	46\46_01_poses.npz	strict_flat_walk_description	walk
+49_01	49\49_01_poses.npz	strict_flat_walk_description	walk
+55_04	55\55_04_poses.npz	strict_flat_walk_description	walk
+91_04	91\91_04_poses.npz	strict_flat_walk_description	Walking

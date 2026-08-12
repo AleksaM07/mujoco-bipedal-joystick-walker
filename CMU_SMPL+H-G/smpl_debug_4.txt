@@ -1,0 +1,4 @@
+CMU_SMPL+H-G/02/02_01_poses.npz
+CMU_SMPL+H-G/02/02_02_poses.npz
+CMU_SMPL+H-G/07/07_01_poses.npz
+CMU_SMPL+H-G/07/07_04_poses.npz

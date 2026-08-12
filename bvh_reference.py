@@ -131,6 +131,9 @@ class BvhReferenceBatch:
     source_start_frames: np.ndarray
     source_end_frames: np.ndarray
     support_feet: tuple[str, ...]
+    diagnostic_summaries: tuple[str, ...] = ()
+    ik_target_names: tuple[str, ...] = ()
+    ik_target_positions: np.ndarray | None = None
 
 
 class BvhMotionLibrary:

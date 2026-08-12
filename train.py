@@ -578,7 +578,7 @@ def run_training(
     write_xml_manifest(run_dir, env)
     log_environment_summary(env, label="train env")
     log_eval_environment_summary(eval_env)
-    if getattr(env._config, "reference_gait", "none") == "bvh":
+    if getattr(env._config, "reference_gait", "none") in ("bvh", "smpl"):
         with logged_stage("reference reset diagnostics"):
             log_reference_reset_diagnostics(env.reset(jax.random.PRNGKey(train_config.seed)))
     logger.info(
@@ -962,7 +962,9 @@ def log_environment_summary(env, label: str = "env") -> None:
         "physics_backend={} | warp_naconmax={} | warp_njmax={} | "
         "command_profile={} | action_smoothing={} | rfi_limit={} | "
         "rao_limit={} | reference_target_observation={} | "
-        "legacy_action_prior={} | init_qpos_file={} | xml={}",
+        "reference_replay_target_step={} | dm_root_vel_weight_scale={} | "
+        "legacy_action_prior={} | "
+        "init_qpos_file={} | xml={}",
         label,
         model.nq,
         model.nv,
@@ -981,6 +983,8 @@ def log_environment_summary(env, label: str = "env") -> None:
         getattr(env._config, "rfi_torque_limit", None),
         getattr(env._config, "rao_torque_limit", None),
         getattr(env._config, "reference_target_observation", None),
+        getattr(env._config, "reference_replay_target_step", None),
+        getattr(env._config, "deepmimic_root_velocity_weight_scale", None),
         getattr(env._config, "legacy_action_prior", None),
         getattr(env._config, "init_qpos_file", None),
         getattr(env, "xml_path", None),
@@ -1141,6 +1145,10 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         "reference_gait": env_config.reference_gait,
         "reference_target_observation": env_config.reference_target_observation,
         "bvh_target_observation_steps": env_config.bvh_target_observation_steps,
+        "reference_replay_target_step": env_config.reference_replay_target_step,
+        "deepmimic_root_velocity_weight_scale": (
+            env_config.deepmimic_root_velocity_weight_scale
+        ),
         "deepmimic_reward_mode": env_config.deepmimic_reward_mode,
         "deepmimic_key_bodies": env_config.deepmimic_key_bodies,
         "pose_termination": env_config.pose_termination,
@@ -1243,6 +1251,7 @@ def run_reference_playback_audit(
         "reference_gait",
         "deepmimic_pose",
         "deepmimic_velocity",
+        "deepmimic_total_no_root_velocity",
         "deepmimic_root_pose",
         "deepmimic_root_velocity",
         "deepmimic_key_position",
@@ -1255,6 +1264,13 @@ def run_reference_playback_audit(
         "deepmimic_key_pos_error",
         "deepmimic_max_key_dist",
         "height",
+        "com_height",
+        "root_vertical_velocity",
+        "pelvis_vertical_velocity",
+        "left_foot_height",
+        "right_foot_height",
+        "foot_slip",
+        "action_magnitude",
         "torso_up",
     )
     done_keys = (
@@ -1271,14 +1287,27 @@ def run_reference_playback_audit(
     trace_metric_keys = (
         "reward",
         "height",
+        "com_height",
         "torso_up",
         "head_up",
+        "root_vertical_velocity",
+        "pelvis_vertical_velocity",
+        "left_foot_height",
+        "right_foot_height",
+        "left_foot_contact",
+        "right_foot_contact",
+        "foot_slip",
+        "action_magnitude",
         "reference_gait",
         "deepmimic_pose",
         "deepmimic_velocity",
+        "deepmimic_total_no_root_velocity",
         "deepmimic_root_pose",
         "deepmimic_root_velocity",
         "deepmimic_key_position",
+        "deepmimic_root_pose_raw",
+        "deepmimic_root_velocity_raw",
+        "deepmimic_key_position_raw",
         "deepmimic_pose_error",
         "deepmimic_velocity_error",
         "deepmimic_root_xy_error",
@@ -1288,6 +1317,14 @@ def run_reference_playback_audit(
         "deepmimic_key_pos_error",
         "deepmimic_max_key_dist",
         "reference_motion_time",
+        "reference_root_height",
+        "reference_root_vertical_velocity",
+        "reference_left_foot_height",
+        "reference_right_foot_height",
+        "root_height_tracking_error",
+        "root_vertical_velocity_tracking_error",
+        "left_foot_height_tracking_error",
+        "right_foot_height_tracking_error",
         "done_low_height",
         "done_tipped",
         "done_invalid",
@@ -1296,36 +1333,78 @@ def run_reference_playback_audit(
         "done",
     )
 
-    def _trace_episode(reset_index: int, max_trace_steps: int) -> None:
-        rng = jax.random.PRNGKey(seed + reset_index)
+    trace_limit = min(max(int(trace_steps), 0), max_steps)
+
+    def _trace_episode_device(rng: jax.Array) -> dict[str, jax.Array]:
         state = env.reset(rng)
-        trace_limit = min(max_trace_steps, max_steps)
+
+        def body(carry, step_index):
+            current_state, stopped = carry
+            metric_values = jnp.stack(
+                [current_state.metrics[key] for key in trace_metric_keys]
+            ).astype(jnp.float32)
+            clip_id = current_state.info["bvh_reference_clip_id"].astype(jnp.int32)
+            fallback = current_state.info["reference_fallback_standing"]
+            done = current_state.done > 0.5
+            valid = ~stopped
+            should_step = valid & (~done) & (step_index < trace_limit)
+            next_state = jax.lax.cond(
+                should_step,
+                lambda _: env.step(current_state, zero_action),
+                lambda _: current_state,
+                operand=None,
+            )
+            return (
+                next_state,
+                stopped | done | (step_index >= trace_limit),
+            ), {
+                "valid": valid,
+                "clip_id": clip_id,
+                "fallback": fallback,
+                "metrics": metric_values,
+            }
+
+        _, rows = jax.lax.scan(
+            body,
+            (state, jnp.array(False)),
+            jnp.arange(trace_limit + 1, dtype=jnp.int32),
+        )
+        return rows
+
+    trace_episode_fn = (
+        jax.jit(_trace_episode_device) if trace_limit > 0 and trace_resets > 0 else None
+    )
+
+    def _trace_episode(reset_index: int) -> None:
+        if trace_episode_fn is None:
+            return
+        rng = jax.random.PRNGKey(seed + reset_index)
+        host = jax.tree_util.tree_map(
+            lambda value: jax.device_get(value),
+            trace_episode_fn(rng),
+        )
+        valid_mask = np.asarray(host["valid"], dtype=bool)
+        metric_values = np.asarray(host["metrics"], dtype=np.float64)
+        clip_ids = np.asarray(host["clip_id"], dtype=np.int32)
+        fallbacks = np.asarray(host["fallback"], dtype=bool)
         rows = []
-        for step_index in range(trace_limit + 1):
+        for step_index in np.where(valid_mask)[0]:
+            clip_id = int(clip_ids[step_index])
             metrics = {
-                key: float(jax.device_get(state.metrics[key]))
-                for key in trace_metric_keys
-                if key in state.metrics
+                key: float(metric_values[step_index, metric_index])
+                for metric_index, key in enumerate(trace_metric_keys)
             }
-            row = {
-                "reset_index": reset_index,
-                "step": step_index,
-                "clip_id": int(jax.device_get(state.info["bvh_reference_clip_id"])),
-                "loop_mode": _loop_mode_name(
-                    env,
-                    int(jax.device_get(state.info["bvh_reference_clip_id"])),
-                ),
-                "fallback": bool(
-                    jax.device_get(state.info["reference_fallback_standing"])
-                ),
-                **metrics,
-            }
-            rows.append(row)
-            if bool(float(jax.device_get(state.done)) > 0.5):
-                break
-            if step_index >= trace_limit:
-                break
-            state = env.step(state, zero_action)
+            rows.append(
+                {
+                    "reset_index": reset_index,
+                    "step": int(step_index),
+                    "clip_id": clip_id,
+                    "loop_mode": _loop_mode_name(env, clip_id),
+                    "support_foot": _clip_support_foot(env, clip_id),
+                    "fallback": bool(fallbacks[step_index]),
+                    **metrics,
+                }
+            )
 
         with trace_path.open("a", encoding="utf-8") as trace_file:
             for row in rows:
@@ -1398,6 +1477,9 @@ def run_reference_playback_audit(
             "height": state.metrics["height"].astype(jnp.float32),
             "reward": state.metrics["reward"].astype(jnp.float32),
             "deepmimic_pose": state.metrics["deepmimic_pose"].astype(jnp.float32),
+            "deepmimic_total_no_root_velocity": state.metrics[
+                "deepmimic_total_no_root_velocity"
+            ].astype(jnp.float32),
             "deepmimic_key_position": state.metrics[
                 "deepmimic_key_position"
             ].astype(jnp.float32),
@@ -1488,7 +1570,7 @@ def run_reference_playback_audit(
         loop_mode = _loop_mode_name(env, clip_id)
         mode_counts[loop_mode] = mode_counts.get(loop_mode, 0) + 1
         if reset_index < max(int(trace_resets), 0) and int(trace_steps) > 0:
-            _trace_episode(reset_index, int(trace_steps))
+            _trace_episode(reset_index)
         is_motion_over = bool(done_flags[3] > 0.5)
         is_pose_termination = bool(done_flags[4] > 0.5)
         is_physical_fail = bool(
@@ -1745,6 +1827,7 @@ def run_reference_playback_audit(
         f"avg_reference_gait={metric_means['reference_gait']} | "
         f"avg_pose={metric_means['deepmimic_pose']} | "
         f"avg_vel={metric_means['deepmimic_velocity']} | "
+        f"avg_no_root_vel={metric_means['deepmimic_total_no_root_velocity']} | "
         f"avg_root_pose={metric_means['deepmimic_root_pose']} | "
         f"avg_root_vel={metric_means['deepmimic_root_velocity']} | "
         f"avg_key_pos={metric_means['deepmimic_key_position']} | "
@@ -1847,6 +1930,12 @@ def _log_reference_library_summary(env) -> None:
     frame_counts = getattr(env, "_bvh_reference_frame_counts", None)
     motion_lengths = getattr(env, "_bvh_reference_motion_lengths", None)
     loop_modes = getattr(env, "_bvh_reference_loop_modes", None)
+    support_feet = tuple(getattr(env, "_bvh_reference_support_feet", ()))
+    diagnostic_summaries = tuple(
+        summary
+        for summary in getattr(env, "_bvh_reference_diagnostic_summaries", ())
+        if summary
+    )
     if frame_counts is None:
         logger.info("reference library | clip_count={}", clip_count)
         return
@@ -1874,6 +1963,22 @@ def _log_reference_library_summary(env) -> None:
         int(np.sum(modes == 1)),
         int(np.sum(modes == 0)),
     )
+    if support_feet:
+        left_support = sum(foot == "left_foot" for foot in support_feet)
+        right_support = sum(foot == "right_foot" for foot in support_feet)
+        unknown_support = sum(not foot for foot in support_feet)
+        logger.info(
+            "reference support feet | left={} | right={} | unknown={}",
+            left_support,
+            right_support,
+            unknown_support,
+        )
+    if diagnostic_summaries:
+        logger.info(
+            "reference retarget diagnostics | clips_with_clipping={} | sample={}",
+            len(diagnostic_summaries),
+            diagnostic_summaries[:3],
+        )
 
 
 def main() -> None:
@@ -1919,11 +2024,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--reference-gait",
-        choices=["none", "sine", "bvh"],
+        choices=["none", "sine", "bvh", "smpl"],
         default="bvh",
         help=(
-            "BVH/MimicKit-style imitation je default; none/sine su samo "
-            "compatibility/debug modovi."
+            "BVH/MimicKit-style imitation je default; smpl cita CMU/AMASS "
+            "SMPL+H-G npz reference; none/sine su compatibility/debug modovi."
         ),
     )
     parser.add_argument(
@@ -1932,8 +2037,8 @@ def main() -> None:
         action="append",
         default=None,
         help=(
-            "BVH fajl za --reference-gait bvh. Moze se navesti vise puta; "
-            "env bira jedan reference clip po epizodi."
+            "Reference fajl za --reference-gait bvh ili smpl. Moze se navesti "
+            "vise puta; env bira jedan reference clip po epizodi."
         ),
     )
     parser.add_argument(
@@ -1942,8 +2047,8 @@ def main() -> None:
         action="append",
         default=None,
         help=(
-            "Text fajl sa jednim BVH path-om po liniji. Moze se navesti "
-            "vise puta za tier1+tier2 curriculum run."
+            "Text fajl sa jednim reference path-om po liniji (BVH ili SMPL npz). "
+            "Moze se navesti vise puta."
         ),
     )
     parser.add_argument(
@@ -2172,7 +2277,8 @@ def main() -> None:
         reference_gait=args.reference_gait,
         reference_gait_file=reference_gait_file,
         reference_target_observation=(
-            args.reference_gait == "bvh" and EnvConfig.reference_target_observation
+            args.reference_gait in ("bvh", "smpl")
+            and EnvConfig.reference_target_observation
         ),
         deepmimic_reward_mode=args.deepmimic_reward_mode,
         deepmimic_key_bodies=tuple(
