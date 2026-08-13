@@ -614,6 +614,12 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
             DEFAULT_BVH_REFERENCE_LIST.relative_to(PROJECT_ROOT).as_posix()
         ],
         reference_target_observation=True,
+        # REF: MIMICKIT-ACTION-BOUNDS-POS
+        # TYPE: REFERENCE_CODE_DERIVED
+        # MimicKit humanoid actions are absolute PD targets in character DOF
+        # space. The reference trajectory is used for reset/reward/obs, not as
+        # a feed-forward motor target during policy training.
+        reference_action_mode="mimickit",
         reference_replay_target_step=1,
         deepmimic_root_velocity_weight_scale=0.15,
         policy_observation_size=None,
@@ -725,7 +731,11 @@ def default_biomechanics_ppo_config() -> config_dict.ConfigDict:
             activation=jax.nn.silu,
             policy_obs_key="state",
             value_obs_key="privileged_state",
-            distribution_type="normal",
+            # REF: MIMICKIT-ACTION-BOUND-LOSS
+            # TYPE: ENGINEERING_EQUIVALENT
+            # MimicKit keeps Gaussian actions near bounds with an actor-side
+            # bound loss. Brax exposes bounded sampling directly via tanh_normal.
+            distribution_type="tanh_normal",
             # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
             # TYPE: REFERENCE_CODE_DERIVED
             # Brax exposes the initial std here. Its PPO wrapper does not expose
@@ -776,6 +786,7 @@ class EnvConfig:
         ]
     )
     reference_target_observation: bool = True
+    reference_action_mode: str = "mimickit"
     bvh_target_observation_steps: tuple[int, ...] = (0,)
     reference_replay_target_step: int = 1
     deepmimic_root_velocity_weight_scale: float = 0.15
@@ -832,6 +843,7 @@ class TrainConfig:
     num_minibatches: int | None = None
     num_updates_per_batch: int | None = None
     learning_rate: float | None = None
+    distribution_type: str | None = None
     enable_erfi: bool = False
     enable_domain_randomization: bool = False
     no_erfi: bool = False

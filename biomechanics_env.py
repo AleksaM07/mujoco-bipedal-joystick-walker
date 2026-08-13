@@ -363,6 +363,38 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             self._actuator_qpos_upper_limits_np
         )
         self._default_ctrl = self._init_q[self._actuator_qpos_indices]
+        finite_action_bounds = (
+            np.isfinite(self._actuator_qpos_lower_limits_np)
+            & np.isfinite(self._actuator_qpos_upper_limits_np)
+        )
+        action_center_np = np.where(
+            finite_action_bounds,
+            0.5
+            * (
+                self._actuator_qpos_lower_limits_np
+                + self._actuator_qpos_upper_limits_np
+            ),
+            np.asarray(self._default_ctrl),
+        )
+        action_half_range_np = np.where(
+            finite_action_bounds,
+            np.maximum(
+                self._actuator_qpos_upper_limits_np - action_center_np,
+                action_center_np - self._actuator_qpos_lower_limits_np,
+            ),
+            np.asarray(self._action_scale),
+        )
+        action_half_range_np = 1.4 * action_half_range_np
+        self._mimickit_action_center = jp.array(action_center_np)
+        self._mimickit_action_half_range = jp.array(
+            np.maximum(action_half_range_np, 1e-4)
+        )
+        self._mimickit_action_lower_limits = (
+            self._mimickit_action_center - self._mimickit_action_half_range
+        )
+        self._mimickit_action_upper_limits = (
+            self._mimickit_action_center + self._mimickit_action_half_range
+        )
         self._n_substeps = int(round(self._ctrl_dt / self._sim_dt))
         self._torso_body_id = self._mj_model.body("thorax").id
         self._head_body_id = self._mj_model.body("head").id
@@ -1755,17 +1787,11 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             self._config.action_smoothing * policy_action
             + (1.0 - self._config.action_smoothing) * previous_action
         )
-        if self._config.get("reference_gait", "none") in ("bvh", "smpl"):
-            target_step = int(self._config.get("reference_replay_target_step", 1))
-            reference_ctrl = self._query_bvh_reference(info, target_step)["qpos"]
-        else:
-            reference_ctrl = self._default_ctrl
-        motor_targets = reference_ctrl + (smoothed_action * self._action_scale)
-        motor_targets = jp.clip(
-            motor_targets,
-            self._actuator_qpos_lower_limits,
-            self._actuator_qpos_upper_limits,
+        motor_targets = self._policy_action_to_motor_targets(
+            smoothed_action,
+            info,
         )
+        motor_targets = self._clip_motor_targets(motor_targets)
         data = self.step_with_joint_torque_injection(
             state.data,
             motor_targets,
@@ -1942,6 +1968,43 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             done=done.astype(reward.dtype),
             metrics=metrics,
             info=info,
+        )
+
+    def _policy_action_to_motor_targets(
+        self,
+        smoothed_action: jax.Array,
+        info: dict[str, jax.Array],
+    ) -> jax.Array:
+        """Map normalized policy actions to PD position targets."""
+        reference_gait = self._config.get("reference_gait", "none")
+        reference_action_mode = self._config.get("reference_action_mode", "mimickit")
+        if reference_gait in ("bvh", "smpl") and reference_action_mode == "mimickit":
+            return (
+                self._mimickit_action_center
+                + smoothed_action * self._mimickit_action_half_range
+            )
+
+        if reference_gait in ("bvh", "smpl"):
+            target_step = int(self._config.get("reference_replay_target_step", 1))
+            reference_ctrl = self._query_bvh_reference(info, target_step)["qpos"]
+        else:
+            reference_ctrl = self._default_ctrl
+        return reference_ctrl + (smoothed_action * self._action_scale)
+
+    def _clip_motor_targets(self, motor_targets: jax.Array) -> jax.Array:
+        """Clip PD targets to the active action convention."""
+        reference_gait = self._config.get("reference_gait", "none")
+        reference_action_mode = self._config.get("reference_action_mode", "mimickit")
+        if reference_gait in ("bvh", "smpl") and reference_action_mode == "mimickit":
+            return jp.clip(
+                motor_targets,
+                self._mimickit_action_lower_limits,
+                self._mimickit_action_upper_limits,
+            )
+        return jp.clip(
+            motor_targets,
+            self._actuator_qpos_lower_limits,
+            self._actuator_qpos_upper_limits,
         )
 
     def sample_command(self, rng: jax.Array) -> jax.Array:

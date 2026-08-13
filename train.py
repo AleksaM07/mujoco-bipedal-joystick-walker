@@ -404,6 +404,8 @@ def make_ppo_config(
     for key, value in overrides.items():
         if value is not None:
             rl_config[key] = value
+    if train_config.distribution_type is not None:
+        rl_config.network_factory.distribution_type = train_config.distribution_type
 
     return rl_config
 
@@ -962,8 +964,8 @@ def log_environment_summary(env, label: str = "env") -> None:
         "physics_backend={} | warp_naconmax={} | warp_njmax={} | "
         "command_profile={} | action_smoothing={} | rfi_limit={} | "
         "rao_limit={} | reference_target_observation={} | "
-        "reference_replay_target_step={} | dm_root_vel_weight_scale={} | "
-        "legacy_action_prior={} | "
+        "reference_action_mode={} | reference_replay_target_step={} | "
+        "dm_root_vel_weight_scale={} | legacy_action_prior={} | "
         "init_qpos_file={} | xml={}",
         label,
         model.nq,
@@ -983,6 +985,7 @@ def log_environment_summary(env, label: str = "env") -> None:
         getattr(env._config, "rfi_torque_limit", None),
         getattr(env._config, "rao_torque_limit", None),
         getattr(env._config, "reference_target_observation", None),
+        getattr(env._config, "reference_action_mode", None),
         getattr(env._config, "reference_replay_target_step", None),
         getattr(env._config, "deepmimic_root_velocity_weight_scale", None),
         getattr(env._config, "legacy_action_prior", None),
@@ -1144,6 +1147,7 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         "command_profile": env_config.command_profile,
         "reference_gait": env_config.reference_gait,
         "reference_target_observation": env_config.reference_target_observation,
+        "reference_action_mode": env_config.reference_action_mode,
         "bvh_target_observation_steps": env_config.bvh_target_observation_steps,
         "reference_replay_target_step": env_config.reference_replay_target_step,
         "deepmimic_root_velocity_weight_scale": (
@@ -1192,6 +1196,7 @@ def run_reference_playback_audit(
     env_config.physics_backend = physics_backend
     env_config.playground_impl = "warp" if physics_backend == "mjx_warp" else "jax"
     env_config.reference_target_observation = False
+    env_config.reference_action_mode = "residual"
     env_config.bvh_target_observation_steps = (0,)
     env_config.reset_sample_attempts = min(int(env_config.reset_sample_attempts), 2)
     env_config.reset_projection_levels = tuple(
@@ -1222,7 +1227,7 @@ def run_reference_playback_audit(
     logger.info(
         "playback config | resets={} | steps={} | seed={} | backend={} | "
         "requested_clip_mode={} | reference_gait={} | reference_gait_file={} | "
-        "audit_target_obs={} | audit_reset_attempts={} | "
+        "audit_target_obs={} | audit_action_mode={} | audit_reset_attempts={} | "
         "audit_projection_levels={} | trace_resets={} | trace_steps={}",
         resets,
         steps,
@@ -1232,6 +1237,7 @@ def run_reference_playback_audit(
         env_config.reference_gait,
         env_config.reference_gait_file,
         env_config.reference_target_observation,
+        env_config.reference_action_mode,
         env_config.reset_sample_attempts,
         env_config.reset_projection_levels,
         trace_resets,
@@ -2032,6 +2038,15 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--reference-action-mode",
+        choices=["mimickit", "residual"],
+        default=EnvConfig.reference_action_mode,
+        help=(
+            "mimickit: policy action is an absolute PD target in DOF space; "
+            "residual: old reference_ctrl + action_scale * action playback mode."
+        ),
+    )
+    parser.add_argument(
         "--reference-gait-file",
         type=Path,
         action="append",
@@ -2126,6 +2141,15 @@ def main() -> None:
     parser.add_argument("--num-minibatches", type=int, default=None)
     parser.add_argument("--updates-per-batch", type=int, default=None)
     parser.add_argument("--learning-rate", type=float, default=None)
+    parser.add_argument(
+        "--distribution-type",
+        choices=["normal", "tanh_normal"],
+        default=None,
+        help=(
+            "Override Brax policy action distribution. Default comes from "
+            "config.py and is tanh_normal for bounded MimicKit-style actions."
+        ),
+    )
     parser.add_argument(
         "--debug-run",
         action="store_true",
@@ -2276,6 +2300,7 @@ def main() -> None:
         command_profile=args.command_profile,
         reference_gait=args.reference_gait,
         reference_gait_file=reference_gait_file,
+        reference_action_mode=args.reference_action_mode,
         reference_target_observation=(
             args.reference_gait in ("bvh", "smpl")
             and EnvConfig.reference_target_observation
@@ -2346,6 +2371,7 @@ def main() -> None:
             else debug_defaults.get("num_updates_per_batch")
         ),
         learning_rate=args.learning_rate,
+        distribution_type=args.distribution_type,
         enable_erfi=args.erfi,
         enable_domain_randomization=(
             args.domain_randomization
