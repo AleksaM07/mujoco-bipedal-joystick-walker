@@ -131,6 +131,16 @@ TRAIN_DIAGNOSTIC_METRICS: Final[tuple[tuple[str, str], ...]] = (
 # to regenerate tier list files.
 BVH_ROOT: Final = PROJECT_ROOT / "BVH_walking_animation"
 DEFAULT_BVH_REFERENCE_LIST: Final = BVH_ROOT / "tier1_debug_10.txt"
+SMPL_ROOT: Final = PROJECT_ROOT / "CMU_SMPL+H-G"
+DEFAULT_SMPL_REFERENCE_FILES: Final[tuple[Path, ...]] = (
+    SMPL_ROOT / "02" / "02_01_poses.npz",
+    SMPL_ROOT / "02" / "02_02_poses.npz",
+    SMPL_ROOT / "07" / "07_01_poses.npz",
+    SMPL_ROOT / "07" / "07_04_poses.npz",
+)
+DEFAULT_SMPL_REFERENCE_LIST: Final = (
+    SMPL_ROOT / "_walking_filter_report" / "keep_manifest.txt"
+)
 BVH_INDEX_PATTERN: Final = re.compile(r"^\s*(\d{2,3}_\d{2})\s+(.+?)\s*$")
 BVH_TIER1_EXCLUDE: Final[set[str]] = {
     "back",
@@ -620,6 +630,15 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # space. The reference trajectory is used for reset/reward/obs, not as
         # a feed-forward motor target during policy training.
         reference_action_mode="mimickit",
+        # MimicKit's own humanoid has meaningful action-space midpoints. Our
+        # generated XML does not: knee joint-limit midpoint is a deep crouch.
+        # Keep zero action at the biomechanical standing default.
+        reference_action_center="default",
+        # Keep the absolute PD action domain in the locally tuned actuator
+        # scale. The raw MimicKit 1.4x joint-limit range is far too wide for
+        # this XML and drives tanh policies straight into saturation.
+        reference_action_range="action_scale",
+        reference_action_range_scale=1.0,
         reference_replay_target_step=1,
         deepmimic_root_velocity_weight_scale=1.0,
         policy_observation_size=None,
@@ -783,6 +802,9 @@ class EnvConfig:
     )
     reference_target_observation: bool = True
     reference_action_mode: str = "mimickit"
+    reference_action_center: str = "default"
+    reference_action_range: str = "action_scale"
+    reference_action_range_scale: float = 1.0
     bvh_target_observation_steps: tuple[int, ...] = (1, 2, 3)
     reference_replay_target_step: int = 1
     deepmimic_root_velocity_weight_scale: float = 1.0

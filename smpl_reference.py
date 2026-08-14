@@ -217,7 +217,7 @@ def _load_smpl_clip(
     initial_root_quat: np.ndarray,
 ) -> SmplMotionClip:
     source_path = path
-    bundle = np.load(source_path)
+    bundle = np.load(source_path, allow_pickle=True)
     poses = np.asarray(bundle["poses"], dtype=np.float32)
     trans = np.asarray(bundle["trans"], dtype=np.float32)
     frame_rate = float(np.asarray(bundle["mocap_framerate"]).reshape(()))

@@ -366,16 +366,22 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             np.isfinite(self._actuator_qpos_lower_limits_np)
             & np.isfinite(self._actuator_qpos_upper_limits_np)
         )
-        action_center_np = np.where(
+        default_ctrl_np = np.asarray(self._default_ctrl)
+        action_midpoint_np = np.where(
             finite_action_bounds,
             0.5
             * (
                 self._actuator_qpos_lower_limits_np
                 + self._actuator_qpos_upper_limits_np
             ),
-            np.asarray(self._default_ctrl),
+            default_ctrl_np,
         )
-        action_half_range_np = np.where(
+        action_center_mode = self._config.get("reference_action_center", "default")
+        if action_center_mode == "joint_midpoint":
+            action_center_np = action_midpoint_np
+        else:
+            action_center_np = default_ctrl_np
+        joint_limit_half_range_np = np.where(
             finite_action_bounds,
             np.maximum(
                 self._actuator_qpos_upper_limits_np - action_center_np,
@@ -383,7 +389,15 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             ),
             np.asarray(self._action_scale),
         )
-        action_half_range_np = 1.4 * action_half_range_np
+        action_range_mode = self._config.get("reference_action_range", "action_scale")
+        if action_range_mode == "joint_limits":
+            action_half_range_np = 1.4 * joint_limit_half_range_np
+        else:
+            action_half_range_np = np.asarray(self._action_scale)
+        action_half_range_np = (
+            float(self._config.get("reference_action_range_scale", 1.0))
+            * action_half_range_np
+        )
         self._mimickit_action_center = jp.array(action_center_np)
         self._mimickit_action_half_range = jp.array(
             np.maximum(action_half_range_np, 1e-4)
@@ -1975,8 +1989,14 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         if reference_gait in ("bvh", "smpl") and reference_action_mode == "mimickit":
             return jp.clip(
                 motor_targets,
-                self._mimickit_action_lower_limits,
-                self._mimickit_action_upper_limits,
+                jp.maximum(
+                    self._mimickit_action_lower_limits,
+                    self._actuator_qpos_lower_limits,
+                ),
+                jp.minimum(
+                    self._mimickit_action_upper_limits,
+                    self._actuator_qpos_upper_limits,
+                ),
             )
         return jp.clip(
             motor_targets,

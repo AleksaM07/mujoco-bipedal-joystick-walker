@@ -32,6 +32,7 @@ from mujoco_playground._src import wrapper as playground_wrapper
 from biomechanics_env import BiomechanicsJoystickEnv, domain_randomize
 from config import (
     DEFAULT_BVH_REFERENCE_LIST,
+    DEFAULT_SMPL_REFERENCE_FILES,
     DOMAIN_RANDOMIZATION_ID,
     PROJECT_ROOT,
     RUNS_DIR,
@@ -89,6 +90,7 @@ class TrainingProgressLogger:
                 ("eval/episode_deepmimic_root_pose", "dm_root_step"),
                 ("eval/episode_deepmimic_root_velocity", "dm_root_vel_step"),
                 ("eval/episode_deepmimic_key_position", "dm_key_step"),
+                ("eval/episode_action_magnitude", "act_mag_step"),
                 ("eval/episode_tracking_lin", "track_lin_step"),
                 ("eval/episode_command_progress", "progress_step"),
                 ("eval/episode_height", "height_step"),
@@ -567,6 +569,14 @@ def run_training(
     logger.add(lambda msg: print(msg, end=""), level="INFO")
     logger.add(run_dir / "train.log", level="INFO", encoding="utf-8", mode="w")
     save_run_config(run_dir, env_config, train_config, rl_config)
+    reference_files = env_config.reference_gait_file
+    reference_count = len(reference_files) if isinstance(reference_files, list) else 0
+    logger.info(
+        "reference files | gait={} | count={} | first={}",
+        env_config.reference_gait,
+        reference_count,
+        reference_files[0] if reference_count else reference_files,
+    )
 
     enable_erfi = (
         train_config.enable_erfi
@@ -964,8 +974,10 @@ def log_environment_summary(env, label: str = "env") -> None:
         "physics_backend={} | warp_naconmax={} | warp_njmax={} | "
         "command_profile={} | action_smoothing={} | rfi_limit={} | "
         "rao_limit={} | reference_target_observation={} | "
-        "reference_action_mode={} | reference_replay_target_step={} | "
-        "dm_root_vel_weight_scale={} | legacy_action_prior={} | "
+        "reference_action_mode={} | reference_action_center={} | "
+        "reference_action_range={} | reference_action_range_scale={} | "
+        "reference_replay_target_step={} | dm_root_vel_weight_scale={} | "
+        "legacy_action_prior={} | "
         "init_qpos_file={} | xml={}",
         label,
         model.nq,
@@ -986,6 +998,9 @@ def log_environment_summary(env, label: str = "env") -> None:
         getattr(env._config, "rao_torque_limit", None),
         getattr(env._config, "reference_target_observation", None),
         getattr(env._config, "reference_action_mode", None),
+        getattr(env._config, "reference_action_center", None),
+        getattr(env._config, "reference_action_range", None),
+        getattr(env._config, "reference_action_range_scale", None),
         getattr(env._config, "reference_replay_target_step", None),
         getattr(env._config, "deepmimic_root_velocity_weight_scale", None),
         getattr(env._config, "legacy_action_prior", None),
@@ -1148,6 +1163,9 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         "reference_gait": env_config.reference_gait,
         "reference_target_observation": env_config.reference_target_observation,
         "reference_action_mode": env_config.reference_action_mode,
+        "reference_action_center": env_config.reference_action_center,
+        "reference_action_range": env_config.reference_action_range,
+        "reference_action_range_scale": env_config.reference_action_range_scale,
         "bvh_target_observation_steps": env_config.bvh_target_observation_steps,
         "reference_replay_target_step": env_config.reference_replay_target_step,
         "deepmimic_root_velocity_weight_scale": (
@@ -1197,6 +1215,9 @@ def run_reference_playback_audit(
     env_config.playground_impl = "warp" if physics_backend == "mjx_warp" else "jax"
     env_config.reference_target_observation = False
     env_config.reference_action_mode = "residual"
+    env_config.reference_action_center = "default"
+    env_config.reference_action_range = "action_scale"
+    env_config.reference_action_range_scale = 1.0
     env_config.bvh_target_observation_steps = (0,)
     env_config.reset_sample_attempts = min(int(env_config.reset_sample_attempts), 2)
     env_config.reset_projection_levels = tuple(
@@ -2047,6 +2068,32 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--reference-action-center",
+        choices=["default", "joint_midpoint"],
+        default=EnvConfig.reference_action_center,
+        help=(
+            "Action-space zero point for MimicKit mode. default keeps zero "
+            "action at the XML standing pose; joint_midpoint reproduces raw "
+            "MimicKit bounds centering."
+        ),
+    )
+    parser.add_argument(
+        "--reference-action-range",
+        choices=["action_scale", "joint_limits"],
+        default=EnvConfig.reference_action_range,
+        help=(
+            "PD target half-range for MimicKit mode. action_scale uses the "
+            "locally tuned actuator scales; joint_limits uses raw 1.4x "
+            "joint-limit bounds."
+        ),
+    )
+    parser.add_argument(
+        "--reference-action-range-scale",
+        type=float,
+        default=EnvConfig.reference_action_range_scale,
+        help="Multiplier for --reference-action-range.",
+    )
+    parser.add_argument(
         "--reference-gait-file",
         type=Path,
         action="append",
@@ -2292,6 +2339,13 @@ def main() -> None:
         reference_gait_file = expand_reference_gait_files(
             reference_gait_lists=[DEFAULT_BVH_REFERENCE_LIST],
         )
+    if args.reference_gait == "smpl" and reference_gait_file is None:
+        reference_gait_file = expand_reference_gait_files(
+            reference_gait_files=[
+                path.relative_to(PROJECT_ROOT)
+                for path in DEFAULT_SMPL_REFERENCE_FILES
+            ],
+        )
 
     env_config = EnvConfig(
         env_version=args.env_version,
@@ -2300,6 +2354,9 @@ def main() -> None:
         reference_gait=args.reference_gait,
         reference_gait_file=reference_gait_file,
         reference_action_mode=args.reference_action_mode,
+        reference_action_center=args.reference_action_center,
+        reference_action_range=args.reference_action_range,
+        reference_action_range_scale=args.reference_action_range_scale,
         reference_target_observation=(
             args.reference_gait in ("bvh", "smpl")
             and EnvConfig.reference_target_observation
