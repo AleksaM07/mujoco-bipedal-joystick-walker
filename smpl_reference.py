@@ -227,7 +227,6 @@ def _load_smpl_clip(
     smpl_global_positions = _smpl_global_joint_positions(poses, trans)
     chest_positions = smpl_global_positions[:, SMPL_MUJOCO_JOINT_INDEX["Chest"]]
 
-    pelvis = _joint_axis_angles_to_mujoco(poses, "pelvis")
     spine1 = _joint_axis_angles_to_mujoco(poses, "spine1")
     spine2 = _joint_axis_angles_to_mujoco(poses, "spine2")
     left_hip = _joint_axis_angles_to_mujoco(poses, "left_hip")
@@ -237,26 +236,28 @@ def _load_smpl_clip(
     left_ankle = _joint_axis_angles_to_mujoco(poses, "left_ankle")
     right_ankle = _joint_axis_angles_to_mujoco(poses, "right_ankle")
     abdomen = 0.65 * spine1 + 0.35 * spine2
+    abdomen_x, abdomen_y, abdomen_z = abdomen[:, 0], abdomen[:, 2], abdomen[:, 1]
+    left_hip_x, left_hip_y, left_hip_z = left_hip[:, 0], left_hip[:, 2], left_hip[:, 1]
+    right_hip_x, right_hip_y, right_hip_z = right_hip[:, 0], right_hip[:, 2], right_hip[:, 1]
+    left_ankle_y, left_ankle_z = left_ankle[:, 2], left_ankle[:, 1]
+    right_ankle_y, right_ankle_z = right_ankle[:, 2], right_ankle[:, 1]
 
     absolute = {
-        "abdomen_x": abdomen[:, 0],
-        "abdomen_y": abdomen[:, 1],
-        "abdomen_z": abdomen[:, 2],
-        "pelvis_x": pelvis[:, 0],
-        "pelvis_y": pelvis[:, 1],
-        "pelvis_z": pelvis[:, 2],
-        "left_hip_x": left_hip[:, 0],
-        "left_hip_y": left_hip[:, 2],
-        "left_hip_z": left_hip[:, 1],
-        "right_hip_x": right_hip[:, 0],
-        "right_hip_y": right_hip[:, 2],
-        "right_hip_z": right_hip[:, 1],
+        "abdomen_x": abdomen_x,
+        "abdomen_y": abdomen_y,
+        "abdomen_z": abdomen_z,
+        "left_hip_x": left_hip_x,
+        "left_hip_y": left_hip_y,
+        "left_hip_z": left_hip_z,
+        "right_hip_x": right_hip_x,
+        "right_hip_y": right_hip_y,
+        "right_hip_z": right_hip_z,
         "left_knee_z": -left_knee[:, 1],
         "right_knee_z": -right_knee[:, 1],
-        "left_ankle_y": left_ankle[:, 1],
-        "right_ankle_y": right_ankle[:, 1],
-        "left_ankle_z": left_ankle[:, 2],
-        "right_ankle_z": right_ankle[:, 2],
+        "left_ankle_y": left_ankle_y,
+        "right_ankle_y": right_ankle_y,
+        "left_ankle_z": left_ankle_z,
+        "right_ankle_z": right_ankle_z,
     }
     bind_frame = _standing_like_frame_index(absolute)
     for joint_name, values in absolute.items():
@@ -464,13 +465,13 @@ def _standing_like_frame_index(absolute: dict[str, np.ndarray]) -> int:
 def _infer_support_foot_from_targets(absolute: dict[str, np.ndarray]) -> str:
     """Infer a dominant support foot from ankle/knee sagittal motion."""
     left_score = (
-        np.abs(absolute["left_ankle_y"])
-        + 0.5 * np.abs(absolute["left_ankle_z"])
+        np.abs(absolute["left_ankle_z"])
+        + 0.5 * np.abs(absolute["left_ankle_y"])
         + 0.35 * np.abs(absolute["left_knee_z"])
     )
     right_score = (
-        np.abs(absolute["right_ankle_y"])
-        + 0.5 * np.abs(absolute["right_ankle_z"])
+        np.abs(absolute["right_ankle_z"])
+        + 0.5 * np.abs(absolute["right_ankle_y"])
         + 0.35 * np.abs(absolute["right_knee_z"])
     )
     window = max(int(min(left_score.shape[0], 30)), 1)
