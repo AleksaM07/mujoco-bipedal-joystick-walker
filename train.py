@@ -2079,12 +2079,13 @@ def main() -> None:
     )
     parser.add_argument(
         "--reference-action-range",
-        choices=["action_scale", "joint_limits"],
+        choices=["action_scale", "joint_limits", "reference_targets"],
         default=EnvConfig.reference_action_range,
         help=(
             "PD target half-range for MimicKit mode. action_scale uses the "
             "locally tuned actuator scales; joint_limits uses raw 1.4x "
-            "joint-limit bounds."
+            "actuator ctrl bounds; reference_targets expands enough to cover "
+            "the loaded reference qpos envelope."
         ),
     )
     parser.add_argument(

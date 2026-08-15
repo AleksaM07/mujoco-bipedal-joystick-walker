@@ -362,53 +362,26 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self._actuator_qpos_upper_limits = jp.array(
             self._actuator_qpos_upper_limits_np
         )
+        self._actuator_ctrl_lower_limits_np = np.array([
+            self._mj_model.actuator_ctrlrange[actuator_id, 0]
+            if self._mj_model.actuator_ctrllimited[actuator_id]
+            else self._actuator_qpos_lower_limits_np[actuator_id]
+            for actuator_id in range(self._mj_model.nu)
+        ])
+        self._actuator_ctrl_upper_limits_np = np.array([
+            self._mj_model.actuator_ctrlrange[actuator_id, 1]
+            if self._mj_model.actuator_ctrllimited[actuator_id]
+            else self._actuator_qpos_upper_limits_np[actuator_id]
+            for actuator_id in range(self._mj_model.nu)
+        ])
+        self._actuator_ctrl_lower_limits = jp.array(
+            self._actuator_ctrl_lower_limits_np
+        )
+        self._actuator_ctrl_upper_limits = jp.array(
+            self._actuator_ctrl_upper_limits_np
+        )
         self._default_ctrl = self._init_q[self._actuator_qpos_indices]
-        finite_action_bounds = (
-            np.isfinite(self._actuator_qpos_lower_limits_np)
-            & np.isfinite(self._actuator_qpos_upper_limits_np)
-        )
-        default_ctrl_np = np.asarray(self._default_ctrl)
-        action_midpoint_np = np.where(
-            finite_action_bounds,
-            0.5
-            * (
-                self._actuator_qpos_lower_limits_np
-                + self._actuator_qpos_upper_limits_np
-            ),
-            default_ctrl_np,
-        )
-        action_center_mode = self._config.get("reference_action_center", "default")
-        if action_center_mode == "joint_midpoint":
-            action_center_np = action_midpoint_np
-        else:
-            action_center_np = default_ctrl_np
-        joint_limit_half_range_np = np.where(
-            finite_action_bounds,
-            np.maximum(
-                self._actuator_qpos_upper_limits_np - action_center_np,
-                action_center_np - self._actuator_qpos_lower_limits_np,
-            ),
-            np.asarray(self._action_scale),
-        )
-        action_range_mode = self._config.get("reference_action_range", "action_scale")
-        if action_range_mode == "joint_limits":
-            action_half_range_np = 1.4 * joint_limit_half_range_np
-        else:
-            action_half_range_np = np.asarray(self._action_scale)
-        action_half_range_np = (
-            float(self._config.get("reference_action_range_scale", 1.0))
-            * action_half_range_np
-        )
-        self._mimickit_action_center = jp.array(action_center_np)
-        self._mimickit_action_half_range = jp.array(
-            np.maximum(action_half_range_np, 1e-4)
-        )
-        self._mimickit_action_lower_limits = (
-            self._mimickit_action_center - self._mimickit_action_half_range
-        )
-        self._mimickit_action_upper_limits = (
-            self._mimickit_action_center + self._mimickit_action_half_range
-        )
+        self._configure_mimickit_action_bounds()
         self._n_substeps = int(round(self._ctrl_dt / self._sim_dt))
         self._torso_body_id = self._mj_model.body("thorax").id
         self._head_body_id = self._mj_model.body("head").id
@@ -618,6 +591,79 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             cls.POSTURE_STD_WALKING[category],
         )
 
+    def _configure_mimickit_action_bounds(
+        self,
+        reference_qpos_targets: np.ndarray | None = None,
+    ) -> None:
+        """Build the normalized policy-action to PD-target map.
+
+        MimicKit actions are absolute PD targets. For retargeted SMPL/BVH, the
+        action domain must cover the loaded reference envelope; otherwise tanh
+        policies hit +-1 while still being unable to command the rewarded pose.
+        """
+        finite_action_bounds = (
+            np.isfinite(self._actuator_ctrl_lower_limits_np)
+            & np.isfinite(self._actuator_ctrl_upper_limits_np)
+        )
+        default_ctrl_np = np.asarray(self._default_ctrl, dtype=np.float32)
+        action_midpoint_np = np.where(
+            finite_action_bounds,
+            0.5
+            * (
+                self._actuator_ctrl_lower_limits_np
+                + self._actuator_ctrl_upper_limits_np
+            ),
+            default_ctrl_np,
+        )
+        action_center_mode = self._config.get("reference_action_center", "default")
+        if action_center_mode == "joint_midpoint":
+            action_center_np = action_midpoint_np.astype(np.float32)
+        else:
+            action_center_np = default_ctrl_np
+
+        ctrl_half_range_np = np.where(
+            finite_action_bounds,
+            np.maximum(
+                self._actuator_ctrl_upper_limits_np - action_center_np,
+                action_center_np - self._actuator_ctrl_lower_limits_np,
+            ),
+            np.asarray(self._action_scale, dtype=np.float32),
+        ).astype(np.float32)
+        action_range_mode = self._config.get("reference_action_range", "action_scale")
+        if action_range_mode == "joint_limits":
+            action_half_range_np = 1.4 * ctrl_half_range_np
+        elif action_range_mode == "reference_targets" and reference_qpos_targets is not None:
+            reference_delta_np = np.max(
+                np.abs(np.asarray(reference_qpos_targets, dtype=np.float32) - action_center_np),
+                axis=(0, 1),
+            )
+            action_half_range_np = np.maximum(
+                np.asarray(self._action_scale, dtype=np.float32),
+                reference_delta_np,
+            )
+        else:
+            action_half_range_np = np.asarray(self._action_scale, dtype=np.float32)
+        action_half_range_np = (
+            float(self._config.get("reference_action_range_scale", 1.0))
+            * action_half_range_np
+        )
+        action_half_range_np = np.minimum(action_half_range_np, ctrl_half_range_np)
+        action_half_range_np = np.maximum(action_half_range_np, 1e-4)
+        self._mimickit_action_center = jp.array(action_center_np)
+        self._mimickit_action_half_range = jp.array(action_half_range_np)
+        self._mimickit_action_lower_limits = jp.array(
+            np.maximum(
+                action_center_np - action_half_range_np,
+                self._actuator_ctrl_lower_limits_np,
+            )
+        )
+        self._mimickit_action_upper_limits = jp.array(
+            np.minimum(
+                action_center_np + action_half_range_np,
+                self._actuator_ctrl_upper_limits_np,
+            )
+        )
+
     def _configure_bvh_reference(self) -> None:
         """Ucita BVH referencu ako je trazena u config-u."""
         reference_gait = self._config.get("reference_gait", "none")
@@ -630,8 +676,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             tuple(resolve_project_path(path) for path in reference_gait_files),
             self._actuator_joint_names,
             np.asarray(self._default_ctrl, dtype=np.float32),
-            self._actuator_qpos_lower_limits_np,
-            self._actuator_qpos_upper_limits_np,
+            self._actuator_ctrl_lower_limits_np,
+            self._actuator_ctrl_upper_limits_np,
             initial_root_pos=np.asarray(self._init_q_np[:3], dtype=np.float32),
             initial_root_quat=np.asarray(self._init_q_np[3:7], dtype=np.float32),
         )
@@ -724,6 +770,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             root_angvel_targets *= velocity_scale
         self._bvh_reference_qpos_targets = jp.array(qpos_targets)
         self._bvh_reference_qvel_targets = jp.array(qvel_targets)
+        self._configure_mimickit_action_bounds(qpos_targets)
         self._bvh_reference_sim_root_pos_targets_np = sim_root_pos_targets
         self._bvh_reference_sim_root_quat_targets_np = references.root_quat_targets
         self._bvh_reference_sim_root_vel_targets_np = sim_root_vel_targets
@@ -849,8 +896,15 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
 
         data = mujoco.MjData(self._mj_model)
         action_size = seed_targets.shape[-1]
-        lower = self._actuator_qpos_lower_limits_np.astype(np.float64)
-        upper = self._actuator_qpos_upper_limits_np.astype(np.float64)
+        lower = self._actuator_ctrl_lower_limits_np.astype(np.float64)
+        upper = self._actuator_ctrl_upper_limits_np.astype(np.float64)
+        ik_update_mask = np.array(
+            [
+                joint_name in LEG_ACTUATED_JOINTS
+                for joint_name in self._actuator_joint_names
+            ],
+            dtype=np.float64,
+        )
         pose_reg = 0.20
         smooth_reg = 0.08
         damping = 1e-5
@@ -895,7 +949,9 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                         sqrt_weight = np.sqrt(marker_weight)
                         residuals.append(sqrt_weight * (target_pos - current_pos))
                         marker_jac = self._host_marker_jacobian(data, marker)
-                        jacobian_rows.append(sqrt_weight * marker_jac)
+                        jacobian_rows.append(
+                            sqrt_weight * marker_jac * ik_update_mask[None, :]
+                        )
 
                     sqrt_pose_reg = np.sqrt(pose_reg)
                     residuals.append(sqrt_pose_reg * (seed - qpos))
@@ -975,27 +1031,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self,
         qpos_targets: np.ndarray,
     ) -> np.ndarray:
-        """Blend IK targets toward the XML's stable neutral pose by joint role."""
-        qpos_targets = np.asarray(qpos_targets, dtype=np.float32)
-        neutral = np.asarray(self._default_ctrl, dtype=np.float32)
-        sagittal_motion_joints = {
-            "left_hip_x",
-            "right_hip_x",
-            "left_knee_z",
-            "right_knee_z",
-            "left_ankle_y",
-            "right_ankle_y",
-        }
-        alpha = np.array(
-            [
-                0.40 if joint_name in sagittal_motion_joints else 0.20
-                for joint_name in self._actuator_joint_names
-            ],
-            dtype=np.float32,
-        )
-        return neutral[None, None, :] + alpha[None, None, :] * (
-            qpos_targets - neutral[None, None, :]
-        )
+        """Keep IK/FK actuator targets. Standing blend undid walking amplitudes."""
+        return np.asarray(qpos_targets, dtype=np.float32)
 
     def _resolve_host_ik_markers(
         self,
@@ -2014,17 +2051,17 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 motor_targets,
                 jp.maximum(
                     self._mimickit_action_lower_limits,
-                    self._actuator_qpos_lower_limits,
+                    self._actuator_ctrl_lower_limits,
                 ),
                 jp.minimum(
                     self._mimickit_action_upper_limits,
-                    self._actuator_qpos_upper_limits,
+                    self._actuator_ctrl_upper_limits,
                 ),
             )
         return jp.clip(
             motor_targets,
-            self._actuator_qpos_lower_limits,
-            self._actuator_qpos_upper_limits,
+            self._actuator_ctrl_lower_limits,
+            self._actuator_ctrl_upper_limits,
         )
 
     def sample_command(self, rng: jax.Array) -> jax.Array:

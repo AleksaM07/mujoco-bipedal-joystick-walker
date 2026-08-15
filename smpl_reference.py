@@ -122,8 +122,6 @@ SMPL_MUJOCO_LOCAL_TRANSLATION = np.array(
 SMPL_IK_TARGET_MAP = (
     ("metatarsal_midpoint_right", "R_Toe"),
     ("metatarsal_midpoint_left", "L_Toe"),
-    ("head_vertex", "Head"),
-    ("centre_of_mass_pelvis", "Pelvis"),
 )
 
 SMPL_TO_MUJOCO = np.array(
@@ -139,9 +137,6 @@ SMPL_RETARGET_GAIN = {
     "abdomen_x": 0.75,
     "abdomen_y": 0.75,
     "abdomen_z": 0.75,
-    "pelvis_x": 0.40,
-    "pelvis_y": 0.70,
-    "pelvis_z": 0.40,
     "left_hip_z": 0.65,
     "right_hip_z": 0.65,
     "left_ankle_z": 0.85,
@@ -227,7 +222,6 @@ def _load_smpl_clip(
     smpl_global_positions = _smpl_global_joint_positions(poses, trans)
     chest_positions = smpl_global_positions[:, SMPL_MUJOCO_JOINT_INDEX["Chest"]]
 
-    pelvis = _joint_axis_angles_to_mujoco(poses, "pelvis")
     spine1 = _joint_axis_angles_to_mujoco(poses, "spine1")
     spine2 = _joint_axis_angles_to_mujoco(poses, "spine2")
     left_hip = _joint_axis_angles_to_mujoco(poses, "left_hip")
@@ -242,9 +236,6 @@ def _load_smpl_clip(
         "abdomen_x": abdomen[:, 0],
         "abdomen_y": abdomen[:, 1],
         "abdomen_z": abdomen[:, 2],
-        "pelvis_x": pelvis[:, 0],
-        "pelvis_y": pelvis[:, 1],
-        "pelvis_z": pelvis[:, 2],
         "left_hip_x": left_hip[:, 0],
         "left_hip_y": left_hip[:, 2],
         "left_hip_z": left_hip[:, 1],

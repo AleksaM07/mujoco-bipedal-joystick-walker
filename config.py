@@ -637,8 +637,8 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # Keep the absolute PD action domain in the locally tuned actuator
         # scale. The raw MimicKit 1.4x joint-limit range is far too wide for
         # this XML and drives tanh policies straight into saturation.
-        reference_action_range="action_scale",
-        reference_action_range_scale=1.0,
+        reference_action_range="reference_targets",
+        reference_action_range_scale=1.1,
         reference_replay_target_step=1,
         deepmimic_root_velocity_weight_scale=0.15,
         policy_observation_size=None,
@@ -807,8 +807,8 @@ class EnvConfig:
     reference_target_observation: bool = True
     reference_action_mode: str = "mimickit"
     reference_action_center: str = "default"
-    reference_action_range: str = "action_scale"
-    reference_action_range_scale: float = 1.0
+    reference_action_range: str = "reference_targets"
+    reference_action_range_scale: float = 1.1
     bvh_target_observation_steps: tuple[int, ...] = (1, 2, 3)
     reference_replay_target_step: int = 1
     deepmimic_root_velocity_weight_scale: float = 0.15
