@@ -2046,8 +2046,8 @@ def main() -> None:
     parser.add_argument(
         "--action-smoothing",
         type=float,
-        default=1.0,
-        help="Policy-to-PD blend; 1.0 is MimicKit-style unsmoothed PD targets.",
+        default=0.5,
+        help="Filtriranje policy akcije pre servo targeta; 0.5 prati walking repo.",
     )
     parser.add_argument(
         "--reference-gait",
@@ -2135,7 +2135,8 @@ def main() -> None:
         dest="pose_termination",
         action="store_true",
         help=(
-            "Enable MimicKit-style pose termination on configured key bodies."
+            "Enable MimicKit-style pose termination on configured key bodies. "
+            "Disabled by default until wrap playback is spatially stable."
         ),
     )
     parser.add_argument(

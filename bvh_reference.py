@@ -29,10 +29,10 @@ per-clip fps/loop/frame counts, derive velocities, and expose one padded static
 tensor batch for JAX/MJX.
 
 Absolute joint targets are built in DeepMimic/MimicKit spirit: each frame is an
-absolute character-DOF pose. CMU BVH is converted to MuJoCo-frame hinges, mapped
-onto this XML (sagittal flexion → hip_z / knee_z / ankle_z), then refined by
-FK→IK onto locomotion sites. Marina's step segmentation supplies clip
-boundaries; it is not a skeleton retargeter.
+absolute character-DOF pose. CMU BVH is converted to MuJoCo-frame hinge angles,
+then mapped by role onto this humanoid's actuators (sagittal flexion → hip_z /
+knee_z). Marina's step segmentation supplies clip boundaries; it is not a
+skeleton retargeter.
 """
 
 
@@ -41,23 +41,6 @@ class LoopMode(IntEnum):
 
     CLAMP = 0
     WRAP = 1
-
-
-# Map BVH joints onto this XML's locomotion sites for MimicKit-style IK.
-BVH_IK_TARGET_MAP = (
-    ("metatarsal_midpoint_right", ("RightToeBase", "RightFoot", "RightAnkle")),
-    ("metatarsal_midpoint_left", ("LeftToeBase", "LeftFoot", "LeftAnkle")),
-    ("head_vertex", ("Head", "HeadTop_End", "Neck1", "Neck")),
-    ("centre_of_mass_pelvis", ("Hips",)),
-)
-# Freejoint lives on thorax, so prefer a chest/spine marker for root translation.
-BVH_ROOT_TRANSLATION_JOINTS = (
-    "Chest",
-    "Thorax",
-    "Spine2",
-    "Spine1",
-    "Spine",
-)
 
 
 @dataclass(frozen=True)
@@ -123,8 +106,6 @@ class MotionClip:
     support_foot: str
     loop_mode: LoopMode = LoopMode.CLAMP
     weight: float = 1.0
-    ik_target_names: tuple[str, ...] = ()
-    ik_target_positions: np.ndarray | None = None
 
     @property
     def frame_count(self) -> int:
@@ -213,13 +194,6 @@ class BvhMotionLibrary:
         weights = np.zeros(clip_count, dtype=np.float32)
         source_start_frames = np.zeros(clip_count, dtype=np.int32)
         source_end_frames = np.zeros(clip_count, dtype=np.int32)
-        ik_target_names = self.clips[0].ik_target_names
-        ik_target_count = len(ik_target_names)
-        ik_target_positions = (
-            np.zeros((clip_count, max_frames, ik_target_count, 3), dtype=np.float32)
-            if ik_target_count
-            else None
-        )
 
         for index, clip in enumerate(self.clips):
             frame_count = clip.frame_count
@@ -234,9 +208,6 @@ class BvhMotionLibrary:
             root_vel_targets[index, :frame_count] = clip.root_vel_targets
             root_angvel_targets[index, :frame_count] = clip.root_angvel_targets
             wrap_deltas[index] = clip.wrap_delta
-            if ik_target_positions is not None and clip.ik_target_positions is not None:
-                ik_target_positions[index, :frame_count] = clip.ik_target_positions
-                ik_target_positions[index, frame_count:] = clip.ik_target_positions[-1]
 
             frame_times[index] = clip.frame_time
             frame_counts[index] = frame_count
@@ -267,8 +238,6 @@ class BvhMotionLibrary:
             source_start_frames=source_start_frames,
             source_end_frames=source_end_frames,
             support_feet=tuple(clip.support_foot for clip in self.clips),
-            ik_target_names=ik_target_names,
-            ik_target_positions=ik_target_positions,
         )
 
 
@@ -346,8 +315,8 @@ def _retarget_segment(
     #
     # Empirically, after Y-up→Z-up conversion, CMU walking flexion lives on
     # MuJoCo hinge-Y for both XYZ and ZYX BVH channel orders. This biomechanics
-    # humanoid puts sagittal flexion on *_z hinges (hip_z, knee_z, ankle_z),
-    # so we map flexion onto those rather than world-axis-i → joint_*i.
+    # humanoid puts sagittal flexion on *_z hinges (hip_z, knee_z), so we map
+    # flexion→hip_z/knee_z rather than world-axis-i → joint_*i.
     pelvis = _joint_hinge_angles(segment_bvh, ("Hips",), allow_missing=True)
     lowerback = _joint_hinge_angles(
         segment_bvh,
@@ -395,43 +364,35 @@ def _retarget_segment(
     )
 
     # Absolute DOF series in this character's actuator semantics.
-    # Converted-world XYZ hinges are remapped onto this XML's body hinges:
-    # thorax euler='90 0 0' makes body Z the sagittal axis (*_z) and body Y up.
-    left_hip_x, left_hip_y, left_hip_z = _body_hinges_from_world_xyz(left_hip)
-    right_hip_x, right_hip_y, right_hip_z = _body_hinges_from_world_xyz(right_hip)
-    abdomen_x, abdomen_y, abdomen_z = _body_hinges_from_world_xyz(abdomen)
-    left_ankle_x, left_ankle_y, left_ankle_z = _body_hinges_from_world_xyz(left_ankle)
-    right_ankle_x, right_ankle_y, right_ankle_z = _body_hinges_from_world_xyz(right_ankle)
-    del left_ankle_x, right_ankle_x
-    _, _, left_knee_z = _body_hinges_from_world_xyz(left_knee)
-    _, _, right_knee_z = _body_hinges_from_world_xyz(right_knee)
+    # Indices of hinge_angles: 0=X, 1=Y(flexion), 2=Z.
     absolute = {
-        "abdomen_x": abdomen_x,
-        "abdomen_y": abdomen_y,
-        "abdomen_z": abdomen_z,
-        # Hips is the BVH root. Do not also dump it onto pelvis_* or the
-        # thorax freejoint and pelvis actuators double-apply the same rotation.
-        "left_hip_x": left_hip_x,
-        "left_hip_y": left_hip_y,
-        "left_hip_z": left_hip_z,
-        "right_hip_x": right_hip_x,
-        "right_hip_y": right_hip_y,
-        "right_hip_z": right_hip_z,
+        "abdomen_x": abdomen[:, 0],
+        "abdomen_y": abdomen[:, 1],
+        "abdomen_z": abdomen[:, 2],
+        "pelvis_x": pelvis[:, 0],
+        "pelvis_y": pelvis[:, 1],
+        "pelvis_z": pelvis[:, 2],
+        "left_hip_x": left_hip[:, 0],
+        "left_hip_y": left_hip[:, 2],
+        "left_hip_z": left_hip[:, 1],
+        "right_hip_x": right_hip[:, 0],
+        "right_hip_y": right_hip[:, 2],
+        "right_hip_z": right_hip[:, 1],
         # BVH knee flexion is >=0 when bent; this XML knee_z is <=0 when bent.
-        "left_knee_z": -left_knee_z,
-        "right_knee_z": -right_knee_z,
-        "left_ankle_y": left_ankle_y,
-        "right_ankle_y": right_ankle_y,
-        "left_ankle_z": left_ankle_z,
-        "right_ankle_z": right_ankle_z,
+        "left_knee_z": -left_knee[:, 1],
+        "right_knee_z": -right_knee[:, 1],
+        "left_ankle_y": left_ankle[:, 1],
+        "right_ankle_y": right_ankle[:, 1],
+        "left_ankle_z": left_ankle[:, 2],
+        "right_ankle_z": right_ankle[:, 2],
     }
 
     # Bind-pose offset only: pick a standing-like frame (Marina foot-speed idea)
     # so absolute walking amplitudes stay, but rest pose matches default_ctrl.
     bind_frame = _standing_like_frame_index(
         segment_bvh,
-        left_knee_flex=left_knee_z,
-        right_knee_flex=right_knee_z,
+        left_knee_flex=left_knee[:, 1],
+        right_knee_flex=right_knee[:, 1],
     )
     for joint_name, values in absolute.items():
         if joint_name not in actuator_joint_names:
@@ -440,16 +401,10 @@ def _retarget_segment(
         bind_offset = float(default_ctrl[index] - values[bind_frame])
         assign_target(joint_name, values + bind_offset)
 
-    root_pos, root_quat, alignment_rot, raw_root_origin = _root_motion_targets(
+    root_pos, root_quat = _root_motion_targets(
         segment_bvh,
         initial_root_pos,
         initial_root_quat,
-    )
-    ik_target_names, ik_target_positions = _bvh_ik_target_positions(
-        segment_bvh,
-        alignment_rot,
-        raw_root_origin,
-        initial_root_pos,
     )
     qvel_targets = _target_velocities(targets, segment_bvh.frame_time)
     root_vel_targets = _target_velocities(root_pos, segment_bvh.frame_time)
@@ -477,8 +432,6 @@ def _retarget_segment(
         support_foot=segment.support_foot,
         loop_mode=loop_mode,
         weight=max(segment_bvh.frames - 1, 1) * segment_bvh.frame_time,
-        ik_target_names=ik_target_names,
-        ik_target_positions=ik_target_positions,
     )
 
 
@@ -638,17 +591,6 @@ def _loop_seam_error(clip: MotionClip) -> float:
         + 2.0 * root_height_err
         + root_rot_err
     )
-
-
-def _body_hinges_from_world_xyz(
-    world_xyz: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Map converted-world XYZ hinges onto this XML's body X/Y/Z hinges.
-
-    Thorax has euler='90 0 0', so body Y is world Z (up) and body Z is the
-    sagittal axis. Walking flexion therefore belongs on *_z actuators.
-    """
-    return world_xyz[:, 0], world_xyz[:, 2], world_xyz[:, 1]
 
 
 def _joint_hinge_angles(
@@ -1082,34 +1024,29 @@ def _root_motion_targets(
     bvh: ParsedBvh,
     initial_root_pos: np.ndarray,
     initial_root_quat: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Return root targets aligned to the MuJoCo character's initial frame.
-
-    Translation uses a thorax/chest joint when present because this XML's free
-    joint is on thorax, not Hips/pelvis. Heading still comes from the BVH root.
-    """
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return root targets aligned to the MuJoCo character's initial frame."""
     root = bvh.joints[bvh.root_name]
     root_values = bvh.motion[:, list(root.channel_indices)]
+    root_translation = np.zeros((bvh.frames, 3), dtype=np.float32)
     root_rotation = np.repeat(np.eye(3, dtype=np.float32)[None, :, :], bvh.frames, axis=0)
 
     for frame_index in range(bvh.frames):
         rotation = np.eye(3, dtype=np.float32)
         for channel_index, channel in enumerate(root.channels):
             value = float(root_values[frame_index, channel_index])
-            if channel.endswith("rotation"):
+            if channel == "Xposition":
+                root_translation[frame_index, 0] = value
+            elif channel == "Yposition":
+                root_translation[frame_index, 1] = value
+            elif channel == "Zposition":
+                root_translation[frame_index, 2] = value
+            elif channel.endswith("rotation"):
                 rotation = rotation @ _axis_rotation(channel[0], value)
         root_rotation[frame_index] = rotation
 
-    global_positions = _global_joint_positions(bvh)
-    translation_joint = _first_existing_joint(
-        bvh,
-        BVH_ROOT_TRANSLATION_JOINTS + (bvh.root_name,),
-    )
-    if translation_joint is None:
-        translation_joint = bvh.root_name
-    root_pos_local = _bvh_positions_to_mujoco(global_positions[translation_joint])
-    raw_root_origin = root_pos_local[0].copy()
-    root_pos_local -= raw_root_origin
+    root_pos_local = _bvh_positions_to_mujoco(root_translation)
+    root_pos_local -= root_pos_local[0]
 
     raw_root_quat = np.stack(
         [
@@ -1121,7 +1058,7 @@ def _root_motion_targets(
     raw_root_quat = _continuous_quat_sequence(raw_root_quat)
     # Keep only heading on the free root. In CMU BVH, root pitch/roll often
     # encode upper-body lean that this MuJoCo model already expresses through
-    # abdomen joints. Copying full root tilt into the free joint makes
+    # pelvis/abdomen joints. Copying full root tilt into the free joint makes
     # reset states fail immediately even when joint targets are otherwise good.
     raw_root_heading_quat = _continuous_quat_sequence(
         np.stack([_yaw_only_quat(quat) for quat in raw_root_quat], axis=0)
@@ -1150,37 +1087,7 @@ def _root_motion_targets(
         ],
         axis=0,
     )
-    return (
-        root_pos.astype(np.float32),
-        root_quat.astype(np.float32),
-        alignment_rot.astype(np.float32),
-        raw_root_origin.astype(np.float32),
-    )
-
-
-def _bvh_ik_target_positions(
-    bvh: ParsedBvh,
-    alignment_rot: np.ndarray,
-    raw_root_origin: np.ndarray,
-    initial_root_pos: np.ndarray,
-) -> tuple[tuple[str, ...], np.ndarray]:
-    """BVH FK markers in the same MuJoCo world frame as the freejoint targets."""
-    positions = _global_joint_positions(bvh)
-    fallback = positions[bvh.root_name]
-    names: list[str] = []
-    series: list[np.ndarray] = []
-    for marker_name, joint_names in BVH_IK_TARGET_MAP:
-        joint_name = _first_existing_joint(bvh, joint_names)
-        names.append(marker_name)
-        series.append(positions[joint_name] if joint_name is not None else fallback)
-    selected = np.stack(series, axis=1)
-    flat = selected.reshape(-1, 3)
-    mujoco_positions = _bvh_positions_to_mujoco(flat).reshape(selected.shape)
-    mujoco_positions -= raw_root_origin[None, None, :]
-    mujoco_positions = (
-        mujoco_positions @ alignment_rot.T[None, :, :] + initial_root_pos[None, None, :]
-    )
-    return tuple(names), mujoco_positions.astype(np.float32)
+    return root_pos.astype(np.float32), root_quat.astype(np.float32)
 
 
 def _heading_alignment_quat(

@@ -615,7 +615,7 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         sim_dt=0.005,
         episode_length=1000,
         action_scale=0.5,
-        action_smoothing=1.0,
+        action_smoothing=0.5,
         command_profile="standard",
         # REF: MIMICKIT-MOTION-LIBRARY
         # TYPE: REFERENCE_CODE_DERIVED
@@ -640,7 +640,7 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         reference_action_range="action_scale",
         reference_action_range_scale=1.0,
         reference_replay_target_step=1,
-        deepmimic_root_velocity_weight_scale=1.0,
+        deepmimic_root_velocity_weight_scale=0.15,
         policy_observation_size=None,
         policy_observation_dict=True,
         xml_path=None,
@@ -659,13 +659,17 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # markers stay on the feet. Use metatarsal sites instead of foot body
         # origins because they are a better locomotion endpoint for this XML.
         deepmimic_key_bodies=("metatarsal_midpoint_right", "metatarsal_midpoint_left"),
-        # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
-        # TYPE: REFERENCE_CODE_DERIVED
-        # MimicKit deepmimic_humanoid_env.yaml: pose_termination true,
-        # pose_termination_dist 1.0, tar_obs_steps [1, 2, 3].
-        pose_termination=True,
+        # REF: PROJECT-POSE-TERMINATION-STAGED
+        # TYPE: ENGINEERING_DEFAULT
+        # Keep pose termination opt-in for now. Our current BVH bridge still
+        # under-constrains root/key-body spatial fidelity, so an always-on
+        # MimicKit-style pose kill-switch ends otherwise informative runs too
+        # early. Re-enable once retargeted wrap playback is spatially stable.
+        pose_termination=False,
         pose_termination_dist=1.0,
-        bvh_target_observation_steps=(1, 2, 3),
+        # Start Phase-1 with the current target frame only. Future frames can be
+        # reintroduced after single-frame imitation becomes stable.
+        bvh_target_observation_steps=(0,),
         # Match the conservative reset policy used by the playback audit so
         # training and audit exercise the same valid-init regime.
         reset_sample_attempts=2,
@@ -807,13 +811,13 @@ class EnvConfig:
     reference_action_range_scale: float = 1.0
     bvh_target_observation_steps: tuple[int, ...] = (1, 2, 3)
     reference_replay_target_step: int = 1
-    deepmimic_root_velocity_weight_scale: float = 1.0
+    deepmimic_root_velocity_weight_scale: float = 0.15
     deepmimic_reward_mode: str = "pure"
     deepmimic_key_bodies: tuple[str, ...] = (
         "metatarsal_midpoint_right",
         "metatarsal_midpoint_left",
     )
-    pose_termination: bool = True
+    pose_termination: bool = False
     pose_termination_dist: float = 1.0
     reset_sample_attempts: int = 2
     reset_projection_levels: tuple[float, ...] = (1.0, 0.7, 0.45)
@@ -830,8 +834,9 @@ class EnvConfig:
     # Za nastavak V10/slow checkpoint-a pre Unitree-style action prior-a.
     legacy_action_prior: bool = False
 
-    # 1.0 is MimicKit-style unsmoothed PD targets (policy output = motor target).
-    action_smoothing: float = 1.0
+    # Referentni humanoid walking setup filtrira targete pre PD kontrole.
+    # 0.5 znaci: pola nova akcija politike, pola prethodni target.
+    action_smoothing: float = 0.5
 
     # Opcioni MJDATA/QPOS fajl za pocetnu pozu, npr. neutralni polucucanj.
     # None koristi built-in standing-home pozu.

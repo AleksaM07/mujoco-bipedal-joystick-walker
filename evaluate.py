@@ -661,7 +661,7 @@ def main():
     action_smoothing = (
         args.action_smoothing
         if args.action_smoothing is not None
-        else float(run_env_value(run_config, "action_smoothing", 1.0))
+        else float(run_env_value(run_config, "action_smoothing", 0.5))
     )
     accurate_physics = bool(
         run_env_value(run_config, "accurate_physics", True)
