@@ -976,6 +976,7 @@ def log_environment_summary(env, label: str = "env") -> None:
         "rao_limit={} | reference_target_observation={} | "
         "reference_action_mode={} | reference_action_center={} | "
         "reference_action_range={} | reference_action_range_scale={} | "
+        "reference_residual_scale={} | "
         "reference_replay_target_step={} | dm_root_vel_weight_scale={} | "
         "legacy_action_prior={} | "
         "init_qpos_file={} | xml={}",
@@ -1001,6 +1002,7 @@ def log_environment_summary(env, label: str = "env") -> None:
         getattr(env._config, "reference_action_center", None),
         getattr(env._config, "reference_action_range", None),
         getattr(env._config, "reference_action_range_scale", None),
+        getattr(env._config, "reference_residual_scale", None),
         getattr(env._config, "reference_replay_target_step", None),
         getattr(env._config, "deepmimic_root_velocity_weight_scale", None),
         getattr(env._config, "legacy_action_prior", None),
@@ -1166,6 +1168,7 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         "reference_action_center": env_config.reference_action_center,
         "reference_action_range": env_config.reference_action_range,
         "reference_action_range_scale": env_config.reference_action_range_scale,
+        "reference_residual_scale": env_config.reference_residual_scale,
         "bvh_target_observation_steps": env_config.bvh_target_observation_steps,
         "reference_replay_target_step": env_config.reference_replay_target_step,
         "deepmimic_root_velocity_weight_scale": (
@@ -2095,6 +2098,15 @@ def main() -> None:
         help="Multiplier for --reference-action-range.",
     )
     parser.add_argument(
+        "--reference-residual-scale",
+        type=float,
+        default=EnvConfig.reference_residual_scale,
+        help=(
+            "Multiplier for residual reference actions: motor_targets = "
+            "reference_ctrl + action * action_scale * this value."
+        ),
+    )
+    parser.add_argument(
         "--reference-gait-file",
         type=Path,
         action="append",
@@ -2359,6 +2371,7 @@ def main() -> None:
         reference_action_center=args.reference_action_center,
         reference_action_range=args.reference_action_range,
         reference_action_range_scale=args.reference_action_range_scale,
+        reference_residual_scale=args.reference_residual_scale,
         reference_target_observation=(
             args.reference_gait in ("bvh", "smpl")
             and EnvConfig.reference_target_observation

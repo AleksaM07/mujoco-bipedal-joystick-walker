@@ -639,6 +639,7 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # this XML and drives tanh policies straight into saturation.
         reference_action_range="reference_targets",
         reference_action_range_scale=1.1,
+        reference_residual_scale=0.25,
         reference_replay_target_step=1,
         deepmimic_root_velocity_weight_scale=0.15,
         policy_observation_size=None,
@@ -809,6 +810,7 @@ class EnvConfig:
     reference_action_center: str = "default"
     reference_action_range: str = "reference_targets"
     reference_action_range_scale: float = 1.1
+    reference_residual_scale: float = 0.25
     bvh_target_observation_steps: tuple[int, ...] = (1, 2, 3)
     reference_replay_target_step: int = 1
     deepmimic_root_velocity_weight_scale: float = 0.15

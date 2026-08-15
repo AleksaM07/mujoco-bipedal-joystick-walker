@@ -397,6 +397,14 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             self._right_foot_sole_geom_id,
         ], dtype=np.int32)
         self._foot_geom_ids = jp.array(self._foot_geom_ids_np)
+        self._foot_geom_sizes = jp.array(
+            self._mj_model.geom_size[self._foot_geom_ids_np],
+            dtype=jp.float32,
+        )
+        self._foot_geom_types = jp.array(
+            self._mj_model.geom_type[self._foot_geom_ids_np],
+            dtype=jp.int32,
+        )
         self._deepmimic_body_ids_np = np.arange(1, self._mj_model.nbody)
         self._deepmimic_body_ids = jp.array(self._deepmimic_body_ids_np)
         anchor_local_indices = np.where(
@@ -1031,8 +1039,32 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self,
         qpos_targets: np.ndarray,
     ) -> np.ndarray:
-        """Keep IK/FK actuator targets. Standing blend undid walking amplitudes."""
-        return np.asarray(qpos_targets, dtype=np.float32)
+        """Blend raw SMPL targets toward a dynamically safer locomotion pose.
+
+        Full-amplitude SMPL joint targets can place this XML's COM far outside
+        the support foot.  Keep the gait signal, but damp the raw pose enough
+        that feed-forward reference playback starts from load-bearing contacts.
+        """
+        qpos_targets = np.asarray(qpos_targets, dtype=np.float32)
+        neutral = np.asarray(self._default_ctrl, dtype=np.float32)
+        sagittal_motion_joints = {
+            "left_hip_x",
+            "right_hip_x",
+            "left_knee_z",
+            "right_knee_z",
+            "left_ankle_y",
+            "right_ankle_y",
+        }
+        alpha = np.array(
+            [
+                0.20 if joint_name in sagittal_motion_joints else 0.10
+                for joint_name in self._actuator_joint_names
+            ],
+            dtype=np.float32,
+        )
+        return neutral[None, None, :] + alpha[None, None, :] * (
+            qpos_targets - neutral[None, None, :]
+        )
 
     def _resolve_host_ik_markers(
         self,
@@ -1161,7 +1193,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 standing_root_height * float(self.MIN_STANDING_HEIGHT_RATIO) + 0.05,
             )
         )
-        desired_lowest_height = float(self.FOOT_CONTACT_HEIGHT)
+        desired_lowest_height = -float(self.FOOT_CONTACT_PRELOAD)
 
         clip_count, max_frames, _ = qpos_targets.shape
         for clip_id in range(clip_count):
@@ -1181,7 +1213,13 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 data.qvel[:] = 0.0
                 mujoco.mj_forward(self._mj_model, data)
 
-                foot_heights = data.geom_xpos[self._foot_geom_ids_np, 2]
+                foot_heights = np.array(
+                    [
+                        self._geom_min_z(data, int(geom_id))
+                        for geom_id in self._foot_geom_ids_np
+                    ],
+                    dtype=np.float32,
+                )
                 z_offset = desired_lowest_height - float(np.min(foot_heights))
                 aligned_z = max(float(full_qpos[2]) + z_offset, minimum_reset_height)
                 aligned_root_pos[clip_id, frame_id] = aligned_root_pos[
@@ -2038,9 +2076,14 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         if reference_gait in ("bvh", "smpl"):
             target_step = int(self._config.get("reference_replay_target_step", 1))
             reference_ctrl = self._query_bvh_reference(info, target_step)["qpos"]
+            residual_scale = jp.array(
+                self._config.get("reference_residual_scale", 0.25),
+                dtype=smoothed_action.dtype,
+            )
         else:
             reference_ctrl = self._default_ctrl
-        return reference_ctrl + (smoothed_action * self._action_scale)
+            residual_scale = jp.array(1.0, dtype=smoothed_action.dtype)
+        return reference_ctrl + (smoothed_action * self._action_scale * residual_scale)
 
     def _clip_motor_targets(self, motor_targets: jax.Array) -> jax.Array:
         """Clip PD targets to the active action convention."""
@@ -3603,12 +3646,11 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             ctrl=ctrl,
         )
         data = mjx.forward(self._mjx_model, data)
-        foot_heights = self._foot_heights(data)
         desired_lowest_height = jp.array(
-            self.FOOT_CONTACT_HEIGHT,
+            -self.FOOT_CONTACT_PRELOAD,
             dtype=qpos.dtype,
         )
-        lowest_foot_height = jp.min(foot_heights)
+        lowest_foot_height = jp.min(self._foot_lowest_heights(data))
         z_offset = desired_lowest_height - lowest_foot_height
         qpos = qpos.at[2].add(z_offset)
         minimum_reset_height = (
@@ -3670,6 +3712,34 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
     def _foot_heights(self, data: mjx.Data) -> jax.Array:
         """World Z visine centara oba foot-sole geom-a."""
         return self._foot_positions(data)[:, 2]
+
+    def _foot_lowest_heights(self, data: mjx.Data) -> jax.Array:
+        """Approximate lowest world-Z point of each foot sole geom."""
+        foot_pos = self._foot_positions(data)
+        foot_xmat = data.geom_xmat[self._foot_geom_ids].reshape((-1, 3, 3))
+        center_z = foot_pos[:, 2]
+        size = self._foot_geom_sizes
+        geom_type = self._foot_geom_types
+
+        box_extent_z = jp.sum(jp.abs(foot_xmat[:, 2, :]) * size, axis=1)
+        box_low = center_z - box_extent_z
+        sphere_low = center_z - size[:, 0]
+        capsule_low = center_z - jp.abs(foot_xmat[:, 2, 2]) * size[:, 1] - size[:, 0]
+        fallback_low = center_z - jp.max(size, axis=1)
+
+        return jp.where(
+            geom_type == int(mujoco.mjtGeom.mjGEOM_BOX),
+            box_low,
+            jp.where(
+                geom_type == int(mujoco.mjtGeom.mjGEOM_SPHERE),
+                sphere_low,
+                jp.where(
+                    geom_type == int(mujoco.mjtGeom.mjGEOM_CAPSULE),
+                    capsule_low,
+                    fallback_low,
+                ),
+            ),
+        )
 
     def _foot_contact(self, data: mjx.Data, info: dict) -> jax.Array:
         """Kontakt stopala sa podom iz MuJoCo contact parova, ne samo iz visine."""
