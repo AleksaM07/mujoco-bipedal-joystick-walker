@@ -11,7 +11,7 @@ WORKSPACE_ROOT = PROJECT_ROOT.parent
 BIOMECH_DIR = WORKSPACE_ROOT / "mujoco-biomechanics"
 RUNS_DIR = PROJECT_ROOT / "runs"
 GENERATED_MODEL_DIR = PROJECT_ROOT / "generated_models"
-SCENE_XML_VERSION = "trainfast_v17"
+SCENE_XML_VERSION = "trainfast_v18"
 
 DEFAULT_HUMAN_MASS_KG = 75.0
 DEFAULT_HUMAN_HEIGHT_M = 1.80
@@ -404,71 +404,71 @@ LEG_JOINT_SPECS: Final[dict[str, XmlAttributes]] = {
 }
 
 ACTUATOR_SPECS: Final[dict[str, XmlAttributes]] = {
-    "abdomen_x": {"kp": "180", "ctrlrange": "-0.18 0.18", "forcerange": "-120 120"},
-    "abdomen_y": {"kp": "180", "ctrlrange": "-0.14 0.14", "forcerange": "-120 120"},
-    "abdomen_z": {"kp": "180", "ctrlrange": "-0.18 0.18", "forcerange": "-120 120"},
-    "pelvis_x": {"kp": "220", "ctrlrange": "-0.12 0.12", "forcerange": "-150 150"},
-    "pelvis_y": {"kp": "220", "ctrlrange": "-0.10 0.10", "forcerange": "-150 150"},
-    "pelvis_z": {"kp": "220", "ctrlrange": "-0.12 0.12", "forcerange": "-150 150"},
+    "abdomen_x": {"kp": "240", "ctrlrange": "-0.18 0.18", "forcerange": "-180 180"},
+    "abdomen_y": {"kp": "240", "ctrlrange": "-0.14 0.14", "forcerange": "-180 180"},
+    "abdomen_z": {"kp": "240", "ctrlrange": "-0.18 0.18", "forcerange": "-180 180"},
+    "pelvis_x": {"kp": "300", "ctrlrange": "-0.12 0.12", "forcerange": "-240 240"},
+    "pelvis_y": {"kp": "300", "ctrlrange": "-0.10 0.10", "forcerange": "-240 240"},
+    "pelvis_z": {"kp": "300", "ctrlrange": "-0.12 0.12", "forcerange": "-240 240"},
     "left_hip_x": {
-        "kp": "100",
+        "kp": "220",
         "ctrlrange": "-0.349066 0.698132",
-        "forcerange": "-180 180",
+        "forcerange": "-360 360",
     },
     "left_hip_y": {
-        "kp": "100",
+        "kp": "180",
         "ctrlrange": "-0.383972 0.383972",
-        "forcerange": "-180 180",
+        "forcerange": "-300 300",
     },
     "left_hip_z": {
-        "kp": "100",
+        "kp": "220",
         "ctrlrange": "-0.523599 1.047198",
-        "forcerange": "-180 180",
+        "forcerange": "-360 360",
     },
     "left_knee_z": {
-        "kp": "120",
+        "kp": "260",
         "ctrlrange": "-2.356194 0.000000",
-        "forcerange": "-180 180",
+        "forcerange": "-420 420",
     },
     "left_ankle_y": {
-        "kp": "120",
+        "kp": "180",
         "ctrlrange": "-0.436332 0.436332",
-        "forcerange": "-220 220",
+        "forcerange": "-300 300",
     },
     "left_ankle_z": {
-        "kp": "120",
+        "kp": "160",
         "ctrlrange": "-0.209440 0.209440",
-        "forcerange": "-220 220",
+        "forcerange": "-260 260",
     },
     "right_hip_x": {
-        "kp": "100",
+        "kp": "220",
         "ctrlrange": "-0.698132 0.349066",
-        "forcerange": "-180 180",
+        "forcerange": "-360 360",
     },
     "right_hip_y": {
-        "kp": "100",
+        "kp": "180",
         "ctrlrange": "-0.383972 0.383972",
-        "forcerange": "-180 180",
+        "forcerange": "-300 300",
     },
     "right_hip_z": {
-        "kp": "100",
+        "kp": "220",
         "ctrlrange": "-0.523599 1.047198",
-        "forcerange": "-180 180",
+        "forcerange": "-360 360",
     },
     "right_knee_z": {
-        "kp": "120",
+        "kp": "260",
         "ctrlrange": "-2.356194 0.000000",
-        "forcerange": "-180 180",
+        "forcerange": "-420 420",
     },
     "right_ankle_y": {
-        "kp": "120",
+        "kp": "180",
         "ctrlrange": "-0.436332 0.436332",
-        "forcerange": "-220 220",
+        "forcerange": "-300 300",
     },
     "right_ankle_z": {
-        "kp": "120",
+        "kp": "160",
         "ctrlrange": "-0.209440 0.209440",
-        "forcerange": "-220 220",
+        "forcerange": "-260 260",
     },
 }
 
@@ -626,10 +626,10 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         reference_target_observation=True,
         # REF: MIMICKIT-ACTION-BOUNDS-POS
         # TYPE: REFERENCE_CODE_DERIVED
-        # MimicKit humanoid actions are absolute PD targets in character DOF
-        # space. The reference trajectory is used for reset/reward/obs, not as
-        # a feed-forward motor target during policy training.
-        reference_action_mode="mimickit",
+        # Bootstrap imitation with residual reference targets: zero action
+        # follows the next reference pose, while PPO learns balance corrections.
+        # Absolute MimicKit-style targets remain available via CLI/config.
+        reference_action_mode="residual",
         # MimicKit's own humanoid has meaningful action-space midpoints. Our
         # generated XML does not: knee joint-limit midpoint is a deep crouch.
         # Keep zero action at the biomechanical standing default.
@@ -642,6 +642,18 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         reference_residual_scale=0.25,
         reference_replay_target_step=1,
         deepmimic_root_velocity_weight_scale=0.15,
+        # Keep finite clips away from the terminal edge during random reset.
+        # This prevents short clamp snippets from ending a few control steps
+        # after reset before the controller can learn a gait segment.
+        reference_reset_min_steps_remaining=25,
+        # Drop very short extracted snippets from the default training task.
+        # They are useful for loader debugging, but not for walking imitation.
+        reference_min_motion_length=0.8,
+        # Root XY travel is intentionally damped during imitation pretraining:
+        # the reward is local-root, and this XML cannot servo the free root.
+        reference_root_xy_scale=0.35,
+        reference_stability_sagittal_alpha=0.20,
+        reference_stability_other_alpha=0.05,
         policy_observation_size=None,
         policy_observation_dict=True,
         xml_path=None,
@@ -668,9 +680,8 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # early. Re-enable once retargeted wrap playback is spatially stable.
         pose_termination=False,
         pose_termination_dist=1.0,
-        # Start Phase-1 with the current target frame only. Future frames can be
-        # reintroduced after single-frame imitation becomes stable.
-        bvh_target_observation_steps=(0,),
+        # Match MimicKit's anticipatory target observations for imitation.
+        bvh_target_observation_steps=(1, 2, 3),
         # Match the conservative reset policy used by the playback audit so
         # training and audit exercise the same valid-init regime.
         reset_sample_attempts=2,
@@ -806,7 +817,7 @@ class EnvConfig:
         ]
     )
     reference_target_observation: bool = True
-    reference_action_mode: str = "mimickit"
+    reference_action_mode: str = "residual"
     reference_action_center: str = "default"
     reference_action_range: str = "reference_targets"
     reference_action_range_scale: float = 1.1
@@ -814,6 +825,11 @@ class EnvConfig:
     bvh_target_observation_steps: tuple[int, ...] = (1, 2, 3)
     reference_replay_target_step: int = 1
     deepmimic_root_velocity_weight_scale: float = 0.15
+    reference_reset_min_steps_remaining: int = 25
+    reference_min_motion_length: float = 0.8
+    reference_root_xy_scale: float = 0.35
+    reference_stability_sagittal_alpha: float = 0.20
+    reference_stability_other_alpha: float = 0.05
     deepmimic_reward_mode: str = "pure"
     deepmimic_key_bodies: tuple[str, ...] = (
         "metatarsal_midpoint_right",

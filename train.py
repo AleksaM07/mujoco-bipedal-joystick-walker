@@ -1206,6 +1206,7 @@ def run_reference_playback_audit(
     clip_mode: str = "all",
     trace_resets: int = 0,
     trace_steps: int = 0,
+    trace_interval: float = 0.0,
     out_dir: Path | None = None,
 ) -> Path:
     """Play zero residual actions against the BVH reference without PPO.
@@ -1252,7 +1253,8 @@ def run_reference_playback_audit(
         "playback config | resets={} | steps={} | seed={} | backend={} | "
         "requested_clip_mode={} | reference_gait={} | reference_gait_file={} | "
         "audit_target_obs={} | audit_action_mode={} | audit_reset_attempts={} | "
-        "audit_projection_levels={} | trace_resets={} | trace_steps={}",
+        "audit_projection_levels={} | trace_resets={} | trace_steps={} | "
+        "trace_interval={}",
         resets,
         steps,
         seed,
@@ -1266,6 +1268,7 @@ def run_reference_playback_audit(
         env_config.reset_projection_levels,
         trace_resets,
         trace_steps,
+        trace_interval,
     )
 
     with logged_stage("reference_playback/make_environment"):
@@ -1364,12 +1367,69 @@ def run_reference_playback_audit(
     )
 
     trace_limit = min(max(int(trace_steps), 0), max_steps)
+    trace_stride = max(int(round(float(trace_interval) / max(float(env.dt), 1e-6))), 1)
+
+    trace_coord_keys = (
+        "sim_root_x",
+        "sim_root_y",
+        "sim_root_z",
+        "sim_root_vx",
+        "sim_root_vy",
+        "sim_root_vz",
+        "sim_root_wx",
+        "sim_root_wy",
+        "sim_root_wz",
+        "sim_left_foot_x",
+        "sim_left_foot_y",
+        "sim_left_foot_z",
+        "sim_right_foot_x",
+        "sim_right_foot_y",
+        "sim_right_foot_z",
+        "ref_root_x",
+        "ref_root_y",
+        "ref_root_z",
+        "ref_root_vx",
+        "ref_root_vy",
+        "ref_root_vz",
+        "ref_left_key_x",
+        "ref_left_key_y",
+        "ref_left_key_z",
+        "ref_right_key_x",
+        "ref_right_key_y",
+        "ref_right_key_z",
+    )
+    trace_motor_keys = tuple(
+        f"motor_target_{joint_name}" for joint_name in env._actuator_joint_names
+    )
 
     def _trace_episode_device(rng: jax.Array) -> dict[str, jax.Array]:
         state = env.reset(rng)
 
         def body(carry, step_index):
             current_state, stopped = carry
+            reference = env._query_bvh_reference(current_state.info, 0)
+            reference_target = env._query_bvh_reference(
+                current_state.info,
+                int(env._config.get("reference_replay_target_step", 1)),
+            )
+            sim_root_pos = env._reference_anchor_pos(current_state.data)
+            sim_root_vel = env._reference_anchor_linvel(current_state.data)
+            sim_root_angvel = env._reference_anchor_angvel(current_state.data)
+            sim_foot_pos = env._foot_positions(current_state.data).reshape(-1)
+            ref_key_pos = reference["key_pos"].reshape(-1)
+            motor_targets = reference_target["qpos"]
+            coord_values = jnp.concatenate(
+                [
+                    sim_root_pos,
+                    sim_root_vel,
+                    sim_root_angvel,
+                    sim_foot_pos,
+                    reference["root_pos"],
+                    reference["root_vel"],
+                    ref_key_pos,
+                ],
+                axis=0,
+            ).astype(jnp.float32)
             metric_values = jnp.stack(
                 [current_state.metrics[key] for key in trace_metric_keys]
             ).astype(jnp.float32)
@@ -1392,6 +1452,8 @@ def run_reference_playback_audit(
                 "clip_id": clip_id,
                 "fallback": fallback,
                 "metrics": metric_values,
+                "coords": coord_values,
+                "motor_targets": motor_targets.astype(jnp.float32),
             }
 
         _, rows = jax.lax.scan(
@@ -1415,27 +1477,47 @@ def run_reference_playback_audit(
         )
         valid_mask = np.asarray(host["valid"], dtype=bool)
         metric_values = np.asarray(host["metrics"], dtype=np.float64)
+        coord_values = np.asarray(host["coords"], dtype=np.float64)
+        motor_targets = np.asarray(host["motor_targets"], dtype=np.float64)
         clip_ids = np.asarray(host["clip_id"], dtype=np.int32)
         fallbacks = np.asarray(host["fallback"], dtype=bool)
         rows = []
         for step_index in np.where(valid_mask)[0]:
-            clip_id = int(clip_ids[step_index])
             metrics = {
                 key: float(metric_values[step_index, metric_index])
                 for metric_index, key in enumerate(trace_metric_keys)
+            }
+            write_sample = (int(step_index) % trace_stride) == 0
+            write_sample = write_sample or bool(metrics.get("done", 0.0) > 0.5)
+            write_sample = write_sample or int(step_index) == int(np.max(np.where(valid_mask)[0]))
+            if not write_sample:
+                continue
+            clip_id = int(clip_ids[step_index])
+            coords = {
+                key: float(coord_values[step_index, coord_index])
+                for coord_index, key in enumerate(trace_coord_keys)
+            }
+            targets = {
+                key: float(motor_targets[step_index, target_index])
+                for target_index, key in enumerate(trace_motor_keys)
             }
             rows.append(
                 {
                     "reset_index": reset_index,
                     "step": int(step_index),
+                    "time_s": float(int(step_index) * env.dt),
                     "clip_id": clip_id,
                     "loop_mode": _loop_mode_name(env, clip_id),
                     "support_foot": _clip_support_foot(env, clip_id),
                     "fallback": bool(fallbacks[step_index]),
+                    **coords,
                     **metrics,
+                    **targets,
                 }
             )
 
+        if not rows:
+            return
         with trace_path.open("a", encoding="utf-8") as trace_file:
             for row in rows:
                 trace_file.write(json.dumps(row, sort_keys=True) + "\n")
@@ -1812,6 +1894,7 @@ def run_reference_playback_audit(
         "trace_path": str(trace_path) if trace_resets > 0 and trace_steps > 0 else None,
         "trace_resets": int(trace_resets),
         "trace_steps": int(trace_steps),
+        "trace_interval": float(trace_interval),
         "seed": seed,
         "valid": valid,
         "failed": failed,
@@ -2339,6 +2422,15 @@ def main() -> None:
             "--reference-playback-trace-resets."
         ),
     )
+    parser.add_argument(
+        "--reference-playback-trace-interval",
+        type=float,
+        default=0.0,
+        help=(
+            "Seconds between JSONL trace rows. 0 writes every env step; "
+            "0.1 writes roughly every five 20 ms control steps."
+        ),
+    )
     parser.add_argument("--out", type=Path, default=RUNS_DIR)
     args = parser.parse_args()
 
@@ -2410,6 +2502,7 @@ def main() -> None:
             clip_mode=args.reference_playback_clip_mode,
             trace_resets=args.reference_playback_trace_resets,
             trace_steps=args.reference_playback_trace_steps,
+            trace_interval=args.reference_playback_trace_interval,
             out_dir=args.out,
         )
         print(f"reference playback logs: {run_dir}")
