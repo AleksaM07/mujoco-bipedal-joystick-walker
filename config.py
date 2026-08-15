@@ -11,7 +11,7 @@ WORKSPACE_ROOT = PROJECT_ROOT.parent
 BIOMECH_DIR = WORKSPACE_ROOT / "mujoco-biomechanics"
 RUNS_DIR = PROJECT_ROOT / "runs"
 GENERATED_MODEL_DIR = PROJECT_ROOT / "generated_models"
-SCENE_XML_VERSION = "trainfast_v18"
+SCENE_XML_VERSION = "trainfast_v21"
 
 DEFAULT_HUMAN_MASS_KG = 75.0
 DEFAULT_HUMAN_HEIGHT_M = 1.80
@@ -230,9 +230,28 @@ LEG_ACTUATED_JOINTS: Final[tuple[str, ...]] = (
     "right_ankle_z",
 )
 
+ARM_ACTUATED_JOINTS: Final[tuple[str, ...]] = (
+    "left_shoulder_x",
+    "left_shoulder_y",
+    "left_shoulder_z",
+    "left_elbow_z",
+    "right_shoulder_x",
+    "right_shoulder_y",
+    "right_shoulder_z",
+    "right_elbow_z",
+)
+
 LOCOMOTION_ACTUATED_JOINTS: Final[tuple[str, ...]] = (
     TRUNK_ACTUATED_JOINTS + LEG_ACTUATED_JOINTS
 )
+
+
+def locomotion_actuated_joints(include_arms: bool = False) -> tuple[str, ...]:
+    """Return controlled joints for the requested training model variant."""
+    if include_arms:
+        return LOCOMOTION_ACTUATED_JOINTS + ARM_ACTUATED_JOINTS
+    return LOCOMOTION_ACTUATED_JOINTS
+
 
 SOLE_CONTACT_GEOM_ATTRIBUTES: Final[XmlAttributes] = {
     "friction": "1.0 0.01 0.001",
@@ -470,6 +489,46 @@ ACTUATOR_SPECS: Final[dict[str, XmlAttributes]] = {
         "ctrlrange": "-0.209440 0.209440",
         "forcerange": "-260 260",
     },
+    "left_shoulder_x": {
+        "kp": "90",
+        "ctrlrange": "-0.872665 3.141593",
+        "forcerange": "-120 120",
+    },
+    "left_shoulder_y": {
+        "kp": "80",
+        "ctrlrange": "-1.570796 1.570796",
+        "forcerange": "-100 100",
+    },
+    "left_shoulder_z": {
+        "kp": "90",
+        "ctrlrange": "-0.872665 3.141593",
+        "forcerange": "-120 120",
+    },
+    "left_elbow_z": {
+        "kp": "70",
+        "ctrlrange": "0.000000 2.617994",
+        "forcerange": "-90 90",
+    },
+    "right_shoulder_x": {
+        "kp": "90",
+        "ctrlrange": "-3.141593 0.872665",
+        "forcerange": "-120 120",
+    },
+    "right_shoulder_y": {
+        "kp": "80",
+        "ctrlrange": "-1.570796 1.570796",
+        "forcerange": "-100 100",
+    },
+    "right_shoulder_z": {
+        "kp": "90",
+        "ctrlrange": "-0.872665 3.141593",
+        "forcerange": "-120 120",
+    },
+    "right_elbow_z": {
+        "kp": "70",
+        "ctrlrange": "0.000000 2.617994",
+        "forcerange": "-90 90",
+    },
 }
 
 PASSIVE_UPPER_BODY_JOINT_SPECS: Final[dict[str, XmlAttributes]] = {
@@ -620,6 +679,7 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # REF: MIMICKIT-MOTION-LIBRARY
         # TYPE: REFERENCE_CODE_DERIVED
         reference_gait="bvh",
+        arm_actuators=False,
         reference_gait_file=[
             DEFAULT_BVH_REFERENCE_LIST.relative_to(PROJECT_ROOT).as_posix()
         ],
@@ -649,11 +709,15 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # Drop very short extracted snippets from the default training task.
         # They are useful for loader debugging, but not for walking imitation.
         reference_min_motion_length=0.8,
-        # Root XY travel is intentionally damped during imitation pretraining:
-        # the reward is local-root, and this XML cannot servo the free root.
-        reference_root_xy_scale=0.35,
-        reference_stability_sagittal_alpha=0.20,
-        reference_stability_other_alpha=0.05,
+        # auto keeps only seam-continuous clips looped. wrap is useful after a
+        # visual BVH check confirms manually segmented stride cycles are clean.
+        reference_loop_mode="auto",
+        # Keep the real walking amplitude visible in the reference. Low values
+        # make good BVH sources look like tiny in-place twitching.
+        reference_root_xy_scale=1.0,
+        reference_stability_sagittal_alpha=1.00,
+        reference_stability_other_alpha=0.35,
+        reference_stability_arm_alpha=0.75,
         policy_observation_size=None,
         policy_observation_dict=True,
         xml_path=None,
@@ -811,6 +875,7 @@ class EnvConfig:
     # BVH/MimicKit-style imitation is the production default. "none" and
     # "sine" remain accepted only for old checkpoint/debug compatibility.
     reference_gait: str = "bvh"
+    arm_actuators: bool = False
     reference_gait_file: str | list[str] | None = field(
         default_factory=lambda: [
             DEFAULT_BVH_REFERENCE_LIST.relative_to(PROJECT_ROOT).as_posix()
@@ -827,9 +892,11 @@ class EnvConfig:
     deepmimic_root_velocity_weight_scale: float = 0.15
     reference_reset_min_steps_remaining: int = 25
     reference_min_motion_length: float = 0.8
-    reference_root_xy_scale: float = 0.35
-    reference_stability_sagittal_alpha: float = 0.20
-    reference_stability_other_alpha: float = 0.05
+    reference_loop_mode: str = "auto"
+    reference_root_xy_scale: float = 1.0
+    reference_stability_sagittal_alpha: float = 1.00
+    reference_stability_other_alpha: float = 0.35
+    reference_stability_arm_alpha: float = 0.75
     deepmimic_reward_mode: str = "pure"
     deepmimic_key_bodies: tuple[str, ...] = (
         "metatarsal_midpoint_right",

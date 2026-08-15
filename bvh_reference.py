@@ -43,6 +43,17 @@ class LoopMode(IntEnum):
     WRAP = 1
 
 
+BVH_IK_TARGET_MAP = (
+    ("metatarsal_midpoint_right", "RightToeBase"),
+    ("metatarsal_midpoint_left", "LeftToeBase"),
+)
+
+# Marina/CMU ``cmuconvert-max`` BVH files use small skeleton units, not
+# centimeters. The neutral source height is about 25 units, so 0.07 maps it to
+# a 1.75 m human and keeps root travel in normal walking-speed range.
+BVH_POSITION_SCALE = 0.07
+
+
 @dataclass(frozen=True)
 class MotionSegment:
     """Frame slice for one usable motion clip."""
@@ -106,6 +117,7 @@ class MotionClip:
     support_foot: str
     loop_mode: LoopMode = LoopMode.CLAMP
     weight: float = 1.0
+    ik_target_positions: np.ndarray | None = None
 
     @property
     def frame_count(self) -> int:
@@ -194,6 +206,13 @@ class BvhMotionLibrary:
         weights = np.zeros(clip_count, dtype=np.float32)
         source_start_frames = np.zeros(clip_count, dtype=np.int32)
         source_end_frames = np.zeros(clip_count, dtype=np.int32)
+        ik_target_positions = None
+        if self.clips[0].ik_target_positions is not None:
+            ik_target_count = self.clips[0].ik_target_positions.shape[1]
+            ik_target_positions = np.zeros(
+                (clip_count, max_frames, ik_target_count, 3),
+                dtype=np.float32,
+            )
 
         for index, clip in enumerate(self.clips):
             frame_count = clip.frame_count
@@ -207,6 +226,9 @@ class BvhMotionLibrary:
             root_quat_targets[index, frame_count:] = clip.root_quat_targets[-1]
             root_vel_targets[index, :frame_count] = clip.root_vel_targets
             root_angvel_targets[index, :frame_count] = clip.root_angvel_targets
+            if ik_target_positions is not None and clip.ik_target_positions is not None:
+                ik_target_positions[index, :frame_count] = clip.ik_target_positions
+                ik_target_positions[index, frame_count:] = clip.ik_target_positions[-1]
             wrap_deltas[index] = clip.wrap_delta
 
             frame_times[index] = clip.frame_time
@@ -238,6 +260,8 @@ class BvhMotionLibrary:
             source_start_frames=source_start_frames,
             source_end_frames=source_end_frames,
             support_feet=tuple(clip.support_foot for clip in self.clips),
+            ik_target_names=tuple(name for name, _ in BVH_IK_TARGET_MAP),
+            ik_target_positions=ik_target_positions,
         )
 
 
@@ -274,12 +298,14 @@ def load_bvh_references(
 
 
 def expand_motion_paths(paths: tuple[str | Path, ...]) -> tuple[Path, ...]:
-    """Expand BVH paths and one-path-per-line list files."""
+    """Expand BVH paths, directories, and one-path-per-line list files."""
     expanded: list[Path] = []
     for raw_path in paths:
         path = resolve_project_path(raw_path)
         if path.suffix.lower() == ".txt":
             expanded.extend(resolve_project_path(item) for item in read_reference_gait_list(path))
+        elif path.is_dir():
+            expanded.extend(sorted(path.rglob("*.bvh")))
         else:
             expanded.append(path)
     if not expanded:
@@ -362,7 +388,6 @@ def _retarget_segment(
         ("RightFoot", "RightAnkle"),
         allow_missing=True,
     )
-
     # Absolute DOF series in this character's actuator semantics.
     # Indices of hinge_angles: 0=X, 1=Y(flexion), 2=Z.
     absolute = {
@@ -386,7 +411,6 @@ def _retarget_segment(
         "left_ankle_z": left_ankle[:, 2],
         "right_ankle_z": right_ankle[:, 2],
     }
-
     # Bind-pose offset only: pick a standing-like frame (Marina foot-speed idea)
     # so absolute walking amplitudes stay, but rest pose matches default_ctrl.
     bind_frame = _standing_like_frame_index(
@@ -400,11 +424,28 @@ def _retarget_segment(
         index = actuator_joint_names.index(joint_name)
         bind_offset = float(default_ctrl[index] - values[bind_frame])
         assign_target(joint_name, values + bind_offset)
+    for joint_name, values in _bvh_arm_swing_targets(
+        segment_bvh,
+        actuator_joint_names,
+        default_ctrl,
+    ).items():
+        assign_target(joint_name, values)
 
-    root_pos, root_quat = _root_motion_targets(
+    (
+        root_pos,
+        root_quat,
+        alignment_rot,
+        raw_root_origin,
+    ) = _root_motion_targets(
         segment_bvh,
         initial_root_pos,
         initial_root_quat,
+    )
+    ik_target_positions = _bvh_ik_target_positions(
+        segment_bvh,
+        alignment_rot,
+        raw_root_origin,
+        initial_root_pos,
     )
     qvel_targets = _target_velocities(targets, segment_bvh.frame_time)
     root_vel_targets = _target_velocities(root_pos, segment_bvh.frame_time)
@@ -432,6 +473,7 @@ def _retarget_segment(
         support_foot=segment.support_foot,
         loop_mode=loop_mode,
         weight=max(segment_bvh.frames - 1, 1) * segment_bvh.frame_time,
+        ik_target_positions=ik_target_positions,
     )
 
 
@@ -440,6 +482,61 @@ def _target_velocities(targets: np.ndarray, frame_time: float) -> np.ndarray:
     if targets.shape[0] < 2:
         return np.zeros_like(targets, dtype=np.float32)
     return np.gradient(targets, frame_time, axis=0).astype(np.float32)
+
+
+def _bvh_arm_swing_targets(
+    bvh: ParsedBvh,
+    actuator_joint_names: tuple[str, ...],
+    default_ctrl: np.ndarray,
+) -> dict[str, np.ndarray]:
+    """Map BVH hand forward/back motion to a soft, natural arm swing.
+
+    Directly projecting BVH shoulder Euler channels is unstable across skeleton
+    conventions, and hand IK over-constrains this MuJoCo upper body.  Use the
+    robust part of the signal instead: each hand's forward displacement relative
+    to the hips drives shoulder_z, while elbows keep a small relaxed bend.
+    """
+    required = {"LeftHand", "RightHand", bvh.root_name}
+    if not required.issubset(bvh.joints):
+        return {}
+    positions = _global_joint_positions(bvh)
+    root = positions[bvh.root_name]
+    left_hand = _bvh_positions_to_mujoco(positions["LeftHand"] - root)
+    right_hand = _bvh_positions_to_mujoco(positions["RightHand"] - root)
+
+    def centered_forward(values: np.ndarray) -> np.ndarray:
+        forward = values[:, 0]
+        centered = forward - float(np.mean(forward))
+        return _median_filter_1d(centered.astype(np.float32), 5)
+
+    left_swing = centered_forward(left_hand)
+    right_swing = centered_forward(right_hand)
+    swing_gain = 1.45
+    max_swing = 0.42
+    elbow_bend = 0.32
+    targets: dict[str, np.ndarray] = {}
+    for joint_name, swing in (
+        ("left_shoulder_z", left_swing),
+        ("right_shoulder_z", right_swing),
+    ):
+        if joint_name not in actuator_joint_names:
+            continue
+        index = actuator_joint_names.index(joint_name)
+        targets[joint_name] = (
+            float(default_ctrl[index])
+            + np.clip(swing_gain * swing, -max_swing, max_swing)
+        ).astype(np.float32)
+
+    for joint_name in ("left_elbow_z", "right_elbow_z"):
+        if joint_name not in actuator_joint_names:
+            continue
+        index = actuator_joint_names.index(joint_name)
+        targets[joint_name] = np.full(
+            bvh.frames,
+            float(default_ctrl[index]) + elbow_bend,
+            dtype=np.float32,
+        )
+    return targets
 
 
 def _quat_angular_velocities(quats: np.ndarray, frame_time: float) -> np.ndarray:
@@ -556,10 +653,11 @@ def _motion_clip_rank_key(clip: MotionClip) -> tuple[float, float, float, float]
     height_stability = -float(
         np.max(np.abs(clip.root_pos_targets[:, 2] - clip.root_pos_targets[0, 2]))
     )
+    duration_score = min(float(duration), 2.0)
     return (
-        seam_score,
+        duration_score,
         mean_speed,
-        float(duration),
+        seam_score,
         height_stability,
     )
 
@@ -813,7 +911,11 @@ def _motion_segments_for_bvh(path: Path, bvh: ParsedBvh) -> tuple[MotionSegment,
     cycles, longer same-foot cycles, and occasionally a broad fallback window.
     """
     candidates: list[MotionSegment] = []
-    csv_segments = _read_step_segments(path.parent / "steps.csv", bvh.frames)
+    csv_segments: tuple[MotionSegment, ...] = ()
+    for step_csv_path in _candidate_step_csv_paths(path):
+        csv_segments = _read_step_segments(step_csv_path, bvh.frames)
+        if csv_segments:
+            break
     detected = _detect_step_segments(bvh)
 
     if csv_segments:
@@ -912,6 +1014,30 @@ def _dedupe_segments(segments: list[MotionSegment]) -> tuple[MotionSegment, ...]
             key=lambda segment: (segment.start_frame, segment.end_frame, segment.support_foot),
         )
     )
+
+
+def _candidate_step_csv_paths(path: Path) -> tuple[Path, ...]:
+    """CSV locations supported by the BVH motion loader.
+
+    Historical CMU imports used a shared ``steps.csv`` next to each BVH.
+    Marina's parser writes one file per BVH into a sibling ``steps`` folder,
+    named like ``walking_forward_bvh/02_01.bvh`` -> ``steps/02_01steps.csv``.
+    """
+    stem = path.stem
+    candidates = (
+        path.parent / "steps.csv",
+        path.with_name(f"{stem}steps.csv"),
+        path.parent / "steps" / f"{stem}steps.csv",
+        path.parent.parent / "steps" / f"{stem}steps.csv",
+    )
+    unique: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved not in seen:
+            unique.append(candidate)
+            seen.add(resolved)
+    return tuple(unique)
 
 
 def _read_step_segments(path: Path, frame_count: int) -> tuple[MotionSegment, ...]:
@@ -1024,7 +1150,7 @@ def _root_motion_targets(
     bvh: ParsedBvh,
     initial_root_pos: np.ndarray,
     initial_root_quat: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Return root targets aligned to the MuJoCo character's initial frame."""
     root = bvh.joints[bvh.root_name]
     root_values = bvh.motion[:, list(root.channel_indices)]
@@ -1046,7 +1172,8 @@ def _root_motion_targets(
         root_rotation[frame_index] = rotation
 
     root_pos_local = _bvh_positions_to_mujoco(root_translation)
-    root_pos_local -= root_pos_local[0]
+    raw_root_origin = root_pos_local[0].copy()
+    root_pos_local -= raw_root_origin
 
     raw_root_quat = np.stack(
         [
@@ -1087,7 +1214,36 @@ def _root_motion_targets(
         ],
         axis=0,
     )
-    return root_pos.astype(np.float32), root_quat.astype(np.float32)
+    return (
+        root_pos.astype(np.float32),
+        root_quat.astype(np.float32),
+        alignment_rot.astype(np.float32),
+        raw_root_origin.astype(np.float32),
+    )
+
+
+def _bvh_ik_target_positions(
+    bvh: ParsedBvh,
+    alignment_rot: np.ndarray,
+    raw_root_origin: np.ndarray,
+    initial_root_pos: np.ndarray,
+) -> np.ndarray:
+    """Transform raw BVH end-effectors into the MuJoCo reference world frame."""
+    global_positions = _global_joint_positions(bvh)
+    selected = np.stack(
+        [
+            global_positions.get(joint_name, global_positions[bvh.root_name])
+            for _, joint_name in BVH_IK_TARGET_MAP
+        ],
+        axis=1,
+    )
+    mujoco_positions = _bvh_positions_to_mujoco(selected)
+    mujoco_positions -= raw_root_origin[None, None, :]
+    mujoco_positions = (
+        mujoco_positions @ alignment_rot.T[None, :, :]
+        + initial_root_pos[None, None, :]
+    )
+    return mujoco_positions.astype(np.float32)
 
 
 def _heading_alignment_quat(
@@ -1117,16 +1273,20 @@ def _yaw_only_quat(quat: np.ndarray) -> np.ndarray:
 
 
 def _bvh_positions_to_mujoco(positions: np.ndarray) -> np.ndarray:
-    # BVH is Y-up centimeters for these CMU-style files. MuJoCo is Z-up meters.
-    scaled = positions.astype(np.float32) * 0.01
-    return np.stack([scaled[:, 2], -scaled[:, 0], scaled[:, 1]], axis=-1)
+    # BVH is Y-up in cmuconvert-max units. MuJoCo is Z-up meters.
+    scaled = positions.astype(np.float32) * BVH_POSITION_SCALE
+    converted = np.empty_like(scaled, dtype=np.float32)
+    converted[..., 0] = scaled[..., 2]
+    converted[..., 1] = scaled[..., 0]
+    converted[..., 2] = scaled[..., 1]
+    return converted
 
 
 def _bvh_rotation_to_mujoco(rotation: np.ndarray) -> np.ndarray:
     conversion = np.array(
         [
             [0.0, 0.0, 1.0],
-            [-1.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
             [0.0, 1.0, 0.0],
         ],
         dtype=np.float32,

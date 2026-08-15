@@ -1,0 +1,19 @@
+BVH retarget nije zavrsen.
+
+Sta radi:
+- Marina raw BVH segmenti izgledaju dobro.
+- BVH step/stride loader sada cita marina_bvh_parse/steps/*steps.csv.
+- Levo/desno osa i BVH scale su popravljeni.
+- Noge u MuJoCo preview-u su good enough za probni 18DOF walking test.
+
+Sta NE valja:
+- Ruke jos nisu dobro integrisane.
+- Hand IK lomi ruke.
+- Blagi arm swing je bolji, ali i dalje nije dovoljno prirodan.
+- Zato za sada trenirati/testirati sa arms_off, tj. bez arm actuator-a.
+
+Trenutni dogovor:
+- Default model je 18DOF noarms.
+- Koristi --arms-off eksplicitno u komandama da bude jasno.
+- --arms-on ostaje samo za kasniji eksperiment sa 26DOF rukama.
+- Ne smatrati ovo finalnim retargetom; ovo je privremeni walking-only setup.

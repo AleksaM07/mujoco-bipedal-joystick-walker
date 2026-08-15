@@ -9,6 +9,7 @@ import mujoco
 
 from config import (
     ACTUATOR_SPECS,
+    ARM_ACTUATED_JOINTS,
     BIOMECH_DIR,
     DEFAULT_HUMAN_ALPHA,
     DEFAULT_HUMAN_HEIGHT_M,
@@ -39,6 +40,7 @@ from config import (
     SOLE_CONTACT_GEOM_ATTRIBUTES,
     TRUNK_ACTUATED_JOINTS,
     TRUNK_JOINT_SPECS,
+    locomotion_actuated_joints,
 )
 
 
@@ -108,10 +110,15 @@ def generate_base_human_xml(spec: HumanSpec) -> Path:
     return output_path
 
 
-def build_trainable_scene_xml(env_version: str, spec: HumanSpec) -> Path:
+def build_trainable_scene_xml(
+    env_version: str,
+    spec: HumanSpec,
+    arm_actuators: bool = False,
+) -> Path:
     """Napravi human XML sa aktuatorima, senzorima i izabranim terenom (cached)."""
+    actuator_suffix = "arms" if arm_actuators else "noarms"
     output_path = GENERATED_MODEL_DIR / (
-        f"{spec.file_stem}_{env_version}_{SCENE_XML_VERSION}.xml"
+        f"{spec.file_stem}_{env_version}_{SCENE_XML_VERSION}_{actuator_suffix}.xml"
     )
 
     if output_path.exists():
@@ -126,15 +133,15 @@ def build_trainable_scene_xml(env_version: str, spec: HumanSpec) -> Path:
     ensure_option(root)
     ensure_visual(root)
     add_passive_joint_damping(root)
-    tune_passive_upper_body_joints(root)
+    tune_passive_upper_body_joints(root, arm_actuators=arm_actuators)
     unlock_trunk_joints(root)
     tune_leg_joints(root)
     remove_trunk_equality_locks(root)
     set_training_collision_filters(root)
     add_stable_foot_contacts(root)
     add_terrain(root, env_version)
-    add_actuators(root)
-    add_keyframe_ctrl(root)
+    add_actuators(root, arm_actuators=arm_actuators)
+    add_keyframe_ctrl(root, arm_actuators=arm_actuators)
 
     ET.indent(tree, space="  ", level=0)
     tree.write(output_path, encoding="utf-8", xml_declaration=True)
@@ -189,11 +196,17 @@ def add_passive_joint_damping(root: ET.Element) -> None:
         joint.set("damping", "1.0")
 
 
-def tune_passive_upper_body_joints(root: ET.Element) -> None:
+def tune_passive_upper_body_joints(
+    root: ET.Element,
+    arm_actuators: bool = False,
+) -> None:
     """Ukruti vrat i ruke da pasivni upper body ne visi kao slobodna masa."""
     worldbody = root.find("worldbody")
     for joint in worldbody.iter("joint"):
-        spec = PASSIVE_UPPER_BODY_JOINT_SPECS.get(joint.get("name"))
+        joint_name = joint.get("name")
+        if arm_actuators and joint_name in ARM_ACTUATED_JOINTS:
+            continue
+        spec = PASSIVE_UPPER_BODY_JOINT_SPECS.get(joint_name)
         if spec is None:
             continue
         for key, value in spec.items():
@@ -343,13 +356,13 @@ def add_rough_blocks(worldbody: ET.Element) -> None:
         )
 
 
-def add_actuators(root: ET.Element) -> None:
+def add_actuators(root: ET.Element, arm_actuators: bool = False) -> None:
     """Doda position servo aktuatore za zglobove koje policy kontrolise."""
     actuator = root.find("actuator")
     if actuator is None:
         actuator = ET.SubElement(root, "actuator")
     existing = {item.get("joint") for item in actuator}
-    for joint_name in LOCOMOTION_ACTUATED_JOINTS:
+    for joint_name in locomotion_actuated_joints(include_arms=arm_actuators):
         if joint_name in existing:
             continue
         spec = ACTUATOR_SPECS[joint_name]
@@ -366,9 +379,11 @@ def add_actuators(root: ET.Element) -> None:
         )
 
 
-def add_keyframe_ctrl(root: ET.Element) -> None:
+def add_keyframe_ctrl(root: ET.Element, arm_actuators: bool = False) -> None:
     """Doda zero ctrl u keyframe-ove jer sada model ima aktuatore."""
-    ctrl = " ".join("0" for _ in LOCOMOTION_ACTUATED_JOINTS)
+    ctrl = " ".join(
+        "0" for _ in locomotion_actuated_joints(include_arms=arm_actuators)
+    )
     keyframe = root.find("keyframe")
     if keyframe is None:
         return

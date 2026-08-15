@@ -19,6 +19,7 @@ from biomechanics_model import (
     build_trainable_scene_xml,
 )
 from config import (
+    ARM_ACTUATED_JOINTS,
     DEFAULT_BVH_REFERENCE_LIST,
     default_biomechanics_env_config,
     resolve_project_path,
@@ -123,6 +124,16 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         "left_ankle_z": 0.08,
         "right_ankle_z": 0.08,
     }
+    ARM_ACTION_SCALE = {
+        "left_shoulder_x": 0.35,
+        "left_shoulder_y": 0.22,
+        "left_shoulder_z": 0.35,
+        "left_elbow_z": 0.35,
+        "right_shoulder_x": 0.35,
+        "right_shoulder_y": 0.22,
+        "right_shoulder_z": 0.35,
+        "right_elbow_z": 0.35,
+    }
     POSTURE_STD_STANDING = {
         "trunk": 0.06,
         "hip_stride": 0.08,
@@ -130,6 +141,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         "ankle_pitch": 0.07,
         "hip_lateral": 0.06,
         "ankle_lateral": 0.05,
+        "arm": 0.18,
     }
     POSTURE_STD_WALKING = {
         "trunk": 0.09,
@@ -138,6 +150,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         "ankle_pitch": 0.24,
         "hip_lateral": 0.14,
         "ankle_lateral": 0.08,
+        "arm": 0.55,
     }
     INIT_TRUNK_NOISE = 0.005
     INIT_LEG_NOISE = 0.02
@@ -221,7 +234,11 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         if configured_xml_path:
             self._xml_path = resolve_project_path(configured_xml_path)
         else:
-            self._xml_path = build_trainable_scene_xml(env_version, human_spec)
+            self._xml_path = build_trainable_scene_xml(
+                env_version,
+                human_spec,
+                arm_actuators=bool(self._config.get("arm_actuators", False)),
+            )
         self._mj_model = mujoco.MjModel.from_xml_path(str(self._xml_path))
         self._mj_model.opt.timestep = self._sim_dt
         init_q = np.array(self._mj_model.keyframe("a-pose").qpos, copy=True)
@@ -264,6 +281,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             for joint_id in self._mj_model.actuator_trnid[:, 0]
         )
         supported_joint_orders = (
+            TRUNK_ACTUATED_JOINTS + LEG_ACTUATED_JOINTS + ARM_ACTUATED_JOINTS,
             TRUNK_ACTUATED_JOINTS + LEG_ACTUATED_JOINTS,
             LEG_ACTUATED_JOINTS,
         )
@@ -551,6 +569,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             return float(self._config.action_scale)
         if joint_name in self.LEG_ACTION_SCALE:
             return self.LEG_ACTION_SCALE[joint_name] * global_scale
+        if joint_name in self.ARM_ACTION_SCALE:
+            return self.ARM_ACTION_SCALE[joint_name] * global_scale
         return float(self._config.action_scale)
 
     @classmethod
@@ -568,6 +588,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             return 0.15
         if joint_name in {"left_hip_y", "right_hip_y"}:
             return 0.10
+        if joint_name in ARM_ACTUATED_JOINTS:
+            return 0.20
         return 0.0
 
     @classmethod
@@ -579,6 +601,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             return 0.15
         if joint_name in {"left_ankle_y", "right_ankle_y"}:
             return 0.10
+        if joint_name in ARM_ACTUATED_JOINTS:
+            return 0.05
         return 0.0
 
     @classmethod
@@ -594,6 +618,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             category = "ankle_pitch"
         elif joint_name in {"left_ankle_z", "right_ankle_z"}:
             category = "ankle_lateral"
+        elif joint_name in ARM_ACTUATED_JOINTS:
+            category = "arm"
         else:
             category = "hip_lateral"
         return (
@@ -692,6 +718,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             initial_root_quat=np.asarray(self._init_q_np[3:7], dtype=np.float32),
         )
         references = self._filter_reference_clips(references)
+        references = self._apply_reference_loop_mode_override(references)
         self._bvh_reference_frame_times = jp.array(references.frame_times)
         self._bvh_reference_frame_counts = jp.array(references.frame_counts)
         self._bvh_reference_motion_lengths = jp.array(
@@ -894,6 +921,27 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             ik_target_positions=ik_target_positions,
         )
 
+    def _apply_reference_loop_mode_override(
+        self,
+        references: BvhReferenceBatch,
+    ) -> BvhReferenceBatch:
+        """Optionally force finite/looping playback for inspected references."""
+        mode = str(self._config.get("reference_loop_mode", "auto")).lower()
+        if mode == "auto":
+            return references
+        if mode not in ("wrap", "clamp"):
+            raise ValueError(
+                "reference_loop_mode mora biti 'auto', 'wrap' ili 'clamp', "
+                f"dobijeno: {mode!r}."
+            )
+
+        loop_value = int(LoopMode.WRAP if mode == "wrap" else LoopMode.CLAMP)
+        loop_modes = np.full_like(
+            np.asarray(references.loop_modes, dtype=np.int32),
+            loop_value,
+        )
+        return replace(references, loop_modes=loop_modes)
+
     def _configure_default_deepmimic_reference(self) -> None:
         """Build a one-frame standing reference for non-BVH runs."""
         qpos_targets = np.asarray(self._bvh_reference_qpos_targets, dtype=np.float32)
@@ -997,6 +1045,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         ik_update_mask = np.array(
             [
                 joint_name in LEG_ACTUATED_JOINTS
+                or joint_name in ARM_ACTUATED_JOINTS
                 for joint_name in self._actuator_joint_names
             ],
             dtype=np.float64,
@@ -1138,6 +1187,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         sagittal_motion_joints = {
             "left_hip_x",
             "right_hip_x",
+            "left_hip_z",
+            "right_hip_z",
             "left_knee_z",
             "right_knee_z",
             "left_ankle_y",
@@ -1152,6 +1203,13 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                     )
                 )
                 if joint_name in sagittal_motion_joints
+                else float(
+                    self._config.get(
+                        "reference_stability_arm_alpha",
+                        0.75,
+                    )
+                )
+                if joint_name in ARM_ACTUATED_JOINTS
                 else float(
                     self._config.get(
                         "reference_stability_other_alpha",
@@ -1177,6 +1235,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             weight = 4.0 if is_foot else 1.2
             if "pelvis" in marker_name:
                 weight = 2.0
+            elif "hand" in marker_name:
+                weight = 0.15
             elif "head" in marker_name:
                 weight = 0.7
             try:

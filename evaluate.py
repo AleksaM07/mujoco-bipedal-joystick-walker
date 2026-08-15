@@ -689,6 +689,7 @@ def main():
         if args.reference_gait == "auto"
         else args.reference_gait
     )
+    arm_actuators = bool(run_env_value(run_config, "arm_actuators", False))
     if args.reference_gait_file is not None or args.reference_gait_list is not None:
         reference_gait_file = expand_reference_gait_files(
             args.reference_gait_file,
@@ -700,6 +701,7 @@ def main():
         reference_target_observation = bool(
             run_env_value(run_config, "reference_target_observation", False)
         )
+    reference_loop_mode = str(run_env_value(run_config, "reference_loop_mode", "auto"))
     saved_legacy_action_prior = run_env_value(
         run_config,
         "legacy_action_prior",
@@ -746,7 +748,9 @@ def main():
         f"xml_path={xml_path} | "
         f"legacy_action_prior={legacy_action_prior} | "
         f"reference_gait={reference_gait} | "
+        f"arm_actuators={arm_actuators} | "
         f"reference_gait_file={reference_gait_file} | "
+        f"reference_loop_mode={reference_loop_mode} | "
         f"reference_target_observation={reference_target_observation} | "
         f"deepmimic_reward_mode={deepmimic_reward_mode} | "
         f"deepmimic_key_bodies={deepmimic_key_bodies} | "
@@ -768,7 +772,9 @@ def main():
         warp_graph_mode=str(run_env_value(run_config, "warp_graph_mode", "warp")),
         command_profile=command_profile,
         reference_gait=reference_gait,
+        arm_actuators=arm_actuators,
         reference_gait_file=reference_gait_file,
+        reference_loop_mode=reference_loop_mode,
         reference_target_observation=reference_target_observation,
         deepmimic_reward_mode=deepmimic_reward_mode,
         deepmimic_key_bodies=deepmimic_key_bodies,

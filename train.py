@@ -2154,6 +2154,19 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--arms-on",
+        dest="arm_actuators",
+        action="store_true",
+        help="Use the experimental 26-DOF model with shoulder/elbow actuators.",
+    )
+    parser.add_argument(
+        "--arms-off",
+        dest="arm_actuators",
+        action="store_false",
+        help="Use the stable 18-DOF locomotion model without arm actuators.",
+    )
+    parser.set_defaults(arm_actuators=EnvConfig.arm_actuators)
+    parser.add_argument(
         "--reference-action-center",
         choices=["default", "joint_midpoint"],
         default=EnvConfig.reference_action_center,
@@ -2207,6 +2220,15 @@ def main() -> None:
         help=(
             "Text fajl sa jednim reference path-om po liniji (BVH ili SMPL npz). "
             "Moze se navesti vise puta."
+        ),
+    )
+    parser.add_argument(
+        "--reference-loop-mode",
+        choices=["auto", "wrap", "clamp"],
+        default=EnvConfig.reference_loop_mode,
+        help=(
+            "auto loopuje samo seam-continuous reference; wrap forsira "
+            "beskonacno BVH/SMPL loopovanje; clamp forsira finite playback."
         ),
     )
     parser.add_argument(
@@ -2458,12 +2480,14 @@ def main() -> None:
         playground_impl=args.playground_impl,
         command_profile=args.command_profile,
         reference_gait=args.reference_gait,
+        arm_actuators=args.arm_actuators,
         reference_gait_file=reference_gait_file,
         reference_action_mode=args.reference_action_mode,
         reference_action_center=args.reference_action_center,
         reference_action_range=args.reference_action_range,
         reference_action_range_scale=args.reference_action_range_scale,
         reference_residual_scale=args.reference_residual_scale,
+        reference_loop_mode=args.reference_loop_mode,
         reference_target_observation=(
             args.reference_gait in ("bvh", "smpl")
             and EnvConfig.reference_target_observation
