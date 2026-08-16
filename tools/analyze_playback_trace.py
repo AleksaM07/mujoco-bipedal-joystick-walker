@@ -38,6 +38,24 @@ def _support_contact_mismatch(row: dict) -> str:
     return ""
 
 
+def _source_frame_text(row: dict) -> str:
+    start = row.get("clip_source_start_frame")
+    frame_count = row.get("clip_frame_count")
+    motion_length = row.get("clip_motion_length_s")
+    motion_time = row.get("reference_motion_time")
+    if (
+        start is None
+        or frame_count is None
+        or motion_length in (None, 0, 0.0)
+        or motion_time is None
+    ):
+        return ""
+    usable_frames = max(int(frame_count) - 1, 1)
+    phase = max(0.0, min(float(motion_time) / float(motion_length), 1.0))
+    source_frame = int(round(int(start) + phase * usable_frames))
+    return f" src_frame~{source_frame}"
+
+
 def _print_row(label: str, row: dict) -> None:
     mismatch = _support_contact_mismatch(row)
     print(
@@ -55,6 +73,7 @@ def _print_row(label: str, row: dict) -> None:
         f"l_foot_err={row.get('left_foot_height_tracking_error', 0.0):.3f} "
         f"r_foot_err={row.get('right_foot_height_tracking_error', 0.0):.3f} "
         f"torso_up={row.get('torso_up', 0.0):.3f}"
+        + _source_frame_text(row)
         + (f" mismatch={mismatch}" if mismatch else "")
     )
 
