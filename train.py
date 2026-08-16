@@ -996,6 +996,7 @@ def log_environment_summary(env, label: str = "env") -> None:
         "reference_action_mode={} | reference_action_center={} | "
         "reference_action_range={} | reference_action_range_scale={} | "
         "reference_residual_scale={} | reference_root_xy_scale={} | "
+        "reference_lock_stance_feet={} | reference_foot_lock_height={} | "
         "reference_forced_clip_id={} | reference_replay_target_step={} | "
         "dm_root_vel_weight_scale={} | legacy_action_prior={} | "
         "init_qpos_file={} | xml={}",
@@ -1023,6 +1024,8 @@ def log_environment_summary(env, label: str = "env") -> None:
         getattr(env._config, "reference_action_range_scale", None),
         getattr(env._config, "reference_residual_scale", None),
         getattr(env._config, "reference_root_xy_scale", None),
+        getattr(env._config, "reference_lock_stance_feet", None),
+        getattr(env._config, "reference_foot_lock_height", None),
         getattr(env._config, "reference_forced_clip_id", None),
         getattr(env._config, "reference_replay_target_step", None),
         getattr(env._config, "deepmimic_root_velocity_weight_scale", None),
@@ -1203,6 +1206,8 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         "reference_min_motion_length": env_config.reference_min_motion_length,
         "reference_loop_mode": env_config.reference_loop_mode,
         "reference_root_xy_scale": env_config.reference_root_xy_scale,
+        "reference_lock_stance_feet": env_config.reference_lock_stance_feet,
+        "reference_foot_lock_height": env_config.reference_foot_lock_height,
         "reference_stability_sagittal_alpha": (
             env_config.reference_stability_sagittal_alpha
         ),
@@ -2341,6 +2346,18 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--reference-lock-stance-feet",
+        action=argparse.BooleanOptionalAction,
+        default=EnvConfig.reference_lock_stance_feet,
+        help="Lock low stance foot XY during BVH/SMPL root retargeting.",
+    )
+    parser.add_argument(
+        "--reference-foot-lock-height",
+        type=float,
+        default=EnvConfig.reference_foot_lock_height,
+        help="Foot min-Z threshold used by stance foot locking.",
+    )
+    parser.add_argument(
         "--deepmimic-reward-mode",
         choices=["pure", "mixed"],
         default="pure",
@@ -2627,6 +2644,8 @@ def main() -> None:
         reference_residual_scale=args.reference_residual_scale,
         reference_loop_mode=args.reference_loop_mode,
         reference_root_xy_scale=args.reference_root_xy_scale,
+        reference_lock_stance_feet=args.reference_lock_stance_feet,
+        reference_foot_lock_height=args.reference_foot_lock_height,
         reference_target_observation=(
             args.reference_gait in ("bvh", "smpl")
             and EnvConfig.reference_target_observation

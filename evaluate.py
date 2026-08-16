@@ -887,6 +887,20 @@ def main():
         if args.reference_root_xy_scale is not None
         else float(run_env_value(run_config, "reference_root_xy_scale", 1.0))
     )
+    reference_lock_stance_feet = bool(
+        run_env_value(
+            run_config,
+            "reference_lock_stance_feet",
+            EnvConfig.reference_lock_stance_feet,
+        )
+    )
+    reference_foot_lock_height = float(
+        run_env_value(
+            run_config,
+            "reference_foot_lock_height",
+            EnvConfig.reference_foot_lock_height,
+        )
+    )
     saved_legacy_action_prior = run_env_value(
         run_config,
         "legacy_action_prior",
@@ -937,6 +951,8 @@ def main():
         f"reference_gait_file={reference_gait_file} | "
         f"reference_loop_mode={reference_loop_mode} | "
         f"reference_root_xy_scale={reference_root_xy_scale} | "
+        f"reference_lock_stance_feet={reference_lock_stance_feet} | "
+        f"reference_foot_lock_height={reference_foot_lock_height} | "
         f"reference_target_observation={reference_target_observation} | "
         f"deepmimic_reward_mode={deepmimic_reward_mode} | "
         f"deepmimic_key_bodies={deepmimic_key_bodies} | "
@@ -962,6 +978,8 @@ def main():
         reference_gait_file=reference_gait_file,
         reference_loop_mode=reference_loop_mode,
         reference_root_xy_scale=reference_root_xy_scale,
+        reference_lock_stance_feet=reference_lock_stance_feet,
+        reference_foot_lock_height=reference_foot_lock_height,
         reference_target_observation=reference_target_observation,
         deepmimic_reward_mode=deepmimic_reward_mode,
         deepmimic_key_bodies=deepmimic_key_bodies,
@@ -1067,6 +1085,8 @@ def make_environment(env_config: EnvConfig):
         "arm_actuators": env_config.arm_actuators,
         "reference_loop_mode": env_config.reference_loop_mode,
         "reference_root_xy_scale": env_config.reference_root_xy_scale,
+        "reference_lock_stance_feet": env_config.reference_lock_stance_feet,
+        "reference_foot_lock_height": env_config.reference_foot_lock_height,
         "reference_target_observation": env_config.reference_target_observation,
         "deepmimic_reward_mode": env_config.deepmimic_reward_mode,
         "deepmimic_key_bodies": env_config.deepmimic_key_bodies,

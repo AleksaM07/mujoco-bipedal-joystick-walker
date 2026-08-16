@@ -102,8 +102,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--reference-lock-stance-feet",
-        action="store_true",
-        help="Experimental retarget pass: anchor low stance foot XY while rendering.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Anchor low stance foot XY while rendering retargeted references.",
     )
     return parser.parse_args()
 
