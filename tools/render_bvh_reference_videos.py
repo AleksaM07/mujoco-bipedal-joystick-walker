@@ -58,11 +58,27 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Limit expanded BVH source files before environment loading.",
     )
-    parser.add_argument("--mode", choices=["kinematic", "pd"], default="kinematic")
+    parser.add_argument(
+        "--mode",
+        choices=["kinematic", "pd", "compare"],
+        default="kinematic",
+        help="kinematic=ideal reference, pd=physics tracking, compare=left/right.",
+    )
     parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--width", type=int, default=960)
     parser.add_argument("--height", type=int, default=720)
-    parser.add_argument("--min-video-seconds", type=float, default=1.2)
+    parser.add_argument(
+        "--min-video-seconds",
+        type=float,
+        default=4.0,
+        help="Minimum preview length. Wrap clips replay for multiple loops.",
+    )
+    parser.add_argument(
+        "--video-seconds",
+        type=float,
+        default=None,
+        help="Exact preview length override.",
+    )
     parser.add_argument("--end-hold-seconds", type=float, default=0.35)
     parser.add_argument("--max-clips", type=int, default=None)
     parser.add_argument(
@@ -155,6 +171,7 @@ def render_clip(
 ) -> tuple[Path, dict[str, object]]:
     model = env._mj_model
     data = mujoco.MjData(model)
+    kinematic_data = mujoco.MjData(model)
     renderer = mujoco.Renderer(model, height=args.height, width=args.width)
     camera = mujoco.MjvCamera()
     camera.distance = 4.2
@@ -165,42 +182,61 @@ def render_clip(
     frame_count = int(np.asarray(env._bvh_reference_frame_counts)[clip_id])
     frame_time = float(np.asarray(env._bvh_reference_frame_times)[clip_id])
     motion_length = float(np.asarray(env._bvh_reference_motion_lengths)[clip_id])
-    video_seconds = max(
-        motion_length + args.end_hold_seconds,
-        float(args.min_video_seconds),
-    )
+    if args.video_seconds is not None:
+        video_seconds = float(args.video_seconds)
+    else:
+        video_seconds = max(
+            motion_length + args.end_hold_seconds,
+            float(args.min_video_seconds),
+        )
     frame_total = max(1, int(np.ceil(video_seconds * args.fps)))
     rendered: list[np.ndarray] = []
 
     try:
-        ref = query_reference_np(env, clip_id, 0.0)
-        qpos, qvel = build_full_state(env, ref)
+        initial_ref = query_reference_np(env, clip_id, 0.0)
+        qpos, qvel = build_full_state(env, initial_ref)
         data.qpos[:] = qpos
         data.qvel[:] = qvel
-        data.ctrl[:] = np.asarray(ref["qpos"], dtype=np.float64)
+        data.ctrl[:] = np.asarray(initial_ref["qpos"], dtype=np.float64)
         mujoco.mj_forward(model, data)
 
+        sim_time = 0.0
         for video_frame in range(frame_total):
-            time_s = video_frame / float(args.fps)
+            render_time = video_frame / float(args.fps)
             if loop_mode == int(LoopMode.CLAMP):
-                time_s = min(time_s, motion_length)
+                render_time = min(render_time, motion_length)
 
-            if args.mode == "kinematic":
-                ref = query_reference_np(env, clip_id, time_s)
+            if args.mode in ("kinematic", "compare"):
+                ref = query_reference_np(env, clip_id, render_time)
                 qpos, qvel = build_full_state(env, ref)
-                data.qpos[:] = qpos
-                data.qvel[:] = qvel
-                data.ctrl[:] = np.asarray(ref["qpos"], dtype=np.float64)
-                mujoco.mj_forward(model, data)
-            else:
-                ref = query_reference_np(env, clip_id, time_s + float(env.dt))
-                data.ctrl[:] = np.asarray(ref["qpos"], dtype=np.float64)
-                for _ in range(env.n_substeps):
-                    mujoco.mj_step(model, data)
+                kinematic_data.qpos[:] = qpos
+                kinematic_data.qvel[:] = qvel
+                kinematic_data.ctrl[:] = np.asarray(ref["qpos"], dtype=np.float64)
+                mujoco.mj_forward(model, kinematic_data)
+            if args.mode in ("pd", "compare"):
+                while sim_time + 1e-9 < render_time:
+                    target_time = sim_time + float(env.dt)
+                    if loop_mode == int(LoopMode.CLAMP):
+                        target_time = min(target_time, motion_length)
+                    ref = query_reference_np(env, clip_id, target_time)
+                    data.ctrl[:] = np.asarray(ref["qpos"], dtype=np.float64)
+                    for _ in range(env.n_substeps):
+                        mujoco.mj_step(model, data)
+                    sim_time += float(env.dt)
 
-            camera.lookat[:] = np.asarray(data.qpos[:3], dtype=np.float64)
-            renderer.update_scene(data, camera=camera)
-            rendered.append(renderer.render())
+            if args.mode == "compare":
+                camera.lookat[:] = np.asarray(kinematic_data.qpos[:3], dtype=np.float64)
+                renderer.update_scene(kinematic_data, camera=camera)
+                kinematic_frame = renderer.render()
+                camera.lookat[:] = np.asarray(data.qpos[:3], dtype=np.float64)
+                renderer.update_scene(data, camera=camera)
+                pd_frame = renderer.render()
+                rendered.append(np.concatenate([kinematic_frame, pd_frame], axis=1))
+            else:
+                render_data = kinematic_data if args.mode == "kinematic" else data
+                camera.lookat[:] = np.asarray(render_data.qpos[:3], dtype=np.float64)
+                renderer.update_scene(render_data, camera=camera)
+                rendered.append(renderer.render())
     finally:
         renderer.close()
 
