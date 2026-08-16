@@ -77,6 +77,16 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--pin-root-to-reference",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Force the free root state to follow the reference during PD "
+            "playback. This isolates joint-target tracking from balance/root "
+            "dynamics."
+        ),
+    )
+    parser.add_argument(
         "--trace-dt",
         type=float,
         default=0.01,
@@ -403,6 +413,7 @@ def render_clip(
             "trace_time_s": sample_elapsed,
             "trace_motion_time_s": sample_motion_time,
             "gravity_scale": float(args.gravity_scale),
+            "pin_root_to_reference": bool(args.pin_root_to_reference),
             "pd_state_time_s": pd_elapsed_time if args.mode in ("pd", "compare") else None,
             "pd_motion_time_s": pd_motion_time if args.mode in ("pd", "compare") else None,
         }
@@ -515,6 +526,14 @@ def render_clip(
                     if args.segment_seconds is not None or loop_mode == int(LoopMode.CLAMP):
                         target_time = min(target_time, segment_end_time)
                     target_ref = query_reference_np(env, clip_id, target_time)
+                    if args.pin_root_to_reference:
+                        data.qpos[:3] = np.asarray(target_ref["root_pos"], dtype=np.float64)
+                        data.qpos[3:7] = np.asarray(target_ref["root_quat"], dtype=np.float64)
+                        data.qvel[:3] = np.asarray(target_ref["root_vel"], dtype=np.float64)
+                        data.qvel[3:6] = np.asarray(
+                            target_ref["root_angvel"],
+                            dtype=np.float64,
+                        )
                     data.ctrl[:] = np.asarray(target_ref["qpos"], dtype=np.float64)
                     for _ in range(env.n_substeps):
                         mujoco.mj_step(model, data)
@@ -553,6 +572,7 @@ def render_clip(
                 "render_time_s": render_elapsed,
                 "render_motion_time_s": render_motion_time,
                 "gravity_scale": float(args.gravity_scale),
+                "pin_root_to_reference": bool(args.pin_root_to_reference),
                 "pd_sim_time_s": pd_elapsed_time if args.mode in ("pd", "compare") else None,
                 "pd_motion_time_s": pd_motion_time if args.mode in ("pd", "compare") else None,
             }
@@ -665,6 +685,7 @@ def render_clip(
         "motion_window_s": motion_window_seconds,
         "reference_speed_scale": float(args.reference_speed_scale),
         "gravity_scale": float(args.gravity_scale),
+        "pin_root_to_reference": bool(args.pin_root_to_reference),
         "trace_dt_s": float(args.trace_dt),
         "rendered_seconds": video_seconds,
         "pd_fail_step": pd_fail_step,
