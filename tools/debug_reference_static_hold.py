@@ -52,6 +52,15 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=EnvConfig.reference_root_xy_scale,
     )
+    parser.add_argument(
+        "--gravity-scale",
+        type=float,
+        default=1.0,
+        help=(
+            "Scale MuJoCo gravity for hold diagnostics. 0.0 isolates actuator "
+            "pose tracking from balance/contact loading."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -203,6 +212,9 @@ def main() -> None:
             "enable_erfi": False,
         }
     )
+    env._mj_model.opt.gravity[:] = (
+        np.asarray(env._mj_model.opt.gravity, dtype=np.float64) * float(args.gravity_scale)
+    )
 
     phases = parse_phases(args.phases)
     clip_count = int(np.asarray(env._bvh_reference_clip_count))
@@ -210,7 +222,8 @@ def main() -> None:
     print(
         f"reference_gait={args.reference_gait} clips={clip_count} "
         f"tested={clip_ids} phases={phases} hold_seconds={args.seconds:.2f} "
-        f"dt={float(env.dt):.4f} substeps={env.n_substeps}"
+        f"dt={float(env.dt):.4f} substeps={env.n_substeps} "
+        f"gravity_scale={float(args.gravity_scale):.3f}"
     )
     print(f"files={reference_files}")
 

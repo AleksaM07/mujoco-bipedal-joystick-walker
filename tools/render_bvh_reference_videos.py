@@ -68,6 +68,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--width", type=int, default=960)
     parser.add_argument("--height", type=int, default=720)
     parser.add_argument(
+        "--gravity-scale",
+        type=float,
+        default=1.0,
+        help=(
+            "Scale MuJoCo gravity for diagnostic renders. 0.0 isolates joint "
+            "tracking without balance/contact loading."
+        ),
+    )
+    parser.add_argument(
         "--trace-dt",
         type=float,
         default=0.01,
@@ -309,6 +318,8 @@ def render_clip(
     args: argparse.Namespace,
 ) -> tuple[Path, dict[str, object], list[dict[str, object]], list[dict[str, object]]]:
     model = env._mj_model
+    base_gravity = np.asarray(model.opt.gravity, dtype=np.float64).copy()
+    model.opt.gravity[:] = base_gravity * float(args.gravity_scale)
     if args.debug_body_floor_collision:
         enable_body_floor_collision_debug(model)
     data = mujoco.MjData(model)
@@ -391,6 +402,7 @@ def render_clip(
             "trace_index": detail_trace_index,
             "trace_time_s": sample_elapsed,
             "trace_motion_time_s": sample_motion_time,
+            "gravity_scale": float(args.gravity_scale),
             "pd_state_time_s": pd_elapsed_time if args.mode in ("pd", "compare") else None,
             "pd_motion_time_s": pd_motion_time if args.mode in ("pd", "compare") else None,
         }
@@ -540,6 +552,7 @@ def render_clip(
                 "video_frame": video_frame,
                 "render_time_s": render_elapsed,
                 "render_motion_time_s": render_motion_time,
+                "gravity_scale": float(args.gravity_scale),
                 "pd_sim_time_s": pd_elapsed_time if args.mode in ("pd", "compare") else None,
                 "pd_motion_time_s": pd_motion_time if args.mode in ("pd", "compare") else None,
             }
@@ -651,6 +664,7 @@ def render_clip(
         "motion_start_time_s": motion_start_time,
         "motion_window_s": motion_window_seconds,
         "reference_speed_scale": float(args.reference_speed_scale),
+        "gravity_scale": float(args.gravity_scale),
         "trace_dt_s": float(args.trace_dt),
         "rendered_seconds": video_seconds,
         "pd_fail_step": pd_fail_step,
