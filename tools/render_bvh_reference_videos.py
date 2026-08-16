@@ -136,10 +136,94 @@ def parse_args() -> argparse.Namespace:
         help="Scale diagnostic position-actuator stiffness before playback.",
     )
     parser.add_argument(
+        "--trunk-kp-scale",
+        type=float,
+        default=1.0,
+        help="Extra stiffness scale for abdomen/trunk actuators only.",
+    )
+    parser.add_argument(
+        "--pelvis-kp-scale",
+        type=float,
+        default=1.0,
+        help="Extra stiffness scale for pelvis actuators only.",
+    )
+    parser.add_argument(
+        "--ankle-kp-scale",
+        type=float,
+        default=1.0,
+        help="Extra stiffness scale for ankle actuators only.",
+    )
+    parser.add_argument(
+        "--hip-kp-scale",
+        type=float,
+        default=1.0,
+        help="Extra stiffness scale for hip actuators only.",
+    )
+    parser.add_argument(
+        "--trunk-passive-scale",
+        type=float,
+        default=1.0,
+        help="Scale passive abdomen joint stiffness/damping/frictionloss.",
+    )
+    parser.add_argument(
+        "--pelvis-passive-scale",
+        type=float,
+        default=1.0,
+        help="Scale passive pelvis joint stiffness/damping/frictionloss.",
+    )
+    parser.add_argument(
+        "--head-passive-scale",
+        type=float,
+        default=1.0,
+        help="Scale passive head/neck joint stiffness/damping/frictionloss.",
+    )
+    parser.add_argument(
+        "--hip-passive-scale",
+        type=float,
+        default=1.0,
+        help="Scale passive hip joint damping/frictionloss.",
+    )
+    parser.add_argument(
         "--contact-friction-scale",
         type=float,
         default=1.0,
         help="Scale floor and sole contact friction for diagnostic playback.",
+    )
+    parser.add_argument(
+        "--root-z-assist-kp",
+        type=float,
+        default=0.0,
+        help="Diagnostic vertical root support force gain toward reference height.",
+    )
+    parser.add_argument(
+        "--root-z-assist-kd",
+        type=float,
+        default=0.0,
+        help="Diagnostic vertical root support damping toward reference vertical velocity.",
+    )
+    parser.add_argument(
+        "--root-z-assist-max-force",
+        type=float,
+        default=0.0,
+        help="Optional absolute clip for diagnostic root-Z assist force. 0 disables clipping.",
+    )
+    parser.add_argument(
+        "--root-pitch-assist-kp",
+        type=float,
+        default=0.0,
+        help="Diagnostic root pitch torque gain toward reference orientation.",
+    )
+    parser.add_argument(
+        "--root-pitch-assist-kd",
+        type=float,
+        default=0.0,
+        help="Diagnostic root pitch torque damping toward reference angular rate.",
+    )
+    parser.add_argument(
+        "--root-pitch-assist-max-torque",
+        type=float,
+        default=0.0,
+        help="Optional absolute clip for diagnostic root-pitch assist torque. 0 disables clipping.",
     )
     parser.add_argument(
         "--trace-dt",
@@ -213,6 +297,15 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional short text banner burned into the output video.",
     )
+    parser.add_argument(
+        "--trace-actuator-state",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Append per-actuator torque/ratio/target/actual/error columns to the "
+            "trace CSVs for forensic debugging."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -245,9 +338,14 @@ def write_video(path: Path, frames: list[np.ndarray], fps: int) -> None:
 
 
 def apply_actuator_scales(
+    env: BiomechanicsJoystickEnv,
     model: mujoco.MjModel,
     kp_scale: float,
     force_scale: float,
+    trunk_kp_scale: float,
+    pelvis_kp_scale: float,
+    ankle_kp_scale: float,
+    hip_kp_scale: float,
 ) -> None:
     """Scale diagnostic actuator stiffness and force limits in-place."""
     if kp_scale <= 0.0:
@@ -256,9 +354,46 @@ def apply_actuator_scales(
         raise ValueError(
             f"--actuator-force-scale must be positive, got {force_scale}."
         )
+    for extra_scale, name in (
+        (trunk_kp_scale, "--trunk-kp-scale"),
+        (pelvis_kp_scale, "--pelvis-kp-scale"),
+        (ankle_kp_scale, "--ankle-kp-scale"),
+        (hip_kp_scale, "--hip-kp-scale"),
+    ):
+        if extra_scale <= 0.0:
+            raise ValueError(f"{name} must be positive, got {extra_scale}.")
     model.actuator_gainprm[:, 0] *= float(kp_scale)
     model.actuator_biasprm[:, 1] *= float(kp_scale)
     model.actuator_forcerange[:] *= float(force_scale)
+
+    joint_names = tuple(env._actuator_joint_names)
+    trunk_mask = np.array(
+        [name.startswith("abdomen_") for name in joint_names],
+        dtype=bool,
+    )
+    pelvis_mask = np.array(
+        [name.startswith("pelvis_") for name in joint_names],
+        dtype=bool,
+    )
+    ankle_mask = np.array(
+        [("ankle_" in name) for name in joint_names],
+        dtype=bool,
+    )
+    hip_mask = np.array(
+        [("hip_" in name) for name in joint_names],
+        dtype=bool,
+    )
+
+    for mask, scale in (
+        (trunk_mask, float(trunk_kp_scale)),
+        (pelvis_mask, float(pelvis_kp_scale)),
+        (ankle_mask, float(ankle_kp_scale)),
+        (hip_mask, float(hip_kp_scale)),
+    ):
+        if not np.any(mask) or scale == 1.0:
+            continue
+        model.actuator_gainprm[mask, 0] *= scale
+        model.actuator_biasprm[mask, 1] *= scale
 
 
 def apply_contact_friction_scale(
@@ -279,6 +414,108 @@ def apply_contact_friction_scale(
     ]
     for geom_id in geom_ids:
         model.geom_friction[geom_id, :] *= float(friction_scale)
+
+
+def apply_passive_joint_scales(
+    model: mujoco.MjModel,
+    *,
+    trunk_passive_scale: float,
+    pelvis_passive_scale: float,
+    head_passive_scale: float,
+    hip_passive_scale: float,
+) -> None:
+    """Scale passive joint stiffness, damping, and frictionloss by joint group."""
+    for scale, flag_name in (
+        (trunk_passive_scale, "--trunk-passive-scale"),
+        (pelvis_passive_scale, "--pelvis-passive-scale"),
+        (head_passive_scale, "--head-passive-scale"),
+        (hip_passive_scale, "--hip-passive-scale"),
+    ):
+        if scale <= 0.0:
+            raise ValueError(f"{flag_name} must be positive, got {scale}.")
+
+    joint_groups = {
+        "head_": float(head_passive_scale),
+        "abdomen_": float(trunk_passive_scale),
+        "pelvis_": float(pelvis_passive_scale),
+        "left_hip_": float(hip_passive_scale),
+        "right_hip_": float(hip_passive_scale),
+    }
+    for joint_id in range(model.njnt):
+        joint_name = model.joint(joint_id).name or ""
+        scale = 1.0
+        for prefix, candidate_scale in joint_groups.items():
+            if joint_name.startswith(prefix):
+                scale = candidate_scale
+                break
+        if scale == 1.0:
+            continue
+        model.jnt_stiffness[joint_id] *= scale
+        dof_adr = int(model.jnt_dofadr[joint_id])
+        if dof_adr >= 0:
+            model.dof_damping[dof_adr] *= scale
+            model.dof_frictionloss[dof_adr] *= scale
+
+
+def root_z_assist_force(
+    env: BiomechanicsJoystickEnv,
+    data: mujoco.MjData,
+    target_ref: dict[str, np.ndarray],
+    *,
+    kp: float,
+    kd: float,
+    max_force: float,
+) -> float:
+    """Return one diagnostic external vertical support force on the root body."""
+    if kp < 0.0 or kd < 0.0:
+        raise ValueError("--root-z-assist gains must be non-negative.")
+    target_z = float(np.asarray(target_ref["root_pos"], dtype=np.float64)[2])
+    target_vz = float(np.asarray(target_ref["root_vel"], dtype=np.float64)[2])
+    current_z = float(data.qpos[2])
+    current_vz = float(data.qvel[2])
+    force = (kp * (target_z - current_z)) + (kd * (target_vz - current_vz))
+    if max_force > 0.0:
+        force = float(np.clip(force, -max_force, max_force))
+    return force
+
+
+def root_pitch_assist_torque(
+    env: BiomechanicsJoystickEnv,
+    data: mujoco.MjData,
+    target_ref: dict[str, np.ndarray],
+    *,
+    kp: float,
+    kd: float,
+    max_torque: float,
+) -> tuple[np.ndarray, dict[str, float]]:
+    """Return one diagnostic pitch-stabilizing root torque and scalar diagnostics."""
+    if kp < 0.0 or kd < 0.0:
+        raise ValueError("--root-pitch-assist gains must be non-negative.")
+    current_rotation = body_rotation_matrix(data, env._reference_anchor_body_id)
+    ref_rotation = quat_to_rotmat(np.asarray(target_ref["root_quat"], dtype=np.float64))
+    _, current_left = heading_frame_axes_from_rotation(current_rotation)
+    _, ref_left = heading_frame_axes_from_rotation(ref_rotation)
+    current_pitch = rotation_pitch_rad(current_rotation)
+    ref_pitch = rotation_pitch_rad(ref_rotation)
+    current_pitch_rate = float(
+        np.dot(np.asarray(data.qvel[3:6], dtype=np.float64), current_left)
+    )
+    ref_pitch_rate = float(
+        np.dot(np.asarray(target_ref["root_angvel"], dtype=np.float64), ref_left)
+    )
+    torque_scalar = (kp * (ref_pitch - current_pitch)) + (
+        kd * (ref_pitch_rate - current_pitch_rate)
+    )
+    if max_torque > 0.0:
+        torque_scalar = float(np.clip(torque_scalar, -max_torque, max_torque))
+    torque_world = torque_scalar * current_left
+    return torque_world, {
+        "pd_root_pitch_assist_torque": float(torque_scalar),
+        "pd_root_pitch_deg": float(np.degrees(current_pitch)),
+        "ref_root_pitch_deg": float(np.degrees(ref_pitch)),
+        "pd_root_pitch_rate": current_pitch_rate,
+        "ref_root_pitch_rate": ref_pitch_rate,
+    }
 
 
 def overlay_frame_title(
@@ -421,6 +658,33 @@ def actuator_force_stats(
     return float(np.max(ratios)), float(np.mean(ratios > 0.98))
 
 
+def actuator_state_trace(
+    env: BiomechanicsJoystickEnv,
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    target_qpos: np.ndarray,
+) -> dict[str, float]:
+    """Return per-actuator torque and tracking state for CSV forensics."""
+    actuator_forces = np.asarray(data.actuator_force, dtype=np.float64)
+    actuator_limits = np.maximum(
+        np.abs(np.asarray(model.actuator_forcerange, dtype=np.float64)).max(axis=1),
+        1e-6,
+    )
+    actual_qpos = np.asarray(data.qpos[env._actuator_qpos_indices_np], dtype=np.float64)
+    target_qpos = np.asarray(target_qpos, dtype=np.float64)
+
+    row: dict[str, float] = {}
+    for index, joint_name in enumerate(env._actuator_joint_names):
+        row[f"pd_act_torque_{joint_name}"] = float(actuator_forces[index])
+        row[f"pd_act_torque_ratio_{joint_name}"] = float(
+            abs(actuator_forces[index]) / actuator_limits[index]
+        )
+        row[f"pd_act_target_{joint_name}"] = float(target_qpos[index])
+        row[f"pd_act_actual_{joint_name}"] = float(actual_qpos[index])
+        row[f"pd_act_error_{joint_name}"] = float(target_qpos[index] - actual_qpos[index])
+    return row
+
+
 def foot_snapshot(
     env: BiomechanicsJoystickEnv,
     data: mujoco.MjData,
@@ -454,6 +718,121 @@ def foot_speed_xy(
     return float(np.hypot(dx, dy) / dt)
 
 
+def body_rotation_matrix(data: mujoco.MjData, body_id: int) -> np.ndarray:
+    """Return one body world rotation matrix."""
+    return np.asarray(data.xmat[body_id], dtype=np.float64).reshape(3, 3)
+
+
+def body_pitch_deg(data: mujoco.MjData, body_id: int) -> float:
+    """Approximate world pitch angle in degrees from the body rotation matrix."""
+    rotation = body_rotation_matrix(data, body_id)
+    return float(np.degrees(rotation_pitch_rad(rotation)))
+
+
+def rotation_pitch_rad(rotation: np.ndarray) -> float:
+    """Approximate world pitch angle in radians from a 3x3 rotation matrix."""
+    return float(np.arctan2(-rotation[2, 0], np.hypot(rotation[2, 1], rotation[2, 2])))
+
+
+def quat_to_rotmat(quat_wxyz: np.ndarray) -> np.ndarray:
+    """Convert one MuJoCo/root quaternion in wxyz order to a 3x3 rotation matrix."""
+    quat = np.asarray(quat_wxyz, dtype=np.float64)
+    norm = np.linalg.norm(quat)
+    if norm < 1e-12:
+        return np.eye(3, dtype=np.float64)
+    w, x, y, z = quat / norm
+    return np.array(
+        [
+            [1.0 - (2.0 * (y * y + z * z)), 2.0 * (x * y - z * w), 2.0 * (x * z + y * w)],
+            [2.0 * (x * y + z * w), 1.0 - (2.0 * (x * x + z * z)), 2.0 * (y * z - x * w)],
+            [2.0 * (x * z - y * w), 2.0 * (y * z + x * w), 1.0 - (2.0 * (x * x + y * y))],
+        ],
+        dtype=np.float64,
+    )
+
+
+def center_of_mass(env: BiomechanicsJoystickEnv, data: mujoco.MjData) -> np.ndarray:
+    """Host-side center of mass using the same weighted body set as DeepMimic."""
+    body_positions = np.asarray(
+        data.xpos[env._deepmimic_body_ids_np],
+        dtype=np.float64,
+    )
+    return np.average(
+        body_positions,
+        axis=0,
+        weights=np.asarray(env._deepmimic_body_weights_np, dtype=np.float64),
+    )
+
+
+def heading_frame_axes_from_rotation(rotation: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Return horizontal heading-forward and heading-left axes from one rotation matrix."""
+    heading_forward = rotation[:, 0].copy()
+    heading_forward[2] = 0.0
+    heading_norm = np.linalg.norm(heading_forward)
+    if heading_norm < 1e-9:
+        heading_forward = np.array([1.0, 0.0, 0.0], dtype=np.float64)
+    else:
+        heading_forward /= heading_norm
+    heading_left = np.cross(np.array([0.0, 0.0, 1.0], dtype=np.float64), heading_forward)
+    return heading_forward, heading_left
+
+
+def heading_frame_axes(
+    env: BiomechanicsJoystickEnv,
+    data: mujoco.MjData,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return horizontal heading-forward and heading-left axes from the anchor body."""
+    rotation = body_rotation_matrix(data, env._reference_anchor_body_id)
+    return heading_frame_axes_from_rotation(rotation)
+
+
+def support_point(feet: dict[str, float]) -> np.ndarray:
+    """Support point from contacting feet, or mid-feet when airborne."""
+    left = np.array(
+        [feet["left_foot_x"], feet["left_foot_y"], feet["left_foot_z"]],
+        dtype=np.float64,
+    )
+    right = np.array(
+        [feet["right_foot_x"], feet["right_foot_y"], feet["right_foot_z"]],
+        dtype=np.float64,
+    )
+    left_contact = feet["left_contact"] > 0.5
+    right_contact = feet["right_contact"] > 0.5
+    if left_contact and right_contact:
+        return 0.5 * (left + right)
+    if left_contact:
+        return left
+    if right_contact:
+        return right
+    return 0.5 * (left + right)
+
+
+def balance_snapshot(
+    env: BiomechanicsJoystickEnv,
+    data: mujoco.MjData,
+    feet: dict[str, float],
+) -> dict[str, float]:
+    """Compact balance diagnostics for backward-fall forensic work."""
+    com = center_of_mass(env, data)
+    support = support_point(feet)
+    heading_forward, heading_left = heading_frame_axes(env, data)
+    support_delta = com - support
+    pelvis_pitch = body_pitch_deg(data, env._reference_anchor_body_id)
+    torso_pitch = body_pitch_deg(data, env._torso_body_id)
+    return {
+        "com_x": float(com[0]),
+        "com_y": float(com[1]),
+        "com_z": float(com[2]),
+        "support_x": float(support[0]),
+        "support_y": float(support[1]),
+        "support_z": float(support[2]),
+        "com_support_sagittal": float(np.dot(support_delta, heading_forward)),
+        "com_support_lateral": float(np.dot(support_delta, heading_left)),
+        "pelvis_pitch_deg": pelvis_pitch,
+        "torso_pitch_deg": torso_pitch,
+    }
+
+
 def render_clip(
     env: BiomechanicsJoystickEnv,
     clip_id: int,
@@ -465,15 +844,33 @@ def render_clip(
     base_biasprm = np.asarray(model.actuator_biasprm, dtype=np.float64).copy()
     base_forcerange = np.asarray(model.actuator_forcerange, dtype=np.float64).copy()
     base_geom_friction = np.asarray(model.geom_friction, dtype=np.float64).copy()
+    base_jnt_stiffness = np.asarray(model.jnt_stiffness, dtype=np.float64).copy()
+    base_dof_damping = np.asarray(model.dof_damping, dtype=np.float64).copy()
+    base_dof_frictionloss = np.asarray(model.dof_frictionloss, dtype=np.float64).copy()
     model.opt.gravity[:] = base_gravity * float(args.gravity_scale)
     model.actuator_gainprm[:] = base_gainprm
     model.actuator_biasprm[:] = base_biasprm
     model.actuator_forcerange[:] = base_forcerange
     model.geom_friction[:] = base_geom_friction
+    model.jnt_stiffness[:] = base_jnt_stiffness
+    model.dof_damping[:] = base_dof_damping
+    model.dof_frictionloss[:] = base_dof_frictionloss
     apply_actuator_scales(
+        env,
         model,
         kp_scale=float(args.actuator_kp_scale),
         force_scale=float(args.actuator_force_scale),
+        trunk_kp_scale=float(args.trunk_kp_scale),
+        pelvis_kp_scale=float(args.pelvis_kp_scale),
+        ankle_kp_scale=float(args.ankle_kp_scale),
+        hip_kp_scale=float(args.hip_kp_scale),
+    )
+    apply_passive_joint_scales(
+        model,
+        trunk_passive_scale=float(args.trunk_passive_scale),
+        pelvis_passive_scale=float(args.pelvis_passive_scale),
+        head_passive_scale=float(args.head_passive_scale),
+        hip_passive_scale=float(args.hip_passive_scale),
     )
     apply_contact_friction_scale(
         env,
@@ -570,7 +967,22 @@ def render_clip(
             "pin_root_rotation_to_reference": bool(args.pin_root_rotation_to_reference),
             "actuator_force_scale": float(args.actuator_force_scale),
             "actuator_kp_scale": float(args.actuator_kp_scale),
+            "trunk_kp_scale": float(args.trunk_kp_scale),
+            "pelvis_kp_scale": float(args.pelvis_kp_scale),
+            "ankle_kp_scale": float(args.ankle_kp_scale),
+            "hip_kp_scale": float(args.hip_kp_scale),
+            "trunk_passive_scale": float(args.trunk_passive_scale),
+            "pelvis_passive_scale": float(args.pelvis_passive_scale),
+            "head_passive_scale": float(args.head_passive_scale),
+            "hip_passive_scale": float(args.hip_passive_scale),
             "contact_friction_scale": float(args.contact_friction_scale),
+            "root_z_assist_kp": float(args.root_z_assist_kp),
+            "root_z_assist_kd": float(args.root_z_assist_kd),
+            "root_z_assist_max_force": float(args.root_z_assist_max_force),
+            "root_pitch_assist_kp": float(args.root_pitch_assist_kp),
+            "root_pitch_assist_kd": float(args.root_pitch_assist_kd),
+            "root_pitch_assist_max_torque": float(args.root_pitch_assist_max_torque),
+            "trace_actuator_state": bool(args.trace_actuator_state),
             "pd_state_time_s": pd_elapsed_time if args.mode in ("pd", "compare") else None,
             "pd_motion_time_s": pd_motion_time if args.mode in ("pd", "compare") else None,
         }
@@ -582,6 +994,7 @@ def render_clip(
             trace_kinematic_data.ctrl[:] = np.asarray(ref["qpos"], dtype=np.float64)
             mujoco.mj_forward(model, trace_kinematic_data)
             kin_feet = foot_snapshot(env, trace_kinematic_data)
+            kin_balance = balance_snapshot(env, trace_kinematic_data, kin_feet)
             row.update(
                 {
                     "kin_root_x": float(trace_kinematic_data.qpos[0]),
@@ -603,15 +1016,41 @@ def render_clip(
                         sample_dt,
                         "right",
                     ),
+                    "kin_com_support_sagittal": kin_balance["com_support_sagittal"],
+                    "kin_com_support_lateral": kin_balance["com_support_lateral"],
+                    "kin_pelvis_pitch_deg": kin_balance["pelvis_pitch_deg"],
+                    "kin_torso_pitch_deg": kin_balance["torso_pitch_deg"],
                 }
             )
             previous_detail_kinematic_feet = kin_feet
         if args.mode in ("pd", "compare"):
             target_ref = query_reference_np(env, clip_id, sample_motion_time)
             pd_feet = foot_snapshot(env, data)
+            pd_balance = balance_snapshot(env, data, pd_feet)
             target_qpos = np.asarray(target_ref["qpos"], dtype=np.float64)
             actual_qpos = data.qpos[env._actuator_qpos_indices_np]
             force_ratio, saturated_fraction = actuator_force_stats(model, data)
+            actuator_trace = (
+                actuator_state_trace(env, model, data, target_qpos)
+                if args.trace_actuator_state
+                else {}
+            )
+            assist_force = root_z_assist_force(
+                env,
+                data,
+                target_ref,
+                kp=float(args.root_z_assist_kp),
+                kd=float(args.root_z_assist_kd),
+                max_force=float(args.root_z_assist_max_force),
+            )
+            _, pitch_diag = root_pitch_assist_torque(
+                env,
+                data,
+                target_ref,
+                kp=float(args.root_pitch_assist_kp),
+                kd=float(args.root_pitch_assist_kd),
+                max_torque=float(args.root_pitch_assist_max_torque),
+            )
             row.update(
                 {
                     "pd_root_x": float(data.qpos[0]),
@@ -638,8 +1077,21 @@ def render_clip(
                         sample_dt,
                         "right",
                     ),
+                    "pd_com_x": pd_balance["com_x"],
+                    "pd_com_y": pd_balance["com_y"],
+                    "pd_com_z": pd_balance["com_z"],
+                    "pd_support_x": pd_balance["support_x"],
+                    "pd_support_y": pd_balance["support_y"],
+                    "pd_support_z": pd_balance["support_z"],
+                    "pd_com_support_sagittal": pd_balance["com_support_sagittal"],
+                    "pd_com_support_lateral": pd_balance["com_support_lateral"],
+                    "pd_pelvis_pitch_deg": pd_balance["pelvis_pitch_deg"],
+                    "pd_torso_pitch_deg": pd_balance["torso_pitch_deg"],
+                    "pd_root_z_assist_force": assist_force,
                     "pd_max_actuator_force_ratio": force_ratio,
                     "pd_saturated_actuator_fraction": saturated_fraction,
+                    **pitch_diag,
+                    **actuator_trace,
                 }
             )
             previous_detail_pd_feet = pd_feet
@@ -683,6 +1135,7 @@ def render_clip(
                     if args.segment_seconds is not None or loop_mode == int(LoopMode.CLAMP):
                         target_time = min(target_time, segment_end_time)
                     target_ref = query_reference_np(env, clip_id, target_time)
+                    data.xfrc_applied[:, :] = 0.0
                     if args.pin_root_to_reference or args.pin_root_position_to_reference:
                         data.qpos[:3] = np.asarray(target_ref["root_pos"], dtype=np.float64)
                         data.qvel[:3] = np.asarray(target_ref["root_vel"], dtype=np.float64)
@@ -702,6 +1155,26 @@ def render_clip(
                             target_ref["root_angvel"],
                             dtype=np.float64,
                         )
+                    assist_force = root_z_assist_force(
+                        env,
+                        data,
+                        target_ref,
+                        kp=float(args.root_z_assist_kp),
+                        kd=float(args.root_z_assist_kd),
+                        max_force=float(args.root_z_assist_max_force),
+                    )
+                    assist_torque, _ = root_pitch_assist_torque(
+                        env,
+                        data,
+                        target_ref,
+                        kp=float(args.root_pitch_assist_kp),
+                        kd=float(args.root_pitch_assist_kd),
+                        max_torque=float(args.root_pitch_assist_max_torque),
+                    )
+                    if assist_force != 0.0:
+                        data.xfrc_applied[env._reference_anchor_body_id, 2] = assist_force
+                    if np.any(np.abs(assist_torque) > 0.0):
+                        data.xfrc_applied[env._reference_anchor_body_id, 3:6] = assist_torque
                     data.ctrl[:] = np.asarray(target_ref["qpos"], dtype=np.float64)
                     for _ in range(env.n_substeps):
                         mujoco.mj_step(model, data)
@@ -747,12 +1220,28 @@ def render_clip(
                 "pin_root_rotation_to_reference": bool(args.pin_root_rotation_to_reference),
                 "actuator_force_scale": float(args.actuator_force_scale),
                 "actuator_kp_scale": float(args.actuator_kp_scale),
+                "trunk_kp_scale": float(args.trunk_kp_scale),
+                "pelvis_kp_scale": float(args.pelvis_kp_scale),
+                "ankle_kp_scale": float(args.ankle_kp_scale),
+                "hip_kp_scale": float(args.hip_kp_scale),
+                "trunk_passive_scale": float(args.trunk_passive_scale),
+                "pelvis_passive_scale": float(args.pelvis_passive_scale),
+                "head_passive_scale": float(args.head_passive_scale),
+                "hip_passive_scale": float(args.hip_passive_scale),
                 "contact_friction_scale": float(args.contact_friction_scale),
+                "root_z_assist_kp": float(args.root_z_assist_kp),
+                "root_z_assist_kd": float(args.root_z_assist_kd),
+                "root_z_assist_max_force": float(args.root_z_assist_max_force),
+                "root_pitch_assist_kp": float(args.root_pitch_assist_kp),
+                "root_pitch_assist_kd": float(args.root_pitch_assist_kd),
+                "root_pitch_assist_max_torque": float(args.root_pitch_assist_max_torque),
+                "trace_actuator_state": bool(args.trace_actuator_state),
                 "pd_sim_time_s": pd_elapsed_time if args.mode in ("pd", "compare") else None,
                 "pd_motion_time_s": pd_motion_time if args.mode in ("pd", "compare") else None,
             }
             if args.mode in ("kinematic", "compare"):
                 kin_feet = foot_snapshot(env, kinematic_data)
+                kin_balance = balance_snapshot(env, kinematic_data, kin_feet)
                 row.update(
                     {
                         "kin_root_x": float(kinematic_data.qpos[0]),
@@ -774,14 +1263,40 @@ def render_clip(
                             1.0 / float(args.fps),
                             "right",
                         ),
+                        "kin_com_support_sagittal": kin_balance["com_support_sagittal"],
+                        "kin_com_support_lateral": kin_balance["com_support_lateral"],
+                        "kin_pelvis_pitch_deg": kin_balance["pelvis_pitch_deg"],
+                        "kin_torso_pitch_deg": kin_balance["torso_pitch_deg"],
                     }
                 )
                 previous_kinematic_feet = kin_feet
             if args.mode in ("pd", "compare"):
                 pd_feet = foot_snapshot(env, data)
+                pd_balance = balance_snapshot(env, data, pd_feet)
                 target_qpos = np.asarray(target_ref["qpos"], dtype=np.float64)
                 actual_qpos = data.qpos[env._actuator_qpos_indices_np]
                 force_ratio, saturated_fraction = actuator_force_stats(model, data)
+                actuator_trace = (
+                    actuator_state_trace(env, model, data, target_qpos)
+                    if args.trace_actuator_state
+                    else {}
+                )
+                assist_force = root_z_assist_force(
+                    env,
+                    data,
+                    target_ref,
+                    kp=float(args.root_z_assist_kp),
+                    kd=float(args.root_z_assist_kd),
+                    max_force=float(args.root_z_assist_max_force),
+                )
+                _, pitch_diag = root_pitch_assist_torque(
+                    env,
+                    data,
+                    target_ref,
+                    kp=float(args.root_pitch_assist_kp),
+                    kd=float(args.root_pitch_assist_kd),
+                    max_torque=float(args.root_pitch_assist_max_torque),
+                )
                 row.update(
                     {
                         "pd_root_x": float(data.qpos[0]),
@@ -808,8 +1323,21 @@ def render_clip(
                             1.0 / float(args.fps),
                             "right",
                         ),
+                        "pd_com_x": pd_balance["com_x"],
+                        "pd_com_y": pd_balance["com_y"],
+                        "pd_com_z": pd_balance["com_z"],
+                        "pd_support_x": pd_balance["support_x"],
+                        "pd_support_y": pd_balance["support_y"],
+                        "pd_support_z": pd_balance["support_z"],
+                        "pd_com_support_sagittal": pd_balance["com_support_sagittal"],
+                        "pd_com_support_lateral": pd_balance["com_support_lateral"],
+                        "pd_pelvis_pitch_deg": pd_balance["pelvis_pitch_deg"],
+                        "pd_torso_pitch_deg": pd_balance["torso_pitch_deg"],
+                        "pd_root_z_assist_force": assist_force,
                         "pd_max_actuator_force_ratio": force_ratio,
                         "pd_saturated_actuator_fraction": saturated_fraction,
+                        **pitch_diag,
+                        **actuator_trace,
                     }
                 )
                 previous_pd_feet = pd_feet
@@ -879,7 +1407,22 @@ def render_clip(
         "pin_root_rotation_to_reference": bool(args.pin_root_rotation_to_reference),
         "actuator_force_scale": float(args.actuator_force_scale),
         "actuator_kp_scale": float(args.actuator_kp_scale),
+        "trunk_kp_scale": float(args.trunk_kp_scale),
+        "pelvis_kp_scale": float(args.pelvis_kp_scale),
+        "ankle_kp_scale": float(args.ankle_kp_scale),
+        "hip_kp_scale": float(args.hip_kp_scale),
+        "trunk_passive_scale": float(args.trunk_passive_scale),
+        "pelvis_passive_scale": float(args.pelvis_passive_scale),
+        "head_passive_scale": float(args.head_passive_scale),
+        "hip_passive_scale": float(args.hip_passive_scale),
         "contact_friction_scale": float(args.contact_friction_scale),
+        "root_z_assist_kp": float(args.root_z_assist_kp),
+        "root_z_assist_kd": float(args.root_z_assist_kd),
+        "root_z_assist_max_force": float(args.root_z_assist_max_force),
+        "root_pitch_assist_kp": float(args.root_pitch_assist_kp),
+        "root_pitch_assist_kd": float(args.root_pitch_assist_kd),
+        "root_pitch_assist_max_torque": float(args.root_pitch_assist_max_torque),
+        "trace_actuator_state": bool(args.trace_actuator_state),
         "trace_dt_s": float(args.trace_dt),
         "rendered_seconds": video_seconds,
         "pd_fail_step": pd_fail_step,
