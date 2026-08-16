@@ -1820,6 +1820,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         rng, command_key, erfi_key, bias_key, gait_key, bvh_key = (
             jax.random.split(rng, 6)
         )
+        pure_imitation = self._is_pure_reference_imitation()
         fallback_qpos = self._init_q.at[2].set(self._standing_height())
         fallback_qvel = jp.zeros(self._mjx_model.nv)
         fallback_data = self._fresh_reset_data().replace(
@@ -1989,7 +1990,11 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 )
                 sampled_valid = sampled_valid | (~candidate_terminal)
 
-        command = self.sample_command(command_key)
+        command = jp.where(
+            pure_imitation,
+            jp.zeros(3, dtype=jp.float32),
+            self.sample_command(command_key),
+        )
         info = {
             "rng": rng,
             "command": command,
@@ -2161,6 +2166,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         """Izvrsi jedan locomotion korak za zadatu akciju politike."""
         info = dict(state.info)
         info["rng"], rfi_key, command_key = jax.random.split(info["rng"], 3)
+        pure_imitation = self._is_pure_reference_imitation()
 
         action = jp.nan_to_num(action, nan=0.0, posinf=1.0, neginf=-1.0)
         policy_action = jp.clip(action, -1.0, 1.0)
@@ -2183,6 +2189,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         )
 
         should_resample = (
+            ~pure_imitation
+        ) & (
             info["command_step"] > self._config.command_resample_steps
         )
         info["command"] = jp.where(
@@ -2358,6 +2366,13 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             done=done.astype(reward.dtype),
             metrics=metrics,
             info=info,
+        )
+
+    def _is_pure_reference_imitation(self) -> jax.Array:
+        """Whether joystick commands should be suppressed for pure BVH/SMPL imitation."""
+        return jp.array(
+            self._config.get("reference_gait", "none") in ("bvh", "smpl")
+            and self._config.get("deepmimic_reward_mode", "pure") == "pure"
         )
 
     def _policy_action_to_motor_targets(

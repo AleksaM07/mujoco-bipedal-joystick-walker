@@ -68,6 +68,33 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--width", type=int, default=960)
     parser.add_argument("--height", type=int, default=720)
     parser.add_argument(
+        "--trace-dt",
+        type=float,
+        default=0.01,
+        help="Detailed trace sampling interval in wall-clock seconds.",
+    )
+    parser.add_argument(
+        "--start-phase",
+        type=float,
+        default=0.0,
+        help="Normalized clip phase in [0, 1] where the diagnostic window starts.",
+    )
+    parser.add_argument(
+        "--segment-seconds",
+        type=float,
+        default=None,
+        help="Optional clip sub-window length in motion seconds before any slow-down.",
+    )
+    parser.add_argument(
+        "--reference-speed-scale",
+        type=float,
+        default=1.0,
+        help=(
+            "Scale for reference motion progression during rendering. "
+            "0.25 means the clip target advances 4x slower than real time."
+        ),
+    )
+    parser.add_argument(
         "--min-video-seconds",
         type=float,
         default=4.0,
@@ -280,7 +307,7 @@ def render_clip(
     env: BiomechanicsJoystickEnv,
     clip_id: int,
     args: argparse.Namespace,
-) -> tuple[Path, dict[str, object], list[dict[str, object]]]:
+) -> tuple[Path, dict[str, object], list[dict[str, object]], list[dict[str, object]]]:
     model = env._mj_model
     if args.debug_body_floor_collision:
         enable_body_floor_collision_debug(model)
@@ -296,65 +323,225 @@ def render_clip(
     frame_count = int(np.asarray(env._bvh_reference_frame_counts)[clip_id])
     frame_time = float(np.asarray(env._bvh_reference_frame_times)[clip_id])
     motion_length = float(np.asarray(env._bvh_reference_motion_lengths)[clip_id])
+    if not 0.0 <= float(args.start_phase) <= 1.0:
+        raise ValueError(f"--start-phase must be in [0, 1], got {args.start_phase}.")
+    if float(args.reference_speed_scale) <= 0.0:
+        raise ValueError(
+            "--reference-speed-scale must be positive, got "
+            f"{args.reference_speed_scale}."
+        )
+    motion_start_time = float(args.start_phase) * motion_length
+    motion_window_seconds = motion_length - motion_start_time
+    if args.segment_seconds is not None:
+        motion_window_seconds = min(
+            motion_window_seconds,
+            max(0.0, float(args.segment_seconds)),
+        )
+    motion_window_seconds = max(motion_window_seconds, frame_time)
+    segment_end_time = motion_start_time + motion_window_seconds
+    slowed_window_seconds = motion_window_seconds / float(args.reference_speed_scale)
     if args.video_seconds is not None:
         video_seconds = float(args.video_seconds)
     else:
         video_seconds = max(
-            motion_length + args.end_hold_seconds,
+            slowed_window_seconds + args.end_hold_seconds,
             float(args.min_video_seconds),
         )
     frame_total = max(1, int(np.ceil(video_seconds * args.fps)))
+    if float(args.trace_dt) <= 0.0:
+        raise ValueError(f"--trace-dt must be positive, got {args.trace_dt}.")
     rendered: list[np.ndarray] = []
     pd_fail_step: int | None = None
     pd_fail_time: float | None = None
     pd_fail_reason = "none"
     trace_rows: list[dict[str, object]] = []
+    detail_trace_rows: list[dict[str, object]] = []
     previous_kinematic_feet: dict[str, float] | None = None
     previous_pd_feet: dict[str, float] | None = None
+    previous_detail_kinematic_feet: dict[str, float] | None = None
+    previous_detail_pd_feet: dict[str, float] | None = None
+    previous_detail_time: float | None = None
+    next_detail_trace_time = 0.0
+    detail_trace_index = 0
+    substep_dt = float(env.dt) / float(env.n_substeps)
+    trace_kinematic_data = mujoco.MjData(model)
+
+    def append_detail_trace_row(
+        sample_elapsed: float,
+        pd_elapsed_time: float,
+        pd_motion_time: float,
+    ) -> None:
+        nonlocal previous_detail_kinematic_feet
+        nonlocal previous_detail_pd_feet
+        nonlocal previous_detail_time
+        nonlocal detail_trace_index
+
+        sample_motion_time = motion_start_time + (
+            sample_elapsed * float(args.reference_speed_scale)
+        )
+        if args.segment_seconds is not None or loop_mode == int(LoopMode.CLAMP):
+            sample_motion_time = min(sample_motion_time, segment_end_time)
+        sample_dt = (
+            float(args.trace_dt)
+            if previous_detail_time is None
+            else max(sample_elapsed - previous_detail_time, 1e-9)
+        )
+        row: dict[str, object] = {
+            "clip_id": clip_id,
+            "trace_index": detail_trace_index,
+            "trace_time_s": sample_elapsed,
+            "trace_motion_time_s": sample_motion_time,
+            "pd_state_time_s": pd_elapsed_time if args.mode in ("pd", "compare") else None,
+            "pd_motion_time_s": pd_motion_time if args.mode in ("pd", "compare") else None,
+        }
+        if args.mode in ("kinematic", "compare"):
+            ref = query_reference_np(env, clip_id, sample_motion_time)
+            qpos, qvel = build_full_state(env, ref)
+            trace_kinematic_data.qpos[:] = qpos
+            trace_kinematic_data.qvel[:] = qvel
+            trace_kinematic_data.ctrl[:] = np.asarray(ref["qpos"], dtype=np.float64)
+            mujoco.mj_forward(model, trace_kinematic_data)
+            kin_feet = foot_snapshot(env, trace_kinematic_data)
+            row.update(
+                {
+                    "kin_root_x": float(trace_kinematic_data.qpos[0]),
+                    "kin_root_y": float(trace_kinematic_data.qpos[1]),
+                    "kin_root_z": float(trace_kinematic_data.qpos[2]),
+                    "kin_left_foot_z": kin_feet["left_foot_z"],
+                    "kin_right_foot_z": kin_feet["right_foot_z"],
+                    "kin_left_contact": kin_feet["left_contact"],
+                    "kin_right_contact": kin_feet["right_contact"],
+                    "kin_left_foot_speed_xy": foot_speed_xy(
+                        kin_feet,
+                        previous_detail_kinematic_feet,
+                        sample_dt,
+                        "left",
+                    ),
+                    "kin_right_foot_speed_xy": foot_speed_xy(
+                        kin_feet,
+                        previous_detail_kinematic_feet,
+                        sample_dt,
+                        "right",
+                    ),
+                }
+            )
+            previous_detail_kinematic_feet = kin_feet
+        if args.mode in ("pd", "compare"):
+            target_ref = query_reference_np(env, clip_id, sample_motion_time)
+            pd_feet = foot_snapshot(env, data)
+            target_qpos = np.asarray(target_ref["qpos"], dtype=np.float64)
+            actual_qpos = data.qpos[env._actuator_qpos_indices_np]
+            force_ratio, saturated_fraction = actuator_force_stats(model, data)
+            row.update(
+                {
+                    "pd_root_x": float(data.qpos[0]),
+                    "pd_root_y": float(data.qpos[1]),
+                    "pd_root_z": float(data.qpos[2]),
+                    "pd_torso_up": torso_up(env, data),
+                    "pd_fail_reason": fail_reason(env, model, data),
+                    "pd_pose_rmse": float(
+                        np.sqrt(np.mean(np.square(actual_qpos - target_qpos)))
+                    ),
+                    "pd_left_foot_z": pd_feet["left_foot_z"],
+                    "pd_right_foot_z": pd_feet["right_foot_z"],
+                    "pd_left_contact": pd_feet["left_contact"],
+                    "pd_right_contact": pd_feet["right_contact"],
+                    "pd_left_foot_speed_xy": foot_speed_xy(
+                        pd_feet,
+                        previous_detail_pd_feet,
+                        sample_dt,
+                        "left",
+                    ),
+                    "pd_right_foot_speed_xy": foot_speed_xy(
+                        pd_feet,
+                        previous_detail_pd_feet,
+                        sample_dt,
+                        "right",
+                    ),
+                    "pd_max_actuator_force_ratio": force_ratio,
+                    "pd_saturated_actuator_fraction": saturated_fraction,
+                }
+            )
+            previous_detail_pd_feet = pd_feet
+        detail_trace_rows.append(row)
+        previous_detail_time = sample_elapsed
+        detail_trace_index += 1
 
     try:
-        initial_ref = query_reference_np(env, clip_id, 0.0)
+        initial_ref = query_reference_np(env, clip_id, motion_start_time)
         qpos, qvel = build_full_state(env, initial_ref)
         data.qpos[:] = qpos
         data.qvel[:] = qvel
         data.ctrl[:] = np.asarray(initial_ref["qpos"], dtype=np.float64)
         mujoco.mj_forward(model, data)
 
-        sim_time = 0.0
+        pd_motion_time = motion_start_time
+        pd_elapsed_time = 0.0
+        append_detail_trace_row(0.0, pd_elapsed_time, pd_motion_time)
+        next_detail_trace_time = float(args.trace_dt)
         for video_frame in range(frame_total):
-            render_time = video_frame / float(args.fps)
-            if loop_mode == int(LoopMode.CLAMP):
-                render_time = min(render_time, motion_length)
+            render_elapsed = video_frame / float(args.fps)
+            render_motion_time = motion_start_time + (
+                render_elapsed * float(args.reference_speed_scale)
+            )
+            if args.segment_seconds is not None or loop_mode == int(LoopMode.CLAMP):
+                render_motion_time = min(render_motion_time, segment_end_time)
 
             if args.mode in ("kinematic", "compare"):
-                ref = query_reference_np(env, clip_id, render_time)
+                ref = query_reference_np(env, clip_id, render_motion_time)
                 qpos, qvel = build_full_state(env, ref)
                 kinematic_data.qpos[:] = qpos
                 kinematic_data.qvel[:] = qvel
                 kinematic_data.ctrl[:] = np.asarray(ref["qpos"], dtype=np.float64)
                 mujoco.mj_forward(model, kinematic_data)
             if args.mode in ("pd", "compare"):
-                target_ref = query_reference_np(env, clip_id, sim_time)
-                while sim_time + 1e-9 < render_time:
-                    target_time = sim_time + float(env.dt)
-                    if loop_mode == int(LoopMode.CLAMP):
-                        target_time = min(target_time, motion_length)
+                target_ref = query_reference_np(env, clip_id, pd_motion_time)
+                while pd_elapsed_time + 1e-9 < render_elapsed:
+                    target_time = pd_motion_time + (
+                        float(env.dt) * float(args.reference_speed_scale)
+                    )
+                    if args.segment_seconds is not None or loop_mode == int(LoopMode.CLAMP):
+                        target_time = min(target_time, segment_end_time)
                     target_ref = query_reference_np(env, clip_id, target_time)
                     data.ctrl[:] = np.asarray(target_ref["qpos"], dtype=np.float64)
                     for _ in range(env.n_substeps):
                         mujoco.mj_step(model, data)
-                    sim_time += float(env.dt)
+                        pd_elapsed_time += substep_dt
+                        while (
+                            next_detail_trace_time <= pd_elapsed_time + 1e-9
+                            and next_detail_trace_time <= video_seconds + 1e-9
+                        ):
+                            append_detail_trace_row(
+                                next_detail_trace_time,
+                                pd_elapsed_time,
+                                pd_motion_time,
+                            )
+                            next_detail_trace_time += float(args.trace_dt)
+                    pd_motion_time = target_time
                     reason = fail_reason(env, model, data)
                     if pd_fail_step is None and reason != "none":
-                        pd_fail_step = int(round(sim_time / float(env.dt)))
-                        pd_fail_time = sim_time
+                        pd_fail_step = int(round(pd_elapsed_time / float(env.dt)))
+                        pd_fail_time = pd_elapsed_time
                         pd_fail_reason = reason
+            elif args.mode == "kinematic":
+                while (
+                    next_detail_trace_time <= render_elapsed + 1e-9
+                    and next_detail_trace_time <= video_seconds + 1e-9
+                ):
+                    append_detail_trace_row(
+                        next_detail_trace_time,
+                        pd_elapsed_time,
+                        pd_motion_time,
+                    )
+                    next_detail_trace_time += float(args.trace_dt)
 
             row: dict[str, object] = {
                 "clip_id": clip_id,
                 "video_frame": video_frame,
-                "render_time_s": render_time,
-                "pd_sim_time_s": sim_time if args.mode in ("pd", "compare") else None,
+                "render_time_s": render_elapsed,
+                "render_motion_time_s": render_motion_time,
+                "pd_sim_time_s": pd_elapsed_time if args.mode in ("pd", "compare") else None,
+                "pd_motion_time_s": pd_motion_time if args.mode in ("pd", "compare") else None,
             }
             if args.mode in ("kinematic", "compare"):
                 kin_feet = foot_snapshot(env, kinematic_data)
@@ -439,9 +626,12 @@ def render_clip(
     label = clip_label(loop_mode)
     stem = safe_name(source_label(env, clip_id))
     duration_label = f"{motion_length:.2f}".replace(".", "p")
+    start_label = f"p{args.start_phase:.3f}".replace(".", "p")
+    speed_label = f"x{args.reference_speed_scale:.2f}".replace(".", "p")
     file_name = (
         f"clip_{clip_id:03d}_{label}_{stem}_"
-        f"frames{frame_count:03d}_dur{duration_label}s_{args.mode}.mp4"
+        f"frames{frame_count:03d}_dur{duration_label}s_"
+        f"{start_label}_{speed_label}_{args.mode}.mp4"
     )
     output_path = args.out_dir / file_name
     write_video(output_path, rendered, args.fps)
@@ -458,12 +648,16 @@ def render_clip(
         "frame_count": frame_count,
         "frame_time": frame_time,
         "motion_length_s": motion_length,
+        "motion_start_time_s": motion_start_time,
+        "motion_window_s": motion_window_seconds,
+        "reference_speed_scale": float(args.reference_speed_scale),
+        "trace_dt_s": float(args.trace_dt),
         "rendered_seconds": video_seconds,
         "pd_fail_step": pd_fail_step,
         "pd_fail_time_s": pd_fail_time,
         "pd_fail_reason": pd_fail_reason,
         "debug_body_floor_collision": bool(args.debug_body_floor_collision),
-    }, trace_rows
+    }, trace_rows, detail_trace_rows
 
 
 def main() -> None:
@@ -487,11 +681,17 @@ def main() -> None:
 
     rows: list[dict[str, object]] = []
     trace_rows: list[dict[str, object]] = []
+    detail_trace_rows: list[dict[str, object]] = []
     print(f"Rendering {len(clip_ids)} BVH clips to {args.out_dir}")
     for clip_id in clip_ids:
-        path, row, clip_trace_rows = render_clip(env, clip_id, args)
+        path, row, clip_trace_rows, clip_detail_trace_rows = render_clip(
+            env,
+            clip_id,
+            args,
+        )
         rows.append(row)
         trace_rows.extend(clip_trace_rows)
+        detail_trace_rows.extend(clip_detail_trace_rows)
         print(
             f"{clip_id:03d} {row['label']} {row['motion_length_s']:.3f}s "
             f"-> {path.name}",
@@ -512,6 +712,14 @@ def main() -> None:
             writer.writeheader()
             writer.writerows(trace_rows)
         print(f"Trace: {trace_path}")
+    if detail_trace_rows:
+        detail_trace_path = args.out_dir / f"trace_detail_{args.mode}.csv"
+        fieldnames = sorted({key for row in detail_trace_rows for key in row})
+        with detail_trace_path.open("w", newline="", encoding="utf-8") as file:
+            writer = csv.DictWriter(file, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(detail_trace_rows)
+        print(f"Detail trace: {detail_trace_path}")
 
 
 if __name__ == "__main__":
