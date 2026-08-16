@@ -3698,6 +3698,14 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             clip_id,
             frame_index1,
         ]
+        reset_root_angvel0 = self._bvh_reference_reset_root_angvel_targets[
+            clip_id,
+            frame_index0,
+        ]
+        reset_root_angvel1 = self._bvh_reference_reset_root_angvel_targets[
+            clip_id,
+            frame_index1,
+        ]
         key_rel0 = self._bvh_reference_key_rel_local_targets[clip_id, frame_index0]
         key_rel1 = self._bvh_reference_key_rel_local_targets[clip_id, frame_index1]
 
@@ -3722,10 +3730,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         reset_root_vel = reset_root_vel0 + alpha * (
             reset_root_vel1 - reset_root_vel0
         )
-        reset_root_angvel = self._quat_interval_angular_velocity(
-            reset_root_quat0,
-            reset_root_quat1,
-            self._bvh_reference_frame_times[clip_id],
+        reset_root_angvel = reset_root_angvel0 + alpha * (
+            reset_root_angvel1 - reset_root_angvel0
         )
         ref_heading = self._heading_world_to_local_from_quat(root_quat)
         key_rel = key_rel0 + alpha * (key_rel1 - key_rel0)
