@@ -610,6 +610,7 @@ def main():
         action="append",
         default=None,
     )
+    parser.add_argument("--reference-root-xy-scale", type=float, default=None)
     parser.add_argument("--action-smoothing", type=float, default=None)
     parser.add_argument("--init-qpos-file", type=Path, default=None)
     parser.add_argument("--xml-path", type=Path, default=None)
@@ -702,6 +703,11 @@ def main():
             run_env_value(run_config, "reference_target_observation", False)
         )
     reference_loop_mode = str(run_env_value(run_config, "reference_loop_mode", "auto"))
+    reference_root_xy_scale = (
+        args.reference_root_xy_scale
+        if args.reference_root_xy_scale is not None
+        else float(run_env_value(run_config, "reference_root_xy_scale", 1.0))
+    )
     saved_legacy_action_prior = run_env_value(
         run_config,
         "legacy_action_prior",
@@ -751,6 +757,7 @@ def main():
         f"arm_actuators={arm_actuators} | "
         f"reference_gait_file={reference_gait_file} | "
         f"reference_loop_mode={reference_loop_mode} | "
+        f"reference_root_xy_scale={reference_root_xy_scale} | "
         f"reference_target_observation={reference_target_observation} | "
         f"deepmimic_reward_mode={deepmimic_reward_mode} | "
         f"deepmimic_key_bodies={deepmimic_key_bodies} | "
@@ -775,6 +782,7 @@ def main():
         arm_actuators=arm_actuators,
         reference_gait_file=reference_gait_file,
         reference_loop_mode=reference_loop_mode,
+        reference_root_xy_scale=reference_root_xy_scale,
         reference_target_observation=reference_target_observation,
         deepmimic_reward_mode=deepmimic_reward_mode,
         deepmimic_key_bodies=deepmimic_key_bodies,
@@ -860,6 +868,9 @@ def make_environment(env_config: EnvConfig):
         "enable_erfi": False,
         "command_profile": env_config.command_profile,
         "reference_gait": env_config.reference_gait,
+        "arm_actuators": env_config.arm_actuators,
+        "reference_loop_mode": env_config.reference_loop_mode,
+        "reference_root_xy_scale": env_config.reference_root_xy_scale,
         "reference_target_observation": env_config.reference_target_observation,
         "deepmimic_reward_mode": env_config.deepmimic_reward_mode,
         "deepmimic_key_bodies": env_config.deepmimic_key_bodies,

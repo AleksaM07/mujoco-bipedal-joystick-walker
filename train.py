@@ -976,7 +976,7 @@ def log_environment_summary(env, label: str = "env") -> None:
         "rao_limit={} | reference_target_observation={} | "
         "reference_action_mode={} | reference_action_center={} | "
         "reference_action_range={} | reference_action_range_scale={} | "
-        "reference_residual_scale={} | "
+        "reference_residual_scale={} | reference_root_xy_scale={} | "
         "reference_replay_target_step={} | dm_root_vel_weight_scale={} | "
         "legacy_action_prior={} | "
         "init_qpos_file={} | xml={}",
@@ -1003,6 +1003,7 @@ def log_environment_summary(env, label: str = "env") -> None:
         getattr(env._config, "reference_action_range", None),
         getattr(env._config, "reference_action_range_scale", None),
         getattr(env._config, "reference_residual_scale", None),
+        getattr(env._config, "reference_root_xy_scale", None),
         getattr(env._config, "reference_replay_target_step", None),
         getattr(env._config, "deepmimic_root_velocity_weight_scale", None),
         getattr(env._config, "legacy_action_prior", None),
@@ -1163,6 +1164,7 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         "enable_erfi": enable_erfi,
         "command_profile": env_config.command_profile,
         "reference_gait": env_config.reference_gait,
+        "arm_actuators": env_config.arm_actuators,
         "reference_target_observation": env_config.reference_target_observation,
         "reference_action_mode": env_config.reference_action_mode,
         "reference_action_center": env_config.reference_action_center,
@@ -1174,6 +1176,17 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         "deepmimic_root_velocity_weight_scale": (
             env_config.deepmimic_root_velocity_weight_scale
         ),
+        "reference_reset_min_steps_remaining": (
+            env_config.reference_reset_min_steps_remaining
+        ),
+        "reference_min_motion_length": env_config.reference_min_motion_length,
+        "reference_loop_mode": env_config.reference_loop_mode,
+        "reference_root_xy_scale": env_config.reference_root_xy_scale,
+        "reference_stability_sagittal_alpha": (
+            env_config.reference_stability_sagittal_alpha
+        ),
+        "reference_stability_other_alpha": env_config.reference_stability_other_alpha,
+        "reference_stability_arm_alpha": env_config.reference_stability_arm_alpha,
         "deepmimic_reward_mode": env_config.deepmimic_reward_mode,
         "deepmimic_key_bodies": env_config.deepmimic_key_bodies,
         "pose_termination": env_config.pose_termination,
@@ -2234,6 +2247,16 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--reference-root-xy-scale",
+        type=float,
+        default=EnvConfig.reference_root_xy_scale,
+        help=(
+            "Skalira horizontalni root motion BVH/SMPL reference pre playback-a. "
+            "Manje vrednosti smanjuju world-space drift ako referenca bezi "
+            "brze nego sto kontaktna dinamika moze da isprati."
+        ),
+    )
+    parser.add_argument(
         "--deepmimic-reward-mode",
         choices=["pure", "mixed"],
         default="pure",
@@ -2490,6 +2513,7 @@ def main() -> None:
         reference_action_range_scale=args.reference_action_range_scale,
         reference_residual_scale=args.reference_residual_scale,
         reference_loop_mode=args.reference_loop_mode,
+        reference_root_xy_scale=args.reference_root_xy_scale,
         reference_target_observation=(
             args.reference_gait in ("bvh", "smpl")
             and EnvConfig.reference_target_observation
