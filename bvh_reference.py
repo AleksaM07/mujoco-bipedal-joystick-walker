@@ -960,9 +960,14 @@ def _promote_stride_cycles(
             and third.support_foot
             and first.support_foot == third.support_foot
         ):
+            # A loopable stride should run until the *next* same-foot support
+            # begins, not through that whole half-step. Otherwise the wrapped
+            # sequence visually lands on the same support foot twice at the seam
+            # (e.g. R-L-R | R-L-R), which is exactly the asymmetric "double
+            # right" artifact we observed in playback.
             cycle = _valid_segment(
                 first.start_frame,
-                third.end_frame,
+                third.start_frame,
                 frame_count,
                 first.support_foot,
             )
@@ -993,7 +998,7 @@ def _long_cycle_segments(
         ):
             cycle = _valid_segment(
                 first.start_frame,
-                fifth.end_frame,
+                fifth.start_frame,
                 frame_count,
                 first.support_foot,
             )
@@ -1101,7 +1106,17 @@ def _valid_segment(
     length = end - start
     if length < 12 or length > 240:
         return None
-    return MotionSegment(start, end, support_foot)
+    return MotionSegment(start, end, _canonical_support_foot(support_foot))
+
+
+def _canonical_support_foot(support_foot: str) -> str:
+    """Normalize step labels so every caller sees one foot naming scheme."""
+    normalized = support_foot.strip().lower()
+    if normalized in {"l", "left", "left_foot"}:
+        return "left_foot"
+    if normalized in {"r", "right", "right_foot"}:
+        return "right_foot"
+    return ""
 
 
 def _global_joint_positions(bvh: ParsedBvh) -> dict[str, np.ndarray]:

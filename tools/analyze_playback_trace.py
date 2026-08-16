@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 
 
@@ -28,12 +29,12 @@ def _first_index(rows: list[dict], key: str, predicate) -> int | None:
 
 
 def _support_contact_mismatch(row: dict) -> str:
-    support = str(row.get("support_foot") or "").upper()
+    support = str(row.get("support_foot") or "").strip().lower()
     left = float(row.get("left_foot_contact", 0.0)) > 0.5
     right = float(row.get("right_foot_contact", 0.0)) > 0.5
-    if support == "L" and not left:
+    if support in {"l", "left", "left_foot"} and not left:
         return "support_left_missing"
-    if support == "R" and not right:
+    if support in {"r", "right", "right_foot"} and not right:
         return "support_right_missing"
     return ""
 
@@ -56,8 +57,29 @@ def _source_frame_text(row: dict) -> str:
     return f" src_frame~{source_frame}"
 
 
+def _foot_3d_error(row: dict, side: str) -> float | None:
+    side = side.lower()
+    sim = (
+        row.get(f"sim_{side}_foot_x"),
+        row.get(f"sim_{side}_foot_y"),
+        row.get(f"sim_{side}_foot_z"),
+    )
+    ref = (
+        row.get(f"ref_{side}_key_x"),
+        row.get(f"ref_{side}_key_y"),
+        row.get(f"ref_{side}_key_z"),
+    )
+    if any(value is None for value in sim + ref):
+        return None
+    return math.sqrt(
+        sum((float(sim_value) - float(ref_value)) ** 2 for sim_value, ref_value in zip(sim, ref, strict=True))
+    )
+
+
 def _print_row(label: str, row: dict) -> None:
     mismatch = _support_contact_mismatch(row)
+    left_3d = _foot_3d_error(row, "left")
+    right_3d = _foot_3d_error(row, "right")
     print(
         f"{label}: step={row['step']} time={row['time_s']:.2f}s "
         f"motion_t={row.get('reference_motion_time', 0.0):.3f}s "
@@ -70,6 +92,8 @@ def _print_row(label: str, row: dict) -> None:
         f"key_err={row.get('deepmimic_key_pos_error', 0.0):.3f} "
         f"l_contact={row.get('left_foot_contact', 0.0):.0f} "
         f"r_contact={row.get('right_foot_contact', 0.0):.0f} "
+        f"l_foot_3d={(left_3d if left_3d is not None else float('nan')):.3f} "
+        f"r_foot_3d={(right_3d if right_3d is not None else float('nan')):.3f} "
         f"l_foot_err={row.get('left_foot_height_tracking_error', 0.0):.3f} "
         f"r_foot_err={row.get('right_foot_height_tracking_error', 0.0):.3f} "
         f"torso_up={row.get('torso_up', 0.0):.3f}"
@@ -111,6 +135,8 @@ def main() -> None:
         ("first root_xy>1.0", "deepmimic_root_xy_error", lambda value: value > 1.0),
         ("first root_h>0.1", "deepmimic_root_height_error", lambda value: value > 0.1),
         ("first root_vel>1.0", "deepmimic_root_vel_error", lambda value: value > 1.0),
+        ("first left_foot_3d>0.25", "step", lambda _value: False),
+        ("first right_foot_3d>0.25", "step", lambda _value: False),
         (
             "first support mismatch",
             "step",
@@ -121,6 +147,16 @@ def main() -> None:
         if label == "first support mismatch":
             index = next(
                 (i for i, row in enumerate(rows) if _support_contact_mismatch(row)),
+                None,
+            )
+        elif label == "first left_foot_3d>0.25":
+            index = next(
+                (i for i, row in enumerate(rows) if (_foot_3d_error(row, "left") or 0.0) > 0.25),
+                None,
+            )
+        elif label == "first right_foot_3d>0.25":
+            index = next(
+                (i for i, row in enumerate(rows) if (_foot_3d_error(row, "right") or 0.0) > 0.25),
                 None,
             )
         else:

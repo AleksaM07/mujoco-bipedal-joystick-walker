@@ -45,6 +45,9 @@ from config import (
 from phase1_backends import resolve_warp_capacities
 
 
+ONE_CLIP_OVERFIT_REFERENCE = Path("marina_bvh_parse/walking_forward_bvh/02_01.bvh")
+
+
 @contextmanager
 def logged_stage(name: str):
     """Loguje pocetak, kraj i trajanje jedne faze."""
@@ -977,8 +980,8 @@ def log_environment_summary(env, label: str = "env") -> None:
         "reference_action_mode={} | reference_action_center={} | "
         "reference_action_range={} | reference_action_range_scale={} | "
         "reference_residual_scale={} | reference_root_xy_scale={} | "
-        "reference_replay_target_step={} | dm_root_vel_weight_scale={} | "
-        "legacy_action_prior={} | "
+        "reference_forced_clip_id={} | reference_replay_target_step={} | "
+        "dm_root_vel_weight_scale={} | legacy_action_prior={} | "
         "init_qpos_file={} | xml={}",
         label,
         model.nq,
@@ -1004,6 +1007,7 @@ def log_environment_summary(env, label: str = "env") -> None:
         getattr(env._config, "reference_action_range_scale", None),
         getattr(env._config, "reference_residual_scale", None),
         getattr(env._config, "reference_root_xy_scale", None),
+        getattr(env._config, "reference_forced_clip_id", None),
         getattr(env._config, "reference_replay_target_step", None),
         getattr(env._config, "deepmimic_root_velocity_weight_scale", None),
         getattr(env._config, "legacy_action_prior", None),
@@ -1165,6 +1169,7 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         "command_profile": env_config.command_profile,
         "reference_gait": env_config.reference_gait,
         "arm_actuators": env_config.arm_actuators,
+        "reference_forced_clip_id": env_config.reference_forced_clip_id,
         "reference_target_observation": env_config.reference_target_observation,
         "reference_action_mode": env_config.reference_action_mode,
         "reference_action_center": env_config.reference_action_center,
@@ -1217,6 +1222,7 @@ def run_reference_playback_audit(
     seed: int,
     physics_backend: str = "mjx_jax",
     clip_mode: str = "all",
+    force_clip_id: int | None = None,
     trace_resets: int = 0,
     trace_steps: int = 0,
     trace_interval: float = 0.0,
@@ -1235,6 +1241,12 @@ def run_reference_playback_audit(
     env_config.reference_action_center = "default"
     env_config.reference_action_range = "action_scale"
     env_config.reference_action_range_scale = 1.0
+    # Playback audit should command the same clock frame that the DeepMimic
+    # metrics and traces score against. Using a future target step here makes
+    # the controller chase the next swing pose while diagnostics still compare
+    # against the current pose, which biases the first large error toward the
+    # active swing foot.
+    env_config.reference_replay_target_step = 0
     env_config.bvh_target_observation_steps = (0,)
     env_config.reset_sample_attempts = min(int(env_config.reset_sample_attempts), 2)
     env_config.reset_projection_levels = tuple(
@@ -1265,7 +1277,8 @@ def run_reference_playback_audit(
     logger.info(
         "playback config | resets={} | steps={} | seed={} | backend={} | "
         "requested_clip_mode={} | reference_gait={} | reference_gait_file={} | "
-        "reference_loop_mode={} | audit_target_obs={} | audit_action_mode={} | "
+        "reference_loop_mode={} | forced_clip_id={} | "
+        "audit_target_obs={} | audit_action_mode={} | "
         "audit_reset_attempts={} | audit_projection_levels={} | "
         "trace_resets={} | trace_steps={} | trace_interval={}",
         resets,
@@ -1276,6 +1289,7 @@ def run_reference_playback_audit(
         env_config.reference_gait,
         env_config.reference_gait_file,
         env_config.reference_loop_mode,
+        force_clip_id,
         env_config.reference_target_observation,
         env_config.reference_action_mode,
         env_config.reset_sample_attempts,
@@ -1288,6 +1302,8 @@ def run_reference_playback_audit(
     with logged_stage("reference_playback/make_environment"):
         env = make_environment(env_config, enable_erfi=False)
     actual_clip_mode = _apply_reference_playback_clip_mode(env, clip_mode)
+    if force_clip_id is not None:
+        _force_reference_playback_clip_id(env, force_clip_id)
     log_environment_summary(env, label="playback env")
     _log_reference_library_summary(env)
 
@@ -1430,7 +1446,13 @@ def run_reference_playback_audit(
             sim_root_vel = env._reference_anchor_linvel(current_state.data)
             sim_root_angvel = env._reference_anchor_angvel(current_state.data)
             sim_foot_pos = env._foot_positions(current_state.data).reshape(-1)
-            ref_key_pos = reference["key_pos"].reshape(-1)
+            ref_key_pos = reference["key_pos"]
+            if getattr(env, "_deepmimic_key_count", 0) >= 2:
+                # Playback traces label reference feet as left then right to
+                # match sim_foot_pos ordering, while the default key-body tuple
+                # is right then left.
+                ref_key_pos = ref_key_pos[jnp.array([1, 0], dtype=jnp.int32)]
+            ref_key_pos = ref_key_pos.reshape(-1)
             motor_targets = reference_target["qpos"]
             coord_values = jnp.concatenate(
                 [
@@ -1905,6 +1927,7 @@ def run_reference_playback_audit(
         "physics_backend": env_config.physics_backend,
         "requested_clip_mode": clip_mode,
         "clip_mode": actual_clip_mode,
+        "forced_clip_id": force_clip_id,
         "reference_gait": env_config.reference_gait,
         "reference_gait_file": env_config.reference_gait_file,
         "reference_loop_mode": env_config.reference_loop_mode,
@@ -2015,6 +2038,32 @@ def _apply_reference_playback_clip_mode(env, clip_mode: str) -> str:
         int(mask.shape[0]),
     )
     return clip_mode
+
+
+def _force_reference_playback_clip_id(env, clip_id: int) -> None:
+    """Restrict playback sampling to one concrete reference clip."""
+    weights = np.asarray(getattr(env, "_bvh_reference_weights", np.array([], dtype=np.float32)))
+    if weights.size == 0:
+        raise ValueError("No reference clips available for playback forcing.")
+    if clip_id < 0 or clip_id >= weights.shape[0]:
+        raise ValueError(
+            "Forced playback clip_id out of range: "
+            f"{clip_id} (available 0..{weights.shape[0] - 1})."
+        )
+    forced = np.zeros_like(weights, dtype=np.float32)
+    forced[clip_id] = 1.0
+    env._bvh_reference_weights = jnp.asarray(forced, dtype=jnp.float32)
+    logger.info(
+        "playback forced clip | clip_id={} | loop_mode={} | support_foot={} | "
+        "source_frames={}..{} | frame_count={} | motion_length_s={:.3f}",
+        clip_id,
+        _loop_mode_name(env, clip_id),
+        _clip_support_foot(env, clip_id),
+        _clip_source_start_frame(env, clip_id),
+        _clip_source_end_frame(env, clip_id),
+        _clip_frame_count(env, clip_id),
+        float(_clip_motion_length(env, clip_id) or 0.0),
+    )
 
 
 def _loop_mode_name(env, clip_id: int) -> str:
@@ -2132,6 +2181,12 @@ def main() -> None:
         default="warp",
     )
     parser.add_argument(
+        "--physics-backend",
+        choices=["mjx_jax", "mjx_warp"],
+        default=EnvConfig.physics_backend,
+        help="Primary physics backend for training runs.",
+    )
+    parser.add_argument(
         "--command-profile",
         choices=[
             "forward_slow",
@@ -2151,8 +2206,8 @@ def main() -> None:
     parser.add_argument(
         "--action-smoothing",
         type=float,
-        default=0.5,
-        help="Filtriranje policy akcije pre servo targeta; 0.5 prati walking repo.",
+        default=EnvConfig.action_smoothing,
+        help="Filtriranje policy akcije pre servo targeta.",
     )
     parser.add_argument(
         "--reference-gait",
@@ -2229,6 +2284,15 @@ def main() -> None:
         help=(
             "Reference fajl za --reference-gait bvh ili smpl. Moze se navesti "
             "vise puta; env bira jedan reference clip po epizodi."
+        ),
+    )
+    parser.add_argument(
+        "--reference-force-clip-id",
+        type=int,
+        default=None,
+        help=(
+            "Force training/reset sampling to one loaded reference clip id. "
+            "Useful because one BVH file can contain multiple stride clips."
         ),
     )
     parser.add_argument(
@@ -2350,6 +2414,14 @@ def main() -> None:
         help="Mali izolacioni run bez domain randomization.",
     )
     parser.add_argument(
+        "--one-clip-overfit",
+        action="store_true",
+        help=(
+            "Forensic preset: train one wrap BVH clip with residual actions, "
+            "pure imitation reward, no arms, no ERFI, and no randomization."
+        ),
+    )
+    parser.add_argument(
         "--bare",
         action="store_true",
         help="Baseline: bez ERFI i bez domain randomization.",
@@ -2456,6 +2528,15 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--reference-playback-force-clip-id",
+        type=int,
+        default=None,
+        help=(
+            "Opcioni konkretan reference clip_id za playback audit. Korisno za "
+            "A/B proveru da li prvi bezi ista noga ili samo swing noga tog clip-a."
+        ),
+    )
+    parser.add_argument(
         "--reference-playback-trace-resets",
         type=int,
         default=0,
@@ -2485,6 +2566,12 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=RUNS_DIR)
     args = parser.parse_args()
 
+    if args.one_clip_overfit:
+        apply_one_clip_overfit_preset(args)
+    if args.device == "cpu" and args.debug_run and args.physics_backend == "mjx_warp":
+        args.playground_impl = "jax"
+        args.physics_backend = "mjx_jax"
+
     device = choose_device(args.device, args.allow_cpu)
     jax.config.update("jax_default_device", device)
 
@@ -2492,6 +2579,10 @@ def main() -> None:
         args.reference_gait_file,
         args.reference_gait_list,
     )
+    if args.one_clip_overfit and reference_gait_file is None:
+        reference_gait_file = expand_reference_gait_files(
+            reference_gait_files=[ONE_CLIP_OVERFIT_REFERENCE],
+        )
     if args.reference_gait == "bvh" and reference_gait_file is None:
         reference_gait_file = expand_reference_gait_files(
             reference_gait_lists=[DEFAULT_BVH_REFERENCE_LIST],
@@ -2507,10 +2598,12 @@ def main() -> None:
     env_config = EnvConfig(
         env_version=args.env_version,
         playground_impl=args.playground_impl,
+        physics_backend=args.physics_backend,
         command_profile=args.command_profile,
         reference_gait=args.reference_gait,
         arm_actuators=args.arm_actuators,
         reference_gait_file=reference_gait_file,
+        reference_forced_clip_id=args.reference_force_clip_id,
         reference_action_mode=args.reference_action_mode,
         reference_action_center=args.reference_action_center,
         reference_action_range=args.reference_action_range,
@@ -2554,6 +2647,7 @@ def main() -> None:
             seed=args.seed,
             physics_backend=args.reference_playback_backend,
             clip_mode=args.reference_playback_clip_mode,
+            force_clip_id=args.reference_playback_force_clip_id,
             trace_resets=args.reference_playback_trace_resets,
             trace_steps=args.reference_playback_trace_steps,
             trace_interval=args.reference_playback_trace_interval,
@@ -2562,7 +2656,10 @@ def main() -> None:
         print(f"reference playback logs: {run_dir}")
         return
 
-    debug_defaults = debug_run_defaults(args.debug_run)
+    debug_defaults = debug_run_defaults(
+        args.debug_run,
+        one_clip_overfit=args.one_clip_overfit,
+    )
     train_config = TrainConfig(
         seed=args.seed,
         num_timesteps=args.timesteps or debug_defaults.get("num_timesteps"),
@@ -2570,7 +2667,11 @@ def main() -> None:
         if args.num_evals is not None
         else debug_defaults.get("num_evals"),
         num_envs=args.num_envs or debug_defaults.get("num_envs"),
-        num_eval_envs=args.num_eval_envs,
+        num_eval_envs=(
+            args.num_eval_envs
+            if args.num_eval_envs is not None
+            else debug_defaults.get("num_eval_envs")
+        ),
         episode_length=args.episode_length or debug_defaults.get("episode_length"),
         unroll_length=(
             args.unroll_length
@@ -2588,14 +2689,18 @@ def main() -> None:
             if args.updates_per_batch is not None
             else debug_defaults.get("num_updates_per_batch")
         ),
-        learning_rate=args.learning_rate,
+        learning_rate=(
+            args.learning_rate
+            if args.learning_rate is not None
+            else debug_defaults.get("learning_rate")
+        ),
         distribution_type=args.distribution_type,
         enable_erfi=args.erfi,
         enable_domain_randomization=(
             args.domain_randomization
             and not debug_defaults.get("no_domain_randomization", False)
         ),
-        no_erfi=args.no_erfi,
+        no_erfi=args.no_erfi or debug_defaults.get("no_erfi", False),
         no_domain_randomization=(
             args.no_domain_randomization
             or debug_defaults.get("no_domain_randomization", False)
@@ -2607,26 +2712,67 @@ def main() -> None:
         resume_from=str(args.resume_from) if args.resume_from is not None else None,
         run_tag=args.run_tag,
         debug_run=args.debug_run,
-        bare=args.bare,
+        bare=args.bare or debug_defaults.get("bare", False),
     )
     run_training(env_config, train_config, args.out)
 
 
-def debug_run_defaults(enabled: bool) -> dict:
+def apply_one_clip_overfit_preset(args: argparse.Namespace) -> None:
+    """Apply env-side defaults for the one-clip forensic overfit experiment."""
+    args.playground_impl = "jax"
+    args.physics_backend = "mjx_jax"
+    args.reference_gait = "bvh"
+    args.reference_action_mode = "residual"
+    args.reference_residual_scale = 1.0
+    args.reference_loop_mode = "wrap"
+    args.reference_root_xy_scale = 0.35
+    args.deepmimic_reward_mode = "pure"
+    args.pose_termination = False
+    args.arm_actuators = False
+    args.erfi = False
+    args.domain_randomization = False
+    args.no_erfi = True
+    args.no_domain_randomization = True
+    args.bare = True
+    if args.reference_force_clip_id is None:
+        args.reference_force_clip_id = 1
+    if args.run_tag is None:
+        args.run_tag = "one_clip_overfit_0201"
+
+
+def debug_run_defaults(enabled: bool, *, one_clip_overfit: bool = False) -> dict:
     """Vraca mali debug preset umesto gomile CLI opcija."""
-    if not enabled:
-        return {}
-    return {
-        "num_timesteps": 1000,
-        "num_envs": 4,
-        "num_evals": 0,
-        "episode_length": 20,
-        "unroll_length": 5,
-        "batch_size": 4,
-        "num_minibatches": 1,
-        "num_updates_per_batch": 1,
-        "no_domain_randomization": True,
-    }
+    if enabled:
+        return {
+            "num_timesteps": 1000,
+            "num_envs": 4,
+            "num_evals": 0,
+            "episode_length": 20,
+            "unroll_length": 5,
+            "batch_size": 4,
+            "num_minibatches": 1,
+            "num_updates_per_batch": 1,
+            "no_erfi": True,
+            "no_domain_randomization": True,
+            "bare": True,
+        }
+    if one_clip_overfit:
+        return {
+            "num_timesteps": 1_000_000,
+            "num_envs": 1024,
+            "num_eval_envs": 16,
+            "num_evals": 5,
+            "episode_length": 180,
+            "unroll_length": 10,
+            "batch_size": 4096,
+            "num_minibatches": 4,
+            "num_updates_per_batch": 2,
+            "learning_rate": 1e-4,
+            "no_erfi": True,
+            "no_domain_randomization": True,
+            "bare": True,
+        }
+    return {}
 
 
 if __name__ == "__main__":

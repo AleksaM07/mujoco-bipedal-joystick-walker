@@ -674,7 +674,7 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         sim_dt=0.005,
         episode_length=1000,
         action_scale=0.5,
-        action_smoothing=0.5,
+        action_smoothing=0.2,
         command_profile="standard",
         # REF: MIMICKIT-MOTION-LIBRARY
         # TYPE: REFERENCE_CODE_DERIVED
@@ -683,6 +683,7 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         reference_gait_file=[
             DEFAULT_BVH_REFERENCE_LIST.relative_to(PROJECT_ROOT).as_posix()
         ],
+        reference_forced_clip_id=None,
         reference_target_observation=True,
         # REF: MIMICKIT-ACTION-BOUNDS-POS
         # TYPE: REFERENCE_CODE_DERIVED
@@ -699,7 +700,7 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # this XML and drives tanh policies straight into saturation.
         reference_action_range="reference_targets",
         reference_action_range_scale=1.1,
-        reference_residual_scale=0.25,
+        reference_residual_scale=1.0,
         reference_replay_target_step=1,
         deepmimic_root_velocity_weight_scale=0.15,
         # Keep finite clips away from the terminal edge during random reset.
@@ -712,9 +713,11 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # auto keeps only seam-continuous clips looped. wrap is useful after a
         # visual BVH check confirms manually segmented stride cycles are clean.
         reference_loop_mode="auto",
-        # Keep the real walking amplitude visible in the reference. Low values
-        # make good BVH sources look like tiny in-place twitching.
-        reference_root_xy_scale=1.0,
+        # BVH joint targets are retargeted and stability-projected into this
+        # XML, so full mocap root travel can move faster than the simulated
+        # feet can support. Keep the root trajectory in the calibrated
+        # retargeted range until a clip passes the PD oracle at full scale.
+        reference_root_xy_scale=0.35,
         reference_stability_sagittal_alpha=1.00,
         reference_stability_other_alpha=0.35,
         reference_stability_arm_alpha=0.75,
@@ -881,19 +884,20 @@ class EnvConfig:
             DEFAULT_BVH_REFERENCE_LIST.relative_to(PROJECT_ROOT).as_posix()
         ]
     )
+    reference_forced_clip_id: int | None = None
     reference_target_observation: bool = True
     reference_action_mode: str = "residual"
     reference_action_center: str = "default"
     reference_action_range: str = "reference_targets"
     reference_action_range_scale: float = 1.1
-    reference_residual_scale: float = 0.25
+    reference_residual_scale: float = 1.0
     bvh_target_observation_steps: tuple[int, ...] = (1, 2, 3)
     reference_replay_target_step: int = 1
     deepmimic_root_velocity_weight_scale: float = 0.15
     reference_reset_min_steps_remaining: int = 25
     reference_min_motion_length: float = 0.8
     reference_loop_mode: str = "auto"
-    reference_root_xy_scale: float = 1.0
+    reference_root_xy_scale: float = 0.35
     reference_stability_sagittal_alpha: float = 1.00
     reference_stability_other_alpha: float = 0.35
     reference_stability_arm_alpha: float = 0.75
@@ -920,8 +924,8 @@ class EnvConfig:
     legacy_action_prior: bool = False
 
     # Referentni humanoid walking setup filtrira targete pre PD kontrole.
-    # 0.5 znaci: pola nova akcija politike, pola prethodni target.
-    action_smoothing: float = 0.5
+    # 0.2 ostavlja residual policy dovoljno brzine da ispravi BVH drift.
+    action_smoothing: float = 0.2
 
     # Opcioni MJDATA/QPOS fajl za pocetnu pozu, npr. neutralni polucucanj.
     # None koristi built-in standing-home pozu.

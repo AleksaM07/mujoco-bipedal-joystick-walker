@@ -70,7 +70,10 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
     # TYPE: MODEL_CALIBRATED
     FOOT_SOLE_GEOMS = ("left_foot_sole", "right_foot_sole")
     FOOT_CONTACT_PRELOAD = 0.005
-    FOOT_CONTACT_HEIGHT = 0.095
+    # Metatarsal key sites in the generated no-arms XML sit at about 0.047 m in
+    # the floor-aligned neutral pose.  A higher IK floor silently asks the BVH
+    # retargeter to keep stance feet airborne, which breaks the contact oracle.
+    FOOT_CONTACT_HEIGHT = 0.05
     FOOT_CONTACT_DISTANCE = 0.01
     FORWARD_SLOW_COMMAND_RANGE = (0.02, 0.12)
     FORWARD_SLOW_ZERO_COMMAND_PROBABILITY = 0.25
@@ -728,9 +731,12 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             ),
             dtype=jp.float32,
         )
-        self._bvh_reference_loop_modes = jp.array(references.loop_modes)
-        self._bvh_reference_weights = jp.array(references.weights, dtype=jp.float32)
         self._bvh_reference_clip_count = len(references.source_paths)
+        self._bvh_reference_loop_modes = jp.array(references.loop_modes)
+        self._bvh_reference_weights = jp.array(
+            self._resolve_reference_clip_weights(references.weights),
+            dtype=jp.float32,
+        )
         self._bvh_reference_source_paths = tuple(
             str(path) for path in references.source_paths
         )
@@ -862,6 +868,27 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             root_angvel_targets,
         )
         self._infer_missing_reference_support_feet()
+
+    def _resolve_reference_clip_weights(self, weights: np.ndarray) -> np.ndarray:
+        """Apply optional single-clip sampling override and normalize weights."""
+        resolved = np.asarray(weights, dtype=np.float32).copy()
+        forced_clip_id = self._config.get("reference_forced_clip_id", None)
+        if forced_clip_id is not None:
+            clip_id = int(forced_clip_id)
+            if clip_id < 0 or clip_id >= resolved.shape[0]:
+                raise ValueError(
+                    "reference_forced_clip_id out of range: "
+                    f"{clip_id} for {resolved.shape[0]} loaded clips."
+                )
+            resolved[:] = 0.0
+            resolved[clip_id] = 1.0
+            return resolved
+
+        weight_sum = float(resolved.sum())
+        if weight_sum > 0.0:
+            return resolved / weight_sum
+        resolved[:] = 1.0 / max(float(resolved.shape[0]), 1.0)
+        return resolved
 
     def _filter_reference_clips(
         self,
