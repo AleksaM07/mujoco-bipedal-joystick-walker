@@ -718,6 +718,8 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # feet can support. Keep the root trajectory in the calibrated
         # retargeted range until a clip passes the PD oracle at full scale.
         reference_root_xy_scale=0.35,
+        reference_lock_stance_feet=False,
+        reference_foot_lock_height=0.035,
         reference_stability_sagittal_alpha=1.00,
         reference_stability_other_alpha=0.35,
         reference_stability_arm_alpha=0.75,
@@ -898,6 +900,8 @@ class EnvConfig:
     reference_min_motion_length: float = 0.8
     reference_loop_mode: str = "auto"
     reference_root_xy_scale: float = 0.35
+    reference_lock_stance_feet: bool = False
+    reference_foot_lock_height: float = 0.035
     reference_stability_sagittal_alpha: float = 1.00
     reference_stability_other_alpha: float = 0.35
     reference_stability_arm_alpha: float = 0.75

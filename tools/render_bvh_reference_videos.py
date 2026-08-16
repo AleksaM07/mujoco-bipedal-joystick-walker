@@ -100,6 +100,11 @@ def parse_args() -> argparse.Namespace:
             "floor. This changes PD diagnostic physics, not training."
         ),
     )
+    parser.add_argument(
+        "--reference-lock-stance-feet",
+        action="store_true",
+        help="Experimental retarget pass: anchor low stance foot XY while rendering.",
+    )
     return parser.parse_args()
 
 
@@ -159,6 +164,7 @@ def make_env(args: argparse.Namespace) -> BiomechanicsJoystickEnv:
         "deepmimic_reward_mode": "pure",
         "pose_termination": False,
         "enable_erfi": False,
+        "reference_lock_stance_feet": args.reference_lock_stance_feet,
     }
     if not args.training_filtered:
         config_overrides["reference_min_motion_length"] = 0.0

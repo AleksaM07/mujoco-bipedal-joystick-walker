@@ -1475,6 +1475,13 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             root_z = np.maximum(root_z, minimum_reset_height)
             aligned_root_pos[clip_id, :frame_count, 2] = root_z
             aligned_root_pos[clip_id, frame_count:, 2] = root_z[-1]
+            if bool(self._config.get("reference_lock_stance_feet", True)):
+                aligned_root_pos[clip_id] = self._lock_clip_root_xy_to_stance_feet(
+                    qpos_targets[clip_id],
+                    aligned_root_pos[clip_id],
+                    root_quat_targets[clip_id],
+                    frame_count,
+                )
             if frame_count > 1:
                 aligned_root_vel[clip_id, :frame_count] = np.gradient(
                     aligned_root_pos[clip_id, :frame_count],
@@ -1498,6 +1505,70 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 wrap_deltas[clip_id, 2] = 0.0
 
         return aligned_root_pos, aligned_root_vel, wrap_deltas
+
+    def _lock_clip_root_xy_to_stance_feet(
+        self,
+        qpos_targets: np.ndarray,
+        root_pos_targets: np.ndarray,
+        root_quat_targets: np.ndarray,
+        frame_count: int,
+    ) -> np.ndarray:
+        """Reduce kinematic foot skating by anchoring the lowest contact foot."""
+        locked_root = np.asarray(root_pos_targets, dtype=np.float32).copy()
+        if frame_count <= 1:
+            return locked_root
+
+        data = mujoco.MjData(self._mj_model)
+        contact_height = float(self._config.get("reference_foot_lock_height", 0.035))
+        xy_offset = np.zeros(2, dtype=np.float32)
+        active_foot: int | None = None
+        active_anchor = np.zeros(2, dtype=np.float32)
+
+        for frame_id in range(frame_count):
+            full_qpos = self._init_q_np.copy()
+            full_qpos[:3] = locked_root[frame_id]
+            full_qpos[:2] += xy_offset
+            full_qpos[3:7] = root_quat_targets[frame_id]
+            full_qpos[self._actuator_qpos_indices_np] = qpos_targets[frame_id]
+            data.qpos[:] = full_qpos
+            data.qvel[:] = 0.0
+            mujoco.mj_forward(self._mj_model, data)
+
+            foot_min_z = np.array(
+                [
+                    self._geom_min_z(data, int(geom_id))
+                    for geom_id in self._foot_geom_ids_np
+                ],
+                dtype=np.float32,
+            )
+            contact_feet = foot_min_z <= contact_height
+            if not np.any(contact_feet):
+                active_foot = None
+                locked_root[frame_id, :2] += xy_offset
+                continue
+
+            foot_xy = np.asarray(
+                data.geom_xpos[self._foot_geom_ids_np, :2],
+                dtype=np.float32,
+            )
+            if active_foot is None or not bool(contact_feet[active_foot]):
+                active_foot = int(np.argmin(np.where(contact_feet, foot_min_z, np.inf)))
+                active_anchor = foot_xy[active_foot].copy()
+            else:
+                xy_offset += active_anchor - foot_xy[active_foot]
+                full_qpos[:2] = locked_root[frame_id, :2] + xy_offset
+                data.qpos[:] = full_qpos
+                mujoco.mj_forward(self._mj_model, data)
+                foot_xy = np.asarray(
+                    data.geom_xpos[self._foot_geom_ids_np, :2],
+                    dtype=np.float32,
+                )
+                active_anchor = foot_xy[active_foot].copy()
+
+            locked_root[frame_id, :2] = full_qpos[:2]
+
+        locked_root[frame_count:] = locked_root[frame_count - 1]
+        return locked_root
 
     def _configure_deepmimic_reference_from_qpos(
         self,
