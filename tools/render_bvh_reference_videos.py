@@ -18,6 +18,7 @@ if platform.system() == "Windows" and os.environ.get("MUJOCO_GL") == "egl":
 
 import mujoco
 import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -87,6 +88,60 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--pin-root-position-to-reference",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Force only root XYZ position/velocity to the reference during PD "
+            "playback."
+        ),
+    )
+    parser.add_argument(
+        "--pin-root-xy-to-reference",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Force only root horizontal XY position/velocity to the reference "
+            "during PD playback."
+        ),
+    )
+    parser.add_argument(
+        "--pin-root-z-to-reference",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Force only root vertical Z position/velocity to the reference "
+            "during PD playback."
+        ),
+    )
+    parser.add_argument(
+        "--pin-root-rotation-to-reference",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Force only root orientation/angular velocity to the reference during "
+            "PD playback."
+        ),
+    )
+    parser.add_argument(
+        "--actuator-force-scale",
+        type=float,
+        default=1.0,
+        help="Scale diagnostic actuator force limits before playback.",
+    )
+    parser.add_argument(
+        "--actuator-kp-scale",
+        type=float,
+        default=1.0,
+        help="Scale diagnostic position-actuator stiffness before playback.",
+    )
+    parser.add_argument(
+        "--contact-friction-scale",
+        type=float,
+        default=1.0,
+        help="Scale floor and sole contact friction for diagnostic playback.",
+    )
+    parser.add_argument(
         "--trace-dt",
         type=float,
         default=0.01,
@@ -152,6 +207,12 @@ def parse_args() -> argparse.Namespace:
         default=True,
         help="Anchor low stance foot XY while rendering retargeted references.",
     )
+    parser.add_argument(
+        "--overlay-title",
+        type=str,
+        default=None,
+        help="Optional short text banner burned into the output video.",
+    )
     return parser.parse_args()
 
 
@@ -181,6 +242,77 @@ def write_video(path: Path, frames: list[np.ndarray], fps: int) -> None:
             "Install mediapy or imageio to write MP4 files: "
             "pip install mediapy imageio imageio-ffmpeg"
         ) from exc
+
+
+def apply_actuator_scales(
+    model: mujoco.MjModel,
+    kp_scale: float,
+    force_scale: float,
+) -> None:
+    """Scale diagnostic actuator stiffness and force limits in-place."""
+    if kp_scale <= 0.0:
+        raise ValueError(f"--actuator-kp-scale must be positive, got {kp_scale}.")
+    if force_scale <= 0.0:
+        raise ValueError(
+            f"--actuator-force-scale must be positive, got {force_scale}."
+        )
+    model.actuator_gainprm[:, 0] *= float(kp_scale)
+    model.actuator_biasprm[:, 1] *= float(kp_scale)
+    model.actuator_forcerange[:] *= float(force_scale)
+
+
+def apply_contact_friction_scale(
+    env: BiomechanicsJoystickEnv,
+    model: mujoco.MjModel,
+    friction_scale: float,
+) -> None:
+    """Scale floor/foot friction terms in-place for contact diagnostics."""
+    if friction_scale <= 0.0:
+        raise ValueError(
+            "--contact-friction-scale must be positive, got "
+            f"{friction_scale}."
+        )
+    geom_ids = [
+        env._floor_geom_id,
+        env._left_foot_sole_geom_id,
+        env._right_foot_sole_geom_id,
+    ]
+    for geom_id in geom_ids:
+        model.geom_friction[geom_id, :] *= float(friction_scale)
+
+
+def overlay_frame_title(
+    frame: np.ndarray,
+    title: str | None,
+    mode: str,
+) -> np.ndarray:
+    """Add a compact diagnostic banner to the top of a rendered frame."""
+    if not title:
+        return frame
+
+    banner_height = 44
+    image = Image.fromarray(frame)
+    canvas = Image.new(
+        "RGB",
+        (image.width, image.height + banner_height),
+        color=(18, 18, 18),
+    )
+    canvas.paste(image, (0, banner_height))
+    draw = ImageDraw.Draw(canvas)
+    font = ImageFont.load_default()
+    draw.rectangle((0, 0, canvas.width, banner_height), fill=(18, 18, 18))
+    draw.text((12, 13), title, fill=(245, 245, 245), font=font)
+    if mode == "compare":
+        midpoint = canvas.width // 2
+        draw.line((midpoint, 0, midpoint, banner_height), fill=(80, 80, 80), width=1)
+        draw.text((12, 28), "LEFT: KINEMATIC REFERENCE", fill=(180, 180, 180), font=font)
+        draw.text(
+            (midpoint + 12, 28),
+            "RIGHT: PD TRACKING",
+            fill=(180, 180, 180),
+            font=font,
+        )
+    return np.asarray(canvas)
 
 
 def default_reference_files(args: argparse.Namespace) -> list[str]:
@@ -329,7 +461,25 @@ def render_clip(
 ) -> tuple[Path, dict[str, object], list[dict[str, object]], list[dict[str, object]]]:
     model = env._mj_model
     base_gravity = np.asarray(model.opt.gravity, dtype=np.float64).copy()
+    base_gainprm = np.asarray(model.actuator_gainprm, dtype=np.float64).copy()
+    base_biasprm = np.asarray(model.actuator_biasprm, dtype=np.float64).copy()
+    base_forcerange = np.asarray(model.actuator_forcerange, dtype=np.float64).copy()
+    base_geom_friction = np.asarray(model.geom_friction, dtype=np.float64).copy()
     model.opt.gravity[:] = base_gravity * float(args.gravity_scale)
+    model.actuator_gainprm[:] = base_gainprm
+    model.actuator_biasprm[:] = base_biasprm
+    model.actuator_forcerange[:] = base_forcerange
+    model.geom_friction[:] = base_geom_friction
+    apply_actuator_scales(
+        model,
+        kp_scale=float(args.actuator_kp_scale),
+        force_scale=float(args.actuator_force_scale),
+    )
+    apply_contact_friction_scale(
+        env,
+        model,
+        friction_scale=float(args.contact_friction_scale),
+    )
     if args.debug_body_floor_collision:
         enable_body_floor_collision_debug(model)
     data = mujoco.MjData(model)
@@ -414,6 +564,13 @@ def render_clip(
             "trace_motion_time_s": sample_motion_time,
             "gravity_scale": float(args.gravity_scale),
             "pin_root_to_reference": bool(args.pin_root_to_reference),
+            "pin_root_position_to_reference": bool(args.pin_root_position_to_reference),
+            "pin_root_xy_to_reference": bool(args.pin_root_xy_to_reference),
+            "pin_root_z_to_reference": bool(args.pin_root_z_to_reference),
+            "pin_root_rotation_to_reference": bool(args.pin_root_rotation_to_reference),
+            "actuator_force_scale": float(args.actuator_force_scale),
+            "actuator_kp_scale": float(args.actuator_kp_scale),
+            "contact_friction_scale": float(args.contact_friction_scale),
             "pd_state_time_s": pd_elapsed_time if args.mode in ("pd", "compare") else None,
             "pd_motion_time_s": pd_motion_time if args.mode in ("pd", "compare") else None,
         }
@@ -526,10 +683,21 @@ def render_clip(
                     if args.segment_seconds is not None or loop_mode == int(LoopMode.CLAMP):
                         target_time = min(target_time, segment_end_time)
                     target_ref = query_reference_np(env, clip_id, target_time)
-                    if args.pin_root_to_reference:
+                    if args.pin_root_to_reference or args.pin_root_position_to_reference:
                         data.qpos[:3] = np.asarray(target_ref["root_pos"], dtype=np.float64)
-                        data.qpos[3:7] = np.asarray(target_ref["root_quat"], dtype=np.float64)
                         data.qvel[:3] = np.asarray(target_ref["root_vel"], dtype=np.float64)
+                    elif args.pin_root_xy_to_reference:
+                        root_pos = np.asarray(target_ref["root_pos"], dtype=np.float64)
+                        root_vel = np.asarray(target_ref["root_vel"], dtype=np.float64)
+                        data.qpos[0:2] = root_pos[0:2]
+                        data.qvel[0:2] = root_vel[0:2]
+                    elif args.pin_root_z_to_reference:
+                        root_pos = np.asarray(target_ref["root_pos"], dtype=np.float64)
+                        root_vel = np.asarray(target_ref["root_vel"], dtype=np.float64)
+                        data.qpos[2] = root_pos[2]
+                        data.qvel[2] = root_vel[2]
+                    if args.pin_root_to_reference or args.pin_root_rotation_to_reference:
+                        data.qpos[3:7] = np.asarray(target_ref["root_quat"], dtype=np.float64)
                         data.qvel[3:6] = np.asarray(
                             target_ref["root_angvel"],
                             dtype=np.float64,
@@ -573,6 +741,13 @@ def render_clip(
                 "render_motion_time_s": render_motion_time,
                 "gravity_scale": float(args.gravity_scale),
                 "pin_root_to_reference": bool(args.pin_root_to_reference),
+                "pin_root_position_to_reference": bool(args.pin_root_position_to_reference),
+                "pin_root_xy_to_reference": bool(args.pin_root_xy_to_reference),
+                "pin_root_z_to_reference": bool(args.pin_root_z_to_reference),
+                "pin_root_rotation_to_reference": bool(args.pin_root_rotation_to_reference),
+                "actuator_force_scale": float(args.actuator_force_scale),
+                "actuator_kp_scale": float(args.actuator_kp_scale),
+                "contact_friction_scale": float(args.contact_friction_scale),
                 "pd_sim_time_s": pd_elapsed_time if args.mode in ("pd", "compare") else None,
                 "pd_motion_time_s": pd_motion_time if args.mode in ("pd", "compare") else None,
             }
@@ -647,12 +822,24 @@ def render_clip(
                 camera.lookat[:] = np.asarray(data.qpos[:3], dtype=np.float64)
                 renderer.update_scene(data, camera=camera)
                 pd_frame = renderer.render()
-                rendered.append(np.concatenate([kinematic_frame, pd_frame], axis=1))
+                rendered.append(
+                    overlay_frame_title(
+                        np.concatenate([kinematic_frame, pd_frame], axis=1),
+                        args.overlay_title,
+                        args.mode,
+                    )
+                )
             else:
                 render_data = kinematic_data if args.mode == "kinematic" else data
                 camera.lookat[:] = np.asarray(render_data.qpos[:3], dtype=np.float64)
                 renderer.update_scene(render_data, camera=camera)
-                rendered.append(renderer.render())
+                rendered.append(
+                    overlay_frame_title(
+                        renderer.render(),
+                        args.overlay_title,
+                        args.mode,
+                    )
+                )
     finally:
         renderer.close()
 
@@ -686,12 +873,20 @@ def render_clip(
         "reference_speed_scale": float(args.reference_speed_scale),
         "gravity_scale": float(args.gravity_scale),
         "pin_root_to_reference": bool(args.pin_root_to_reference),
+        "pin_root_position_to_reference": bool(args.pin_root_position_to_reference),
+        "pin_root_xy_to_reference": bool(args.pin_root_xy_to_reference),
+        "pin_root_z_to_reference": bool(args.pin_root_z_to_reference),
+        "pin_root_rotation_to_reference": bool(args.pin_root_rotation_to_reference),
+        "actuator_force_scale": float(args.actuator_force_scale),
+        "actuator_kp_scale": float(args.actuator_kp_scale),
+        "contact_friction_scale": float(args.contact_friction_scale),
         "trace_dt_s": float(args.trace_dt),
         "rendered_seconds": video_seconds,
         "pd_fail_step": pd_fail_step,
         "pd_fail_time_s": pd_fail_time,
         "pd_fail_reason": pd_fail_reason,
         "debug_body_floor_collision": bool(args.debug_body_floor_collision),
+        "overlay_title": args.overlay_title or "",
     }, trace_rows, detail_trace_rows
 
 

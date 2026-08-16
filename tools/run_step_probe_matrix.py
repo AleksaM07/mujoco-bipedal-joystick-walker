@@ -25,8 +25,18 @@ class ProbeCase:
     """One step-probe render configuration."""
 
     name: str
+    title: str
+    hypothesis: str
     gravity_scale: float
     pin_root_to_reference: bool
+    pin_root_position_to_reference: bool = False
+    pin_root_xy_to_reference: bool = False
+    pin_root_z_to_reference: bool = False
+    pin_root_rotation_to_reference: bool = False
+    actuator_force_scale: float = 1.0
+    actuator_kp_scale: float = 1.0
+    contact_friction_scale: float = 1.0
+    reference_speed_scale: float | None = None
 
 
 def parse_args() -> argparse.Namespace:
@@ -75,17 +85,94 @@ def parse_args() -> argparse.Namespace:
 
 
 def build_cases() -> list[ProbeCase]:
-    """Return the two core tests for the current debug phase."""
+    """Return the current diagnostic matrix."""
     return [
         ProbeCase(
-            name="gravity1_rootpinned",
+            name="case_a_rootpinned_control",
+            title="CASE A | ROOT PINNED CONTROL | g=1.0",
+            hypothesis="Positive control: joint-space tracking should succeed when balance/root dynamics are removed.",
             gravity_scale=1.0,
             pin_root_to_reference=True,
         ),
         ProbeCase(
-            name="gravity1_rootfree",
+            name="case_b_rootfree_baseline",
+            title="CASE B | ROOT FREE BASELINE | g=1.0",
+            hypothesis="Baseline failure mode with full free-root locomotion dynamics.",
             gravity_scale=1.0,
             pin_root_to_reference=False,
+        ),
+        ProbeCase(
+            name="case_c_rootpos_pinned",
+            title="CASE C | ROOT POS PINNED ONLY | g=1.0",
+            hypothesis="Tests whether world-space translation / COM support is the main failure driver.",
+            gravity_scale=1.0,
+            pin_root_to_reference=False,
+            pin_root_position_to_reference=True,
+        ),
+        ProbeCase(
+            name="case_d_rootrot_pinned",
+            title="CASE D | ROOT ROT PINNED ONLY | g=1.0",
+            hypothesis="Tests whether trunk orientation stabilization is the main failure driver.",
+            gravity_scale=1.0,
+            pin_root_to_reference=False,
+            pin_root_rotation_to_reference=True,
+        ),
+        ProbeCase(
+            name="case_e_rootfree_authority2x",
+            title="CASE E | ROOT FREE | 2x KP + 2x FORCE",
+            hypothesis="Tests whether insufficient actuator authority/stiffness is the dominant problem.",
+            gravity_scale=1.0,
+            pin_root_to_reference=False,
+            actuator_force_scale=2.0,
+            actuator_kp_scale=2.0,
+        ),
+        ProbeCase(
+            name="case_f_rootfree_speed0p10",
+            title="CASE F | ROOT FREE | SPEED 0.10x",
+            hypothesis="Tests whether the failure is mainly due to dynamic timing / motion speed.",
+            gravity_scale=1.0,
+            pin_root_to_reference=False,
+            reference_speed_scale=0.10,
+        ),
+        ProbeCase(
+            name="case_g_rootfree_friction3x",
+            title="CASE G | ROOT FREE | 3x CONTACT FRICTION",
+            hypothesis="Tests whether contact support / foot-ground traction is the main bottleneck.",
+            gravity_scale=1.0,
+            pin_root_to_reference=False,
+            contact_friction_scale=3.0,
+        ),
+        ProbeCase(
+            name="case_h_rootfree_xypin",
+            title="CASE H | ROOT FREE | ROOT XY PIN ONLY",
+            hypothesis="Tests whether horizontal root progression is the main missing ingredient while vertical balance remains free.",
+            gravity_scale=1.0,
+            pin_root_to_reference=False,
+            pin_root_xy_to_reference=True,
+        ),
+        ProbeCase(
+            name="case_i_rootfree_zpin",
+            title="CASE I | ROOT FREE | ROOT Z PIN ONLY",
+            hypothesis="Tests whether vertical support / root height retention is the main missing ingredient while horizontal progression remains free.",
+            gravity_scale=1.0,
+            pin_root_to_reference=False,
+            pin_root_z_to_reference=True,
+        ),
+        ProbeCase(
+            name="case_j_rootfree_kp4x",
+            title="CASE J | ROOT FREE | 4x KP ONLY",
+            hypothesis="Tests the 'too loose' hypothesis by increasing stiffness without increasing force limits proportionally.",
+            gravity_scale=1.0,
+            pin_root_to_reference=False,
+            actuator_kp_scale=4.0,
+        ),
+        ProbeCase(
+            name="case_k_rootfree_force4x",
+            title="CASE K | ROOT FREE | 4x FORCE ONLY",
+            hypothesis="Tests whether pure actuator headroom, without extra stiffness, is enough to stabilize the motion.",
+            gravity_scale=1.0,
+            pin_root_to_reference=False,
+            actuator_force_scale=4.0,
         ),
     ]
 
@@ -109,7 +196,11 @@ def run_case(args: argparse.Namespace, case: ProbeCase) -> Path:
         "--segment-seconds",
         str(args.segment_seconds),
         "--reference-speed-scale",
-        str(args.reference_speed_scale),
+        str(
+            case.reference_speed_scale
+            if case.reference_speed_scale is not None
+            else args.reference_speed_scale
+        ),
         "--trace-dt",
         str(args.trace_dt),
         "--video-seconds",
@@ -118,11 +209,35 @@ def run_case(args: argparse.Namespace, case: ProbeCase) -> Path:
         str(args.fps),
         "--gravity-scale",
         str(case.gravity_scale),
+        "--actuator-force-scale",
+        str(case.actuator_force_scale),
+        "--actuator-kp-scale",
+        str(case.actuator_kp_scale),
+        "--contact-friction-scale",
+        str(case.contact_friction_scale),
+        "--overlay-title",
+        case.title,
     ]
     if case.pin_root_to_reference:
         command.append("--pin-root-to-reference")
     else:
         command.append("--no-pin-root-to-reference")
+    if case.pin_root_position_to_reference:
+        command.append("--pin-root-position-to-reference")
+    else:
+        command.append("--no-pin-root-position-to-reference")
+    if case.pin_root_xy_to_reference:
+        command.append("--pin-root-xy-to-reference")
+    else:
+        command.append("--no-pin-root-xy-to-reference")
+    if case.pin_root_z_to_reference:
+        command.append("--pin-root-z-to-reference")
+    else:
+        command.append("--no-pin-root-z-to-reference")
+    if case.pin_root_rotation_to_reference:
+        command.append("--pin-root-rotation-to-reference")
+    else:
+        command.append("--no-pin-root-rotation-to-reference")
     if args.arm_actuators:
         command.append("--arms-on")
     else:
@@ -185,6 +300,22 @@ def summarize_case(case_dir: Path) -> dict[str, object]:
         "case_dir": case_dir,
         "pd_fail_reason": manifest.get("pd_fail_reason", ""),
         "pd_fail_time_s": manifest.get("pd_fail_time_s", ""),
+        "gravity_scale": manifest.get("gravity_scale", ""),
+        "reference_speed_scale": manifest.get("reference_speed_scale", ""),
+        "pin_root_to_reference": manifest.get("pin_root_to_reference", ""),
+        "pin_root_position_to_reference": manifest.get(
+            "pin_root_position_to_reference",
+            "",
+        ),
+        "pin_root_xy_to_reference": manifest.get("pin_root_xy_to_reference", ""),
+        "pin_root_z_to_reference": manifest.get("pin_root_z_to_reference", ""),
+        "pin_root_rotation_to_reference": manifest.get(
+            "pin_root_rotation_to_reference",
+            "",
+        ),
+        "actuator_force_scale": manifest.get("actuator_force_scale", ""),
+        "actuator_kp_scale": manifest.get("actuator_kp_scale", ""),
+        "contact_friction_scale": manifest.get("contact_friction_scale", ""),
         "rmse_mean": statistics.mean(rmse) if rmse else float("nan"),
         "rmse_max": max(rmse) if rmse else float("nan"),
         "force_mean": statistics.mean(force_ratio) if force_ratio else float("nan"),
@@ -229,10 +360,25 @@ def main() -> None:
     args = parse_args()
     args.out_dir.mkdir(parents=True, exist_ok=True)
     cases = build_cases()
+    summary_rows: list[dict[str, object]] = []
     for case in cases:
         case_dir = run_case(args, case)
         summary = summarize_case(case_dir)
         print_summary(case.name, summary)
+        summary_rows.append(
+            {
+                "case_name": case.name,
+                "title": case.title,
+                "hypothesis": case.hypothesis,
+                **summary,
+            }
+        )
+    summary_path = args.out_dir / "matrix_summary.csv"
+    with summary_path.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=list(summary_rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(summary_rows)
+    print(f"\nSummary CSV: {summary_path}")
 
 
 if __name__ == "__main__":
