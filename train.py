@@ -46,6 +46,7 @@ from phase1_backends import resolve_warp_capacities
 
 
 ONE_CLIP_OVERFIT_REFERENCE = Path("marina_bvh_parse/walking_forward_bvh/02_01.bvh")
+PERFECT_WALK_STEPS = 500
 
 
 @contextmanager
@@ -86,6 +87,21 @@ class TrainingProgressLogger:
 
         if episode_length is not None and float(episode_length) > 1e-6:
             length = float(episode_length)
+            survival_percent = 100.0 * length / float(PERFECT_WALK_STEPS)
+            diagnostics.append(f"survive_pct={survival_percent:.1f}")
+            if reward is not None:
+                max_reward = (
+                    float(BiomechanicsJoystickEnv.REWARD_MAX)
+                    * float(PERFECT_WALK_STEPS)
+                )
+                score_percent = 100.0 * float(reward) / max(max_reward, 1e-6)
+                quality_percent = (
+                    100.0
+                    * float(reward)
+                    / max(float(BiomechanicsJoystickEnv.REWARD_MAX) * length, 1e-6)
+                )
+                diagnostics.append(f"score_pct={score_percent:.1f}")
+                diagnostics.append(f"quality_pct={quality_percent:.1f}")
             per_step_metrics = (
                 ("eval/episode_reward", "reward_step"),
                 ("eval/episode_deepmimic_pose", "dm_pose_step"),

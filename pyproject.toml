@@ -21,6 +21,9 @@ dependencies = [
     "numpy>=2.0",
     "pandas>=2.3",
     "playground>=0.2.0",
+    "imageio>=2.34",
+    "imageio-ffmpeg>=0.5",
+    "mediapy>=1.2",
 ]
 
 [tool.uv]

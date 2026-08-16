@@ -53,6 +53,9 @@ from config import (
 from phase1_backends import resolve_warp_capacities
 
 
+PERFECT_WALK_STEPS = 500
+
+
 class JoystickController:
     """Cita tastaturu iz MuJoCo viewer-a i menja command vektor politike."""
 
@@ -430,6 +433,46 @@ def update_viewer_data(model, data, state) -> None:
     mujoco.mj_forward(model, data)
 
 
+def write_video(path: Path, frames: list[np.ndarray], fps: int) -> None:
+    """Write an RGB frame list to MP4 using an installed lightweight writer."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        import mediapy as media
+
+        media.write_video(path, frames, fps=fps)
+        return
+    except ImportError:
+        pass
+
+    try:
+        import imageio.v3 as iio
+
+        iio.imwrite(path, np.asarray(frames), fps=fps)
+        return
+    except ImportError as exc:
+        raise RuntimeError(
+            "Install mediapy or imageio to write MP4 files: "
+            "pip install mediapy imageio imageio-ffmpeg"
+        ) from exc
+
+
+def score_percent(reward: float, max_steps: int = PERFECT_WALK_STEPS) -> float:
+    """Normalize total reward so 100% means perfect reward for max_steps."""
+    max_reward = float(BiomechanicsJoystickEnv.REWARD_MAX) * float(max_steps)
+    return 100.0 * reward / max(max_reward, 1e-6)
+
+
+def survival_percent(length: int, max_steps: int = PERFECT_WALK_STEPS) -> float:
+    """Normalize episode length so 100% means surviving max_steps."""
+    return 100.0 * float(length) / max(float(max_steps), 1e-6)
+
+
+def quality_percent(reward: float, length: int) -> float:
+    """Normalize reward quality over the steps that actually happened."""
+    max_reward = float(BiomechanicsJoystickEnv.REWARD_MAX) * max(float(length), 1.0)
+    return 100.0 * reward / max(max_reward, 1e-6)
+
+
 def reset_state(env, rng, command: np.ndarray):
     """Resetuje epizodu i zadrzava trenutnu joystick komandu."""
     state = env.reset(rng)
@@ -548,11 +591,102 @@ def inspect_policy(env, policy, rng, command: np.ndarray, steps: int) -> None:
         f"resets={reset_count} "
         f"mean_episode_length={np.mean(episode_lengths):.1f} "
         f"total_reward={total_reward:.3f} "
+        f"score_pct={score_percent(total_reward, steps):.1f} "
+        f"mean_survive_pct={survival_percent(int(np.mean(episode_lengths))):.1f} "
         f"mean_z={np.mean(z_values):.3f} "
         f"min_z={np.min(z_values):.3f} "
         f"mean_torso_up={np.mean(torso_up_values):.3f} "
         f"min_torso_up={np.min(torso_up_values):.3f} "
         f"mean_action_norm={np.mean(action_norm_values):.3f}",
+        flush=True,
+    )
+
+
+def record_policy_video(
+    env,
+    policy,
+    rng,
+    command: np.ndarray,
+    output_path: Path,
+    steps: int,
+    fps: int,
+    width: int,
+    height: int,
+    continue_after_done: bool,
+) -> None:
+    """Render one policy rollout to MP4 and print normalized score diagnostics."""
+    state = reset_state(env, rng, command)
+    model = env.mj_model
+    data = mjx.get_data(model, state.data)
+    renderer = mujoco.Renderer(model, height=height, width=width)
+    camera = mujoco.MjvCamera()
+    camera.distance = 4.0
+    camera.azimuth = 160
+    camera.elevation = -20
+
+    frames: list[np.ndarray] = []
+    total_reward = 0.0
+    episode_reward = 0.0
+    episode_length = 0
+    completed_episodes = 0
+    done_reason = "none"
+
+    print("compiling first JAX record step...", flush=True)
+    rng, action_key = jax.random.split(rng)
+    state, action = simulation_step(env, policy, state, action_key, command)
+    jax.block_until_ready(action)
+    print("compile done, recording video", flush=True)
+
+    for step in range(steps):
+        rng, action_key, reset_key = jax.random.split(rng, 3)
+        state, _action = simulation_step(env, policy, state, action_key, command)
+        reward = float(np.asarray(state.reward))
+        done = bool(np.asarray(state.done))
+        total_reward += reward
+        episode_reward += reward
+        episode_length += 1
+
+        update_viewer_data(model, data, state)
+        camera.lookat[:] = data.qpos[:3]
+        renderer.update_scene(data, camera=camera)
+        frames.append(renderer.render())
+
+        if done:
+            qpos_z = float(np.asarray(state.data.qpos[2]))
+            torso_up = get_torso_up(state)
+            done_reason = f"done z={qpos_z:.3f} torso_up={torso_up:.3f}"
+            completed_episodes += 1
+            print(
+                "record episode done | "
+                f"step={step} "
+                f"episode_length={episode_length} "
+                f"episode_reward={episode_reward:.3f} "
+                f"score_pct={score_percent(episode_reward):.1f} "
+                f"survive_pct={survival_percent(episode_length):.1f} "
+                f"quality_pct={quality_percent(episode_reward, episode_length):.1f} "
+                f"{done_reason}",
+                flush=True,
+            )
+            if not continue_after_done:
+                break
+            state = reset_state(env, reset_key, command)
+            episode_reward = 0.0
+            episode_length = 0
+
+    renderer.close()
+    if not frames:
+        raise RuntimeError("No frames were rendered.")
+    write_video(output_path, frames, fps=fps)
+    print(
+        "record summary | "
+        f"file={output_path} "
+        f"frames={len(frames)} "
+        f"fps={fps} "
+        f"total_reward={total_reward:.3f} "
+        f"score_pct={score_percent(total_reward, steps):.1f} "
+        f"completed_episodes={completed_episodes} "
+        f"last_episode_length={episode_length} "
+        f"last_done={done_reason}",
         flush=True,
     )
 
@@ -628,6 +762,21 @@ def main():
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--inspect", action="store_true")
     parser.add_argument("--inspect-steps", type=int, default=2000)
+    parser.add_argument(
+        "--record-video",
+        type=Path,
+        default=None,
+        help="Headless MP4 output path for a policy rollout.",
+    )
+    parser.add_argument("--record-steps", type=int, default=500)
+    parser.add_argument("--record-fps", type=int, default=0)
+    parser.add_argument("--record-width", type=int, default=1280)
+    parser.add_argument("--record-height", type=int, default=720)
+    parser.add_argument(
+        "--record-continue-after-done",
+        action="store_true",
+        help="Keep recording after terminal states by resetting the episode.",
+    )
     parser.add_argument(
         "--fast-physics",
         action="store_true",
@@ -811,6 +960,22 @@ def main():
 
     if args.inspect:
         inspect_policy(env, policy, rng, command, args.inspect_steps)
+        return
+
+    if args.record_video is not None:
+        fps = args.record_fps if args.record_fps > 0 else int(round(1.0 / env.dt))
+        record_policy_video(
+            env,
+            policy,
+            rng,
+            command,
+            args.record_video,
+            args.record_steps,
+            fps,
+            args.record_width,
+            args.record_height,
+            args.record_continue_after_done,
+        )
         return
 
     print("compiling first JAX simulation step...", flush=True)
