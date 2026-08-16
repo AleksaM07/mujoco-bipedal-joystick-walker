@@ -25,7 +25,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from biomechanics_env import BiomechanicsJoystickEnv  # noqa: E402
 from bvh_reference import LoopMode, expand_motion_paths  # noqa: E402
 from config import DEFAULT_BVH_REFERENCE_LIST, expand_reference_gait_files  # noqa: E402
-from debug_reference_playback import build_full_state, query_reference_np  # noqa: E402
+from debug_reference_playback import build_full_state, query_reference_np, torso_up  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -80,11 +80,25 @@ def parse_args() -> argparse.Namespace:
         help="Exact preview length override.",
     )
     parser.add_argument("--end-hold-seconds", type=float, default=0.35)
+    parser.add_argument(
+        "--clip-id",
+        type=int,
+        default=None,
+        help="Render only one loaded clip id.",
+    )
     parser.add_argument("--max-clips", type=int, default=None)
     parser.add_argument(
         "--training-filtered",
         action="store_true",
         help="Render only clips kept by the current training filter.",
+    )
+    parser.add_argument(
+        "--debug-body-floor-collision",
+        action="store_true",
+        help=(
+            "Viewer-only readable falls: make all body geoms collide with the "
+            "floor. This changes PD diagnostic physics, not training."
+        ),
     )
     return parser.parse_args()
 
@@ -164,12 +178,105 @@ def source_label(env: BiomechanicsJoystickEnv, clip_id: int) -> str:
     return f"{source_path.stem}_f{start:04d}-{end:04d}"
 
 
+def enable_body_floor_collision_debug(model: mujoco.MjModel) -> None:
+    """Make failed PD playback easier to read by colliding all bodies with floor."""
+    floor_id = model.geom("floor").id
+    model.geom_contype[floor_id] = 1
+    model.geom_conaffinity[floor_id] = 2
+    for geom_id in range(model.ngeom):
+        if geom_id == floor_id:
+            continue
+        model.geom_contype[geom_id] = 2
+        model.geom_conaffinity[geom_id] = 1
+
+
+def fail_reason(
+    env: BiomechanicsJoystickEnv,
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+) -> str:
+    low = data.qpos[2] < env.MIN_STANDING_HEIGHT_RATIO * float(model.qpos0[2])
+    tipped = torso_up(env, data) < 0.25
+    if low:
+        return "low_height"
+    if tipped:
+        return "tipped"
+    return "none"
+
+
+def host_foot_contacts(
+    env: BiomechanicsJoystickEnv,
+    data: mujoco.MjData,
+) -> tuple[bool, bool]:
+    """Return host MuJoCo left/right foot-floor contact flags."""
+    left_contact = False
+    right_contact = False
+    floor_id = env._floor_geom_id
+    left_id = env._left_foot_sole_geom_id
+    right_id = env._right_foot_sole_geom_id
+    for contact_index in range(data.ncon):
+        geom_a, geom_b = data.contact[contact_index].geom
+        pair = {int(geom_a), int(geom_b)}
+        if floor_id not in pair:
+            continue
+        left_contact = left_contact or left_id in pair
+        right_contact = right_contact or right_id in pair
+    return left_contact, right_contact
+
+
+def actuator_force_stats(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+) -> tuple[float, float]:
+    """Return max force ratio and fraction of saturated actuators."""
+    forces = np.abs(np.asarray(data.actuator_force, dtype=np.float64))
+    ranges = np.asarray(model.actuator_forcerange, dtype=np.float64)
+    limits = np.maximum(np.abs(ranges).max(axis=1), 1e-6)
+    ratios = forces / limits
+    return float(np.max(ratios)), float(np.mean(ratios > 0.98))
+
+
+def foot_snapshot(
+    env: BiomechanicsJoystickEnv,
+    data: mujoco.MjData,
+) -> dict[str, float]:
+    """Compact host foot/root state for render traces."""
+    foot_pos = np.asarray(data.geom_xpos[env._foot_geom_ids_np], dtype=np.float64)
+    left_contact, right_contact = host_foot_contacts(env, data)
+    return {
+        "left_foot_x": float(foot_pos[0, 0]),
+        "left_foot_y": float(foot_pos[0, 1]),
+        "left_foot_z": float(foot_pos[0, 2]),
+        "right_foot_x": float(foot_pos[1, 0]),
+        "right_foot_y": float(foot_pos[1, 1]),
+        "right_foot_z": float(foot_pos[1, 2]),
+        "left_contact": float(left_contact),
+        "right_contact": float(right_contact),
+    }
+
+
+def foot_speed_xy(
+    current: dict[str, float],
+    previous: dict[str, float] | None,
+    dt: float,
+    foot_name: str,
+) -> float:
+    """Approximate per-render-frame foot XY speed."""
+    if previous is None or dt <= 0.0:
+        return 0.0
+    dx = current[f"{foot_name}_foot_x"] - previous[f"{foot_name}_foot_x"]
+    dy = current[f"{foot_name}_foot_y"] - previous[f"{foot_name}_foot_y"]
+    return float(np.hypot(dx, dy) / dt)
+
+
 def render_clip(
     env: BiomechanicsJoystickEnv,
     clip_id: int,
     args: argparse.Namespace,
-) -> tuple[Path, dict[str, object]]:
+) -> tuple[Path, dict[str, object], list[dict[str, object]]]:
     model = env._mj_model
+    if args.debug_body_floor_collision:
+        enable_body_floor_collision_debug(model)
     data = mujoco.MjData(model)
     kinematic_data = mujoco.MjData(model)
     renderer = mujoco.Renderer(model, height=args.height, width=args.width)
@@ -191,6 +298,12 @@ def render_clip(
         )
     frame_total = max(1, int(np.ceil(video_seconds * args.fps)))
     rendered: list[np.ndarray] = []
+    pd_fail_step: int | None = None
+    pd_fail_time: float | None = None
+    pd_fail_reason = "none"
+    trace_rows: list[dict[str, object]] = []
+    previous_kinematic_feet: dict[str, float] | None = None
+    previous_pd_feet: dict[str, float] | None = None
 
     try:
         initial_ref = query_reference_np(env, clip_id, 0.0)
@@ -214,15 +327,91 @@ def render_clip(
                 kinematic_data.ctrl[:] = np.asarray(ref["qpos"], dtype=np.float64)
                 mujoco.mj_forward(model, kinematic_data)
             if args.mode in ("pd", "compare"):
+                target_ref = query_reference_np(env, clip_id, sim_time)
                 while sim_time + 1e-9 < render_time:
                     target_time = sim_time + float(env.dt)
                     if loop_mode == int(LoopMode.CLAMP):
                         target_time = min(target_time, motion_length)
-                    ref = query_reference_np(env, clip_id, target_time)
-                    data.ctrl[:] = np.asarray(ref["qpos"], dtype=np.float64)
+                    target_ref = query_reference_np(env, clip_id, target_time)
+                    data.ctrl[:] = np.asarray(target_ref["qpos"], dtype=np.float64)
                     for _ in range(env.n_substeps):
                         mujoco.mj_step(model, data)
                     sim_time += float(env.dt)
+                    reason = fail_reason(env, model, data)
+                    if pd_fail_step is None and reason != "none":
+                        pd_fail_step = int(round(sim_time / float(env.dt)))
+                        pd_fail_time = sim_time
+                        pd_fail_reason = reason
+
+            row: dict[str, object] = {
+                "clip_id": clip_id,
+                "video_frame": video_frame,
+                "render_time_s": render_time,
+                "pd_sim_time_s": sim_time if args.mode in ("pd", "compare") else None,
+            }
+            if args.mode in ("kinematic", "compare"):
+                kin_feet = foot_snapshot(env, kinematic_data)
+                row.update(
+                    {
+                        "kin_root_x": float(kinematic_data.qpos[0]),
+                        "kin_root_y": float(kinematic_data.qpos[1]),
+                        "kin_root_z": float(kinematic_data.qpos[2]),
+                        "kin_left_foot_z": kin_feet["left_foot_z"],
+                        "kin_right_foot_z": kin_feet["right_foot_z"],
+                        "kin_left_contact": kin_feet["left_contact"],
+                        "kin_right_contact": kin_feet["right_contact"],
+                        "kin_left_foot_speed_xy": foot_speed_xy(
+                            kin_feet,
+                            previous_kinematic_feet,
+                            1.0 / float(args.fps),
+                            "left",
+                        ),
+                        "kin_right_foot_speed_xy": foot_speed_xy(
+                            kin_feet,
+                            previous_kinematic_feet,
+                            1.0 / float(args.fps),
+                            "right",
+                        ),
+                    }
+                )
+                previous_kinematic_feet = kin_feet
+            if args.mode in ("pd", "compare"):
+                pd_feet = foot_snapshot(env, data)
+                target_qpos = np.asarray(target_ref["qpos"], dtype=np.float64)
+                actual_qpos = data.qpos[env._actuator_qpos_indices_np]
+                force_ratio, saturated_fraction = actuator_force_stats(model, data)
+                row.update(
+                    {
+                        "pd_root_x": float(data.qpos[0]),
+                        "pd_root_y": float(data.qpos[1]),
+                        "pd_root_z": float(data.qpos[2]),
+                        "pd_torso_up": torso_up(env, data),
+                        "pd_fail_reason": fail_reason(env, model, data),
+                        "pd_pose_rmse": float(
+                            np.sqrt(np.mean(np.square(actual_qpos - target_qpos)))
+                        ),
+                        "pd_left_foot_z": pd_feet["left_foot_z"],
+                        "pd_right_foot_z": pd_feet["right_foot_z"],
+                        "pd_left_contact": pd_feet["left_contact"],
+                        "pd_right_contact": pd_feet["right_contact"],
+                        "pd_left_foot_speed_xy": foot_speed_xy(
+                            pd_feet,
+                            previous_pd_feet,
+                            1.0 / float(args.fps),
+                            "left",
+                        ),
+                        "pd_right_foot_speed_xy": foot_speed_xy(
+                            pd_feet,
+                            previous_pd_feet,
+                            1.0 / float(args.fps),
+                            "right",
+                        ),
+                        "pd_max_actuator_force_ratio": force_ratio,
+                        "pd_saturated_actuator_fraction": saturated_fraction,
+                    }
+                )
+                previous_pd_feet = pd_feet
+            trace_rows.append(row)
 
             if args.mode == "compare":
                 camera.lookat[:] = np.asarray(kinematic_data.qpos[:3], dtype=np.float64)
@@ -263,7 +452,11 @@ def render_clip(
         "frame_time": frame_time,
         "motion_length_s": motion_length,
         "rendered_seconds": video_seconds,
-    }
+        "pd_fail_step": pd_fail_step,
+        "pd_fail_time_s": pd_fail_time,
+        "pd_fail_reason": pd_fail_reason,
+        "debug_body_floor_collision": bool(args.debug_body_floor_collision),
+    }, trace_rows
 
 
 def main() -> None:
@@ -273,14 +466,25 @@ def main() -> None:
 
     env = make_env(args)
     clip_count = int(np.asarray(env._bvh_reference_clip_count))
-    if args.max_clips is not None:
+    if args.clip_id is not None:
+        if args.clip_id < 0 or args.clip_id >= clip_count:
+            raise ValueError(
+                f"--clip-id {args.clip_id} out of range for {clip_count} clips."
+            )
+        clip_ids = [int(args.clip_id)]
+    elif args.max_clips is not None:
         clip_count = min(clip_count, int(args.max_clips))
+        clip_ids = list(range(clip_count))
+    else:
+        clip_ids = list(range(clip_count))
 
     rows: list[dict[str, object]] = []
-    print(f"Rendering {clip_count} BVH clips to {args.out_dir}")
-    for clip_id in range(clip_count):
-        path, row = render_clip(env, clip_id, args)
+    trace_rows: list[dict[str, object]] = []
+    print(f"Rendering {len(clip_ids)} BVH clips to {args.out_dir}")
+    for clip_id in clip_ids:
+        path, row, clip_trace_rows = render_clip(env, clip_id, args)
         rows.append(row)
+        trace_rows.extend(clip_trace_rows)
         print(
             f"{clip_id:03d} {row['label']} {row['motion_length_s']:.3f}s "
             f"-> {path.name}",
@@ -293,6 +497,14 @@ def main() -> None:
         writer.writeheader()
         writer.writerows(rows)
     print(f"Manifest: {manifest_path}")
+    if trace_rows:
+        trace_path = args.out_dir / f"trace_{args.mode}.csv"
+        fieldnames = sorted({key for row in trace_rows for key in row})
+        with trace_path.open("w", newline="", encoding="utf-8") as file:
+            writer = csv.DictWriter(file, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(trace_rows)
+        print(f"Trace: {trace_path}")
 
 
 if __name__ == "__main__":
