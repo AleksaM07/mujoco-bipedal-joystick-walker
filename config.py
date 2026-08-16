@@ -688,8 +688,9 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # REF: MIMICKIT-ACTION-BOUNDS-POS
         # TYPE: REFERENCE_CODE_DERIVED
         # Bootstrap imitation with residual reference targets: zero action
-        # follows the next reference pose, while PPO learns balance corrections.
-        # Absolute MimicKit-style targets remain available via CLI/config.
+        # follows the same reference pose scored by DeepMimic, while PPO learns
+        # balance corrections. Future target observations still provide
+        # anticipation without making the PD center disagree with the reward.
         reference_action_mode="residual",
         # MimicKit's own humanoid has meaningful action-space midpoints. Our
         # generated XML does not: knee joint-limit midpoint is a deep crouch.
@@ -701,8 +702,8 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         reference_action_range="reference_targets",
         reference_action_range_scale=1.1,
         reference_residual_scale=1.0,
-        reference_replay_target_step=1,
-        deepmimic_root_velocity_weight_scale=0.15,
+        reference_replay_target_step=0,
+        deepmimic_root_velocity_weight_scale=1.0,
         # Keep finite clips away from the terminal edge during random reset.
         # This prevents short clamp snippets from ending a few control steps
         # after reset before the controller can learn a gait segment.
@@ -894,8 +895,8 @@ class EnvConfig:
     reference_action_range_scale: float = 1.1
     reference_residual_scale: float = 1.0
     bvh_target_observation_steps: tuple[int, ...] = (1, 2, 3)
-    reference_replay_target_step: int = 1
-    deepmimic_root_velocity_weight_scale: float = 0.15
+    reference_replay_target_step: int = 0
+    deepmimic_root_velocity_weight_scale: float = 1.0
     reference_reset_min_steps_remaining: int = 25
     reference_min_motion_length: float = 0.8
     reference_loop_mode: str = "auto"

@@ -2358,6 +2358,25 @@ def main() -> None:
         help="Foot min-Z threshold used by stance foot locking.",
     )
     parser.add_argument(
+        "--reference-replay-target-step",
+        type=int,
+        default=EnvConfig.reference_replay_target_step,
+        help=(
+            "Reference frame offset used as the residual PD action center. "
+            "Use 0 to command the same frame scored by DeepMimic; use 1 for "
+            "one-step anticipatory tracking."
+        ),
+    )
+    parser.add_argument(
+        "--deepmimic-root-velocity-weight-scale",
+        type=float,
+        default=EnvConfig.deepmimic_root_velocity_weight_scale,
+        help=(
+            "Multiplier for the DeepMimic root-velocity reward weight before "
+            "active-weight normalization."
+        ),
+    )
+    parser.add_argument(
         "--deepmimic-reward-mode",
         choices=["pure", "mixed"],
         default="pure",
@@ -2646,6 +2665,10 @@ def main() -> None:
         reference_root_xy_scale=args.reference_root_xy_scale,
         reference_lock_stance_feet=args.reference_lock_stance_feet,
         reference_foot_lock_height=args.reference_foot_lock_height,
+        reference_replay_target_step=args.reference_replay_target_step,
+        deepmimic_root_velocity_weight_scale=(
+            args.deepmimic_root_velocity_weight_scale
+        ),
         reference_target_observation=(
             args.reference_gait in ("bvh", "smpl")
             and EnvConfig.reference_target_observation
@@ -2759,8 +2782,10 @@ def apply_one_clip_overfit_preset(args: argparse.Namespace) -> None:
     args.reference_gait = "bvh"
     args.reference_action_mode = "residual"
     args.reference_residual_scale = 1.0
+    args.reference_replay_target_step = 0
     args.reference_loop_mode = "wrap"
     args.reference_root_xy_scale = 0.35
+    args.deepmimic_root_velocity_weight_scale = 1.0
     args.deepmimic_reward_mode = "pure"
     args.pose_termination = False
     args.arm_actuators = False
