@@ -1252,9 +1252,9 @@ def run_reference_playback_audit(
     logger.info(
         "playback config | resets={} | steps={} | seed={} | backend={} | "
         "requested_clip_mode={} | reference_gait={} | reference_gait_file={} | "
-        "audit_target_obs={} | audit_action_mode={} | audit_reset_attempts={} | "
-        "audit_projection_levels={} | trace_resets={} | trace_steps={} | "
-        "trace_interval={}",
+        "reference_loop_mode={} | audit_target_obs={} | audit_action_mode={} | "
+        "audit_reset_attempts={} | audit_projection_levels={} | "
+        "trace_resets={} | trace_steps={} | trace_interval={}",
         resets,
         steps,
         seed,
@@ -1262,6 +1262,7 @@ def run_reference_playback_audit(
         clip_mode,
         env_config.reference_gait,
         env_config.reference_gait_file,
+        env_config.reference_loop_mode,
         env_config.reference_target_observation,
         env_config.reference_action_mode,
         env_config.reset_sample_attempts,
@@ -1889,6 +1890,7 @@ def run_reference_playback_audit(
         "clip_mode": actual_clip_mode,
         "reference_gait": env_config.reference_gait,
         "reference_gait_file": env_config.reference_gait_file,
+        "reference_loop_mode": env_config.reference_loop_mode,
         "resets": total_resets,
         "max_steps": max_steps,
         "trace_path": str(trace_path) if trace_resets > 0 and trace_steps > 0 else None,
