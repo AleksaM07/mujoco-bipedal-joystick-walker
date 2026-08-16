@@ -21,7 +21,6 @@ from brax.training import checkpoint
 from brax.training import networks as brax_networks
 from brax.training.acme import running_statistics
 from brax.training.agents.ppo import networks as ppo_networks
-from mujoco import mjx
 
 from biomechanics_env import BiomechanicsJoystickEnv
 from config import (
@@ -425,11 +424,23 @@ def set_command(state, command: np.ndarray):
     return state.replace(info=info, obs=obs)
 
 
+def state_qpos_qvel_host(model: mujoco.MjModel, state) -> tuple[np.ndarray, np.ndarray]:
+    """Copy only qpos/qvel from MJX/Warp state for host MuJoCo rendering."""
+    qpos = np.asarray(jax.device_get(state.data.qpos), dtype=np.float64).reshape(-1)
+    qvel = np.asarray(jax.device_get(state.data.qvel), dtype=np.float64).reshape(-1)
+    if qpos.size < model.nq or qvel.size < model.nv:
+        raise ValueError(
+            "Cannot render state: "
+            f"qpos has {qpos.size}/{model.nq}, qvel has {qvel.size}/{model.nv}."
+        )
+    return qpos[: model.nq].copy(), qvel[: model.nv].copy()
+
+
 def update_viewer_data(model, data, state) -> None:
-    """Kopira MJX state u MuJoCo viewer data."""
-    latest_data = mjx.get_data(model, state.data)
-    data.qpos[:] = latest_data.qpos
-    data.qvel[:] = latest_data.qvel
+    """Kopira qpos/qvel iz MJX/Warp state-a u MuJoCo viewer data."""
+    qpos, qvel = state_qpos_qvel_host(model, state)
+    data.qpos[:] = qpos
+    data.qvel[:] = qvel
     mujoco.mj_forward(model, data)
 
 
@@ -441,15 +452,15 @@ def write_video(path: Path, frames: list[np.ndarray], fps: int) -> None:
 
         media.write_video(path, frames, fps=fps)
         return
-    except ImportError:
-        pass
+    except Exception as exc:
+        print(f"mediapy video writer failed, trying imageio | {exc}", flush=True)
 
     try:
         import imageio.v3 as iio
 
         iio.imwrite(path, np.asarray(frames), fps=fps)
         return
-    except ImportError as exc:
+    except Exception as exc:
         raise RuntimeError(
             "Install mediapy or imageio to write MP4 files: "
             "pip install mediapy imageio imageio-ffmpeg"
@@ -471,6 +482,33 @@ def quality_percent(reward: float, length: int) -> float:
     """Normalize reward quality over the steps that actually happened."""
     max_reward = float(BiomechanicsJoystickEnv.REWARD_MAX) * max(float(length), 1.0)
     return 100.0 * reward / max(max_reward, 1e-6)
+
+
+def render_host_replay_frames(
+    model: mujoco.MjModel,
+    snapshots: list[tuple[np.ndarray, np.ndarray]],
+    width: int,
+    height: int,
+) -> list[np.ndarray]:
+    """Render saved qpos/qvel snapshots with host MuJoCo after rollout."""
+    renderer = mujoco.Renderer(model, height=height, width=width)
+    camera = mujoco.MjvCamera()
+    camera.distance = 4.0
+    camera.azimuth = 160
+    camera.elevation = -20
+    data = mujoco.MjData(model)
+    frames: list[np.ndarray] = []
+    try:
+        for qpos, qvel in snapshots:
+            data.qpos[:] = qpos
+            data.qvel[:] = qvel
+            mujoco.mj_forward(model, data)
+            camera.lookat[:] = data.qpos[:3]
+            renderer.update_scene(data, camera=camera)
+            frames.append(renderer.render())
+    finally:
+        renderer.close()
+    return frames
 
 
 def reset_state(env, rng, command: np.ndarray):
@@ -617,14 +655,8 @@ def record_policy_video(
     """Render one policy rollout to MP4 and print normalized score diagnostics."""
     state = reset_state(env, rng, command)
     model = env.mj_model
-    data = mjx.get_data(model, state.data)
-    renderer = mujoco.Renderer(model, height=height, width=width)
-    camera = mujoco.MjvCamera()
-    camera.distance = 4.0
-    camera.azimuth = 160
-    camera.elevation = -20
 
-    frames: list[np.ndarray] = []
+    snapshots: list[tuple[np.ndarray, np.ndarray]] = []
     total_reward = 0.0
     episode_reward = 0.0
     episode_length = 0
@@ -646,10 +678,7 @@ def record_policy_video(
         episode_reward += reward
         episode_length += 1
 
-        update_viewer_data(model, data, state)
-        camera.lookat[:] = data.qpos[:3]
-        renderer.update_scene(data, camera=camera)
-        frames.append(renderer.render())
+        snapshots.append(state_qpos_qvel_host(model, state))
 
         if done:
             qpos_z = float(np.asarray(state.data.qpos[2]))
@@ -673,9 +702,10 @@ def record_policy_video(
             episode_reward = 0.0
             episode_length = 0
 
-    renderer.close()
-    if not frames:
+    if not snapshots:
         raise RuntimeError("No frames were rendered.")
+    print("rendering host MuJoCo replay frames", flush=True)
+    frames = render_host_replay_frames(model, snapshots, width, height)
     write_video(output_path, frames, fps=fps)
     print(
         "record summary | "
@@ -985,7 +1015,8 @@ def main():
     print("compile done, opening MuJoCo viewer", flush=True)
 
     model = env.mj_model
-    data = mjx.get_data(model, state.data)
+    data = mujoco.MjData(model)
+    update_viewer_data(model, data, state)
     controller = JoystickController(command, args.command_step)
     step = 0
 
