@@ -85,15 +85,15 @@ def write_video(path: Path, frames: list[np.ndarray], fps: int) -> None:
 
         media.write_video(path, frames, fps=fps)
         return
-    except ImportError:
-        pass
+    except Exception as exc:
+        print(f"mediapy video writer failed, trying imageio | {exc}", flush=True)
 
     try:
         import imageio.v3 as iio
 
         iio.imwrite(path, np.asarray(frames), fps=fps)
         return
-    except ImportError as exc:
+    except Exception as exc:
         raise RuntimeError(
             "Install mediapy or imageio to write videos: "
             "pip install mediapy imageio imageio-ffmpeg"

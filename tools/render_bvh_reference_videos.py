@@ -86,15 +86,15 @@ def write_video(path: Path, frames: list[np.ndarray], fps: int) -> None:
 
         media.write_video(path, frames, fps=fps)
         return
-    except ImportError:
-        pass
+    except Exception as exc:
+        print(f"mediapy video writer failed, trying imageio | {exc}", flush=True)
 
     try:
         import imageio.v3 as iio
 
         iio.imwrite(path, np.asarray(frames), fps=fps)
         return
-    except ImportError as exc:
+    except Exception as exc:
         raise RuntimeError(
             "Install mediapy or imageio to write MP4 files: "
             "pip install mediapy imageio imageio-ffmpeg"
@@ -172,34 +172,37 @@ def render_clip(
     frame_total = max(1, int(np.ceil(video_seconds * args.fps)))
     rendered: list[np.ndarray] = []
 
-    ref = query_reference_np(env, clip_id, 0.0)
-    qpos, qvel = build_full_state(env, ref)
-    data.qpos[:] = qpos
-    data.qvel[:] = qvel
-    data.ctrl[:] = np.asarray(ref["qpos"], dtype=np.float64)
-    mujoco.mj_forward(model, data)
+    try:
+        ref = query_reference_np(env, clip_id, 0.0)
+        qpos, qvel = build_full_state(env, ref)
+        data.qpos[:] = qpos
+        data.qvel[:] = qvel
+        data.ctrl[:] = np.asarray(ref["qpos"], dtype=np.float64)
+        mujoco.mj_forward(model, data)
 
-    for video_frame in range(frame_total):
-        time_s = video_frame / float(args.fps)
-        if loop_mode == int(LoopMode.CLAMP):
-            time_s = min(time_s, motion_length)
+        for video_frame in range(frame_total):
+            time_s = video_frame / float(args.fps)
+            if loop_mode == int(LoopMode.CLAMP):
+                time_s = min(time_s, motion_length)
 
-        if args.mode == "kinematic":
-            ref = query_reference_np(env, clip_id, time_s)
-            qpos, qvel = build_full_state(env, ref)
-            data.qpos[:] = qpos
-            data.qvel[:] = qvel
-            data.ctrl[:] = np.asarray(ref["qpos"], dtype=np.float64)
-            mujoco.mj_forward(model, data)
-        else:
-            ref = query_reference_np(env, clip_id, time_s + float(env.dt))
-            data.ctrl[:] = np.asarray(ref["qpos"], dtype=np.float64)
-            for _ in range(env.n_substeps):
-                mujoco.mj_step(model, data)
+            if args.mode == "kinematic":
+                ref = query_reference_np(env, clip_id, time_s)
+                qpos, qvel = build_full_state(env, ref)
+                data.qpos[:] = qpos
+                data.qvel[:] = qvel
+                data.ctrl[:] = np.asarray(ref["qpos"], dtype=np.float64)
+                mujoco.mj_forward(model, data)
+            else:
+                ref = query_reference_np(env, clip_id, time_s + float(env.dt))
+                data.ctrl[:] = np.asarray(ref["qpos"], dtype=np.float64)
+                for _ in range(env.n_substeps):
+                    mujoco.mj_step(model, data)
 
-        camera.lookat[:] = np.asarray(data.qpos[:3], dtype=np.float64)
-        renderer.update_scene(data, camera=camera)
-        rendered.append(renderer.render())
+            camera.lookat[:] = np.asarray(data.qpos[:3], dtype=np.float64)
+            renderer.update_scene(data, camera=camera)
+            rendered.append(renderer.render())
+    finally:
+        renderer.close()
 
     label = clip_label(loop_mode)
     stem = safe_name(source_label(env, clip_id))
@@ -210,7 +213,6 @@ def render_clip(
     )
     output_path = args.out_dir / file_name
     write_video(output_path, rendered, args.fps)
-    renderer.close()
 
     return output_path, {
         "clip_id": clip_id,
