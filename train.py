@@ -458,6 +458,18 @@ def save_run_config(
     (run_dir / "config.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+def parse_int_tuple(raw_value: str) -> tuple[int, ...]:
+    """Parse a comma-separated integer list for CLI tuple fields."""
+    values = tuple(
+        int(part.strip())
+        for part in raw_value.split(",")
+        if part.strip()
+    )
+    if not values:
+        raise ValueError("Expected at least one integer value.")
+    return values
+
+
 def file_sha256(path: str | Path | None) -> str | None:
     """Return a SHA-256 hash for compatibility-critical files."""
     if path is None:
@@ -2368,6 +2380,16 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--bvh-target-observation-steps",
+        type=str,
+        default=",".join(str(step) for step in EnvConfig.bvh_target_observation_steps),
+        help=(
+            "Comma-separated future-step offsets exposed to the policy as "
+            "reference targets. Example: 0,1,2,3 includes the currently "
+            "scored frame plus three lookahead frames."
+        ),
+    )
+    parser.add_argument(
         "--deepmimic-root-velocity-weight-scale",
         type=float,
         default=EnvConfig.deepmimic_root_velocity_weight_scale,
@@ -2379,7 +2401,7 @@ def main() -> None:
     parser.add_argument(
         "--deepmimic-reward-mode",
         choices=["pure", "mixed"],
-        default="pure",
+        default=EnvConfig.deepmimic_reward_mode,
         help=(
             "pure koristi MimicKit/DeepMimic imitation-only reward; mixed "
             "vraca joystick task shaping preko imitacije."
@@ -2665,6 +2687,9 @@ def main() -> None:
         reference_root_xy_scale=args.reference_root_xy_scale,
         reference_lock_stance_feet=args.reference_lock_stance_feet,
         reference_foot_lock_height=args.reference_foot_lock_height,
+        bvh_target_observation_steps=parse_int_tuple(
+            args.bvh_target_observation_steps
+        ),
         reference_replay_target_step=args.reference_replay_target_step,
         deepmimic_root_velocity_weight_scale=(
             args.deepmimic_root_velocity_weight_scale

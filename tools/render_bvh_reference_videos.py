@@ -292,6 +292,51 @@ def parse_args() -> argparse.Namespace:
         help="Anchor low stance foot XY while rendering retargeted references.",
     )
     parser.add_argument(
+        "--reference-action-mode",
+        choices=["mimickit", "residual"],
+        default="residual",
+        help="Env-side policy-to-PD mapping used when emulating training control.",
+    )
+    parser.add_argument(
+        "--reference-action-center",
+        choices=["default", "joint_midpoint"],
+        default="default",
+        help="Action-space zero point for MimicKit-style control emulation.",
+    )
+    parser.add_argument(
+        "--reference-action-range",
+        choices=["action_scale", "joint_limits", "reference_targets"],
+        default="reference_targets",
+        help="Half-range convention for MimicKit-style control emulation.",
+    )
+    parser.add_argument(
+        "--reference-action-range-scale",
+        type=float,
+        default=1.1,
+        help="Multiplier for --reference-action-range during control emulation.",
+    )
+    parser.add_argument(
+        "--reference-residual-scale",
+        type=float,
+        default=1.0,
+        help="Residual action scale for residual-mode control emulation.",
+    )
+    parser.add_argument(
+        "--reference-replay-target-step",
+        type=int,
+        default=0,
+        help="Reference step offset used by residual-mode control emulation.",
+    )
+    parser.add_argument(
+        "--control-source",
+        choices=["direct_reference", "zero_policy", "encoded_reference"],
+        default="direct_reference",
+        help=(
+            "direct_reference bypasses the policy map; zero_policy and "
+            "encoded_reference emulate the training action-to-PD map."
+        ),
+    )
+    parser.add_argument(
         "--overlay-title",
         type=str,
         default=None,
@@ -576,7 +621,12 @@ def make_env(args: argparse.Namespace) -> BiomechanicsJoystickEnv:
         "reference_gait_file": default_reference_files(args),
         "reference_loop_mode": args.reference_loop_mode,
         "reference_target_observation": False,
-        "reference_action_mode": "residual",
+        "reference_action_mode": args.reference_action_mode,
+        "reference_action_center": args.reference_action_center,
+        "reference_action_range": args.reference_action_range,
+        "reference_action_range_scale": args.reference_action_range_scale,
+        "reference_residual_scale": args.reference_residual_scale,
+        "reference_replay_target_step": args.reference_replay_target_step,
         "deepmimic_reward_mode": "pure",
         "pose_termination": False,
         "enable_erfi": False,
@@ -833,6 +883,103 @@ def balance_snapshot(
     }
 
 
+def emulate_policy_motor_targets(
+    env: BiomechanicsJoystickEnv,
+    clip_id: int,
+    motion_time: float,
+    desired_ctrl: np.ndarray,
+    previous_action: np.ndarray,
+    query_reference_at,
+    *,
+    control_source: str,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, float]]:
+    """Emulate the training action map and return motor targets for PD playback."""
+    desired_ctrl = np.asarray(desired_ctrl, dtype=np.float64)
+    previous_action = np.asarray(previous_action, dtype=np.float64)
+    action_size = int(env.action_size)
+    zero_action = np.zeros(action_size, dtype=np.float64)
+    action_scale = np.asarray(env._action_scale, dtype=np.float64)
+    lower_limits = np.asarray(env._actuator_ctrl_lower_limits_np, dtype=np.float64)
+    upper_limits = np.asarray(env._actuator_ctrl_upper_limits_np, dtype=np.float64)
+    action_smoothing = float(getattr(env._config, "action_smoothing", 1.0))
+    reference_action_mode = str(env._config.get("reference_action_mode", "residual"))
+
+    if control_source == "direct_reference":
+        return desired_ctrl, zero_action, zero_action, {
+            "pd_policy_action_l2": 0.0,
+            "pd_smoothed_action_l2": 0.0,
+            "pd_policy_action_clip_fraction": 0.0,
+            "pd_ctrl_target_rmse": 0.0,
+        }
+
+    if control_source == "zero_policy":
+        policy_action = zero_action
+    elif control_source == "encoded_reference":
+        if reference_action_mode == "mimickit":
+            center = np.asarray(env._mimickit_action_center, dtype=np.float64)
+            half_range = np.maximum(
+                np.asarray(env._mimickit_action_half_range, dtype=np.float64),
+                1e-6,
+            )
+            policy_action = (desired_ctrl - center) / half_range
+        else:
+            replay_step = int(env._config.get("reference_replay_target_step", 0))
+            replay_ref = query_reference_at(
+                clip_id,
+                motion_time + (replay_step * float(env.dt)),
+            )
+            reference_ctrl = np.asarray(replay_ref["qpos"], dtype=np.float64)
+            residual_scale = max(
+                float(env._config.get("reference_residual_scale", 1.0)),
+                1e-6,
+            )
+            policy_action = (desired_ctrl - reference_ctrl) / (
+                np.maximum(action_scale, 1e-6) * residual_scale
+            )
+    else:
+        raise ValueError(f"Unknown --control-source {control_source}.")
+
+    clipped_policy_action = np.clip(policy_action, -1.0, 1.0)
+    smoothed_action = (
+        action_smoothing * clipped_policy_action
+        + (1.0 - action_smoothing) * previous_action
+    )
+    if reference_action_mode == "mimickit":
+        center = np.asarray(env._mimickit_action_center, dtype=np.float64)
+        half_range = np.asarray(env._mimickit_action_half_range, dtype=np.float64)
+        motor_targets = center + smoothed_action * half_range
+        mimickit_lower = np.maximum(
+            np.asarray(env._mimickit_action_lower_limits, dtype=np.float64),
+            lower_limits,
+        )
+        mimickit_upper = np.minimum(
+            np.asarray(env._mimickit_action_upper_limits, dtype=np.float64),
+            upper_limits,
+        )
+        motor_targets = np.clip(motor_targets, mimickit_lower, mimickit_upper)
+    else:
+        replay_step = int(env._config.get("reference_replay_target_step", 0))
+        replay_ref = query_reference_at(
+            clip_id,
+            motion_time + (replay_step * float(env.dt)),
+        )
+        reference_ctrl = np.asarray(replay_ref["qpos"], dtype=np.float64)
+        residual_scale = float(env._config.get("reference_residual_scale", 1.0))
+        motor_targets = reference_ctrl + smoothed_action * action_scale * residual_scale
+        motor_targets = np.clip(motor_targets, lower_limits, upper_limits)
+
+    return motor_targets, clipped_policy_action, smoothed_action, {
+        "pd_policy_action_l2": float(np.linalg.norm(clipped_policy_action)),
+        "pd_smoothed_action_l2": float(np.linalg.norm(smoothed_action)),
+        "pd_policy_action_clip_fraction": float(
+            np.mean(np.abs(policy_action) > 1.0)
+        ),
+        "pd_ctrl_target_rmse": float(
+            np.sqrt(np.mean(np.square(motor_targets - desired_ctrl)))
+        ),
+    }
+
+
 def render_clip(
     env: BiomechanicsJoystickEnv,
     clip_id: int,
@@ -929,10 +1076,17 @@ def render_clip(
     previous_detail_kinematic_feet: dict[str, float] | None = None
     previous_detail_pd_feet: dict[str, float] | None = None
     previous_detail_time: float | None = None
+    previous_policy_action = np.zeros(int(env.action_size), dtype=np.float64)
     next_detail_trace_time = 0.0
     detail_trace_index = 0
     substep_dt = float(env.dt) / float(env.n_substeps)
     trace_kinematic_data = mujoco.MjData(model)
+
+    def query_reference_at(query_clip_id: int, query_motion_time: float) -> dict[str, np.ndarray]:
+        bounded_motion_time = query_motion_time
+        if args.segment_seconds is not None or loop_mode == int(LoopMode.CLAMP):
+            bounded_motion_time = min(bounded_motion_time, segment_end_time)
+        return query_reference_np(env, query_clip_id, bounded_motion_time)
 
     def append_detail_trace_row(
         sample_elapsed: float,
@@ -983,11 +1137,18 @@ def render_clip(
             "root_pitch_assist_kd": float(args.root_pitch_assist_kd),
             "root_pitch_assist_max_torque": float(args.root_pitch_assist_max_torque),
             "trace_actuator_state": bool(args.trace_actuator_state),
+            "control_source": args.control_source,
+            "reference_action_mode": args.reference_action_mode,
+            "reference_action_center": args.reference_action_center,
+            "reference_action_range": args.reference_action_range,
+            "reference_action_range_scale": float(args.reference_action_range_scale),
+            "reference_residual_scale": float(args.reference_residual_scale),
+            "reference_replay_target_step": int(args.reference_replay_target_step),
             "pd_state_time_s": pd_elapsed_time if args.mode in ("pd", "compare") else None,
             "pd_motion_time_s": pd_motion_time if args.mode in ("pd", "compare") else None,
         }
         if args.mode in ("kinematic", "compare"):
-            ref = query_reference_np(env, clip_id, sample_motion_time)
+            ref = query_reference_at(clip_id, sample_motion_time)
             qpos, qvel = build_full_state(env, ref)
             trace_kinematic_data.qpos[:] = qpos
             trace_kinematic_data.qvel[:] = qvel
@@ -1024,12 +1185,21 @@ def render_clip(
             )
             previous_detail_kinematic_feet = kin_feet
         if args.mode in ("pd", "compare"):
-            target_ref = query_reference_np(env, clip_id, sample_motion_time)
+            target_ref = query_reference_at(clip_id, sample_motion_time)
             pd_feet = foot_snapshot(env, data)
             pd_balance = balance_snapshot(env, data, pd_feet)
             target_qpos = np.asarray(target_ref["qpos"], dtype=np.float64)
             actual_qpos = data.qpos[env._actuator_qpos_indices_np]
             force_ratio, saturated_fraction = actuator_force_stats(model, data)
+            _, clipped_policy_action, smoothed_action, control_diag = emulate_policy_motor_targets(
+                env,
+                clip_id,
+                sample_motion_time,
+                target_qpos,
+                previous_policy_action,
+                query_reference_at,
+                control_source=args.control_source,
+            )
             actuator_trace = (
                 actuator_state_trace(env, model, data, target_qpos)
                 if args.trace_actuator_state
@@ -1090,6 +1260,12 @@ def render_clip(
                     "pd_root_z_assist_force": assist_force,
                     "pd_max_actuator_force_ratio": force_ratio,
                     "pd_saturated_actuator_fraction": saturated_fraction,
+                    "pd_policy_action_l2": control_diag["pd_policy_action_l2"],
+                    "pd_smoothed_action_l2": control_diag["pd_smoothed_action_l2"],
+                    "pd_policy_action_clip_fraction": control_diag[
+                        "pd_policy_action_clip_fraction"
+                    ],
+                    "pd_ctrl_target_rmse": control_diag["pd_ctrl_target_rmse"],
                     **pitch_diag,
                     **actuator_trace,
                 }
@@ -1100,11 +1276,22 @@ def render_clip(
         detail_trace_index += 1
 
     try:
-        initial_ref = query_reference_np(env, clip_id, motion_start_time)
+        initial_ref = query_reference_at(clip_id, motion_start_time)
         qpos, qvel = build_full_state(env, initial_ref)
         data.qpos[:] = qpos
         data.qvel[:] = qvel
-        data.ctrl[:] = np.asarray(initial_ref["qpos"], dtype=np.float64)
+        initial_ctrl, previous_policy_action, _initial_smoothed, _initial_diag = (
+            emulate_policy_motor_targets(
+                env,
+                clip_id,
+                motion_start_time,
+                np.asarray(initial_ref["qpos"], dtype=np.float64),
+                np.zeros(int(env.action_size), dtype=np.float64),
+                query_reference_at,
+                control_source=args.control_source,
+            )
+        )
+        data.ctrl[:] = initial_ctrl
         mujoco.mj_forward(model, data)
 
         pd_motion_time = motion_start_time
@@ -1120,21 +1307,21 @@ def render_clip(
                 render_motion_time = min(render_motion_time, segment_end_time)
 
             if args.mode in ("kinematic", "compare"):
-                ref = query_reference_np(env, clip_id, render_motion_time)
+                ref = query_reference_at(clip_id, render_motion_time)
                 qpos, qvel = build_full_state(env, ref)
                 kinematic_data.qpos[:] = qpos
                 kinematic_data.qvel[:] = qvel
                 kinematic_data.ctrl[:] = np.asarray(ref["qpos"], dtype=np.float64)
                 mujoco.mj_forward(model, kinematic_data)
             if args.mode in ("pd", "compare"):
-                target_ref = query_reference_np(env, clip_id, pd_motion_time)
+                target_ref = query_reference_at(clip_id, pd_motion_time)
                 while pd_elapsed_time + 1e-9 < render_elapsed:
                     target_time = pd_motion_time + (
                         float(env.dt) * float(args.reference_speed_scale)
                     )
                     if args.segment_seconds is not None or loop_mode == int(LoopMode.CLAMP):
                         target_time = min(target_time, segment_end_time)
-                    target_ref = query_reference_np(env, clip_id, target_time)
+                    target_ref = query_reference_at(clip_id, target_time)
                     data.xfrc_applied[:, :] = 0.0
                     if args.pin_root_to_reference or args.pin_root_position_to_reference:
                         data.qpos[:3] = np.asarray(target_ref["root_pos"], dtype=np.float64)
@@ -1175,7 +1362,17 @@ def render_clip(
                         data.xfrc_applied[env._reference_anchor_body_id, 2] = assist_force
                     if np.any(np.abs(assist_torque) > 0.0):
                         data.xfrc_applied[env._reference_anchor_body_id, 3:6] = assist_torque
-                    data.ctrl[:] = np.asarray(target_ref["qpos"], dtype=np.float64)
+                    data.ctrl[:], previous_policy_action, _smoothed_action, _control_diag = (
+                        emulate_policy_motor_targets(
+                            env,
+                            clip_id,
+                            target_time,
+                            np.asarray(target_ref["qpos"], dtype=np.float64),
+                            previous_policy_action,
+                            query_reference_at,
+                            control_source=args.control_source,
+                        )
+                    )
                     for _ in range(env.n_substeps):
                         mujoco.mj_step(model, data)
                         pd_elapsed_time += substep_dt
@@ -1236,6 +1433,13 @@ def render_clip(
                 "root_pitch_assist_kd": float(args.root_pitch_assist_kd),
                 "root_pitch_assist_max_torque": float(args.root_pitch_assist_max_torque),
                 "trace_actuator_state": bool(args.trace_actuator_state),
+                "control_source": args.control_source,
+                "reference_action_mode": args.reference_action_mode,
+                "reference_action_center": args.reference_action_center,
+                "reference_action_range": args.reference_action_range,
+                "reference_action_range_scale": float(args.reference_action_range_scale),
+                "reference_residual_scale": float(args.reference_residual_scale),
+                "reference_replay_target_step": int(args.reference_replay_target_step),
                 "pd_sim_time_s": pd_elapsed_time if args.mode in ("pd", "compare") else None,
                 "pd_motion_time_s": pd_motion_time if args.mode in ("pd", "compare") else None,
             }
@@ -1276,6 +1480,15 @@ def render_clip(
                 target_qpos = np.asarray(target_ref["qpos"], dtype=np.float64)
                 actual_qpos = data.qpos[env._actuator_qpos_indices_np]
                 force_ratio, saturated_fraction = actuator_force_stats(model, data)
+                _, clipped_policy_action, smoothed_action, control_diag = emulate_policy_motor_targets(
+                    env,
+                    clip_id,
+                    pd_motion_time,
+                    target_qpos,
+                    previous_policy_action,
+                    query_reference_at,
+                    control_source=args.control_source,
+                )
                 actuator_trace = (
                     actuator_state_trace(env, model, data, target_qpos)
                     if args.trace_actuator_state
@@ -1336,6 +1549,12 @@ def render_clip(
                         "pd_root_z_assist_force": assist_force,
                         "pd_max_actuator_force_ratio": force_ratio,
                         "pd_saturated_actuator_fraction": saturated_fraction,
+                        "pd_policy_action_l2": control_diag["pd_policy_action_l2"],
+                        "pd_smoothed_action_l2": control_diag["pd_smoothed_action_l2"],
+                        "pd_policy_action_clip_fraction": control_diag[
+                            "pd_policy_action_clip_fraction"
+                        ],
+                        "pd_ctrl_target_rmse": control_diag["pd_ctrl_target_rmse"],
                         **pitch_diag,
                         **actuator_trace,
                     }
@@ -1423,6 +1642,13 @@ def render_clip(
         "root_pitch_assist_kd": float(args.root_pitch_assist_kd),
         "root_pitch_assist_max_torque": float(args.root_pitch_assist_max_torque),
         "trace_actuator_state": bool(args.trace_actuator_state),
+        "control_source": args.control_source,
+        "reference_action_mode": args.reference_action_mode,
+        "reference_action_center": args.reference_action_center,
+        "reference_action_range": args.reference_action_range,
+        "reference_action_range_scale": float(args.reference_action_range_scale),
+        "reference_residual_scale": float(args.reference_residual_scale),
+        "reference_replay_target_step": int(args.reference_replay_target_step),
         "trace_dt_s": float(args.trace_dt),
         "rendered_seconds": video_seconds,
         "pd_fail_step": pd_fail_step,

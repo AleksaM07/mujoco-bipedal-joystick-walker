@@ -733,11 +733,13 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # TYPE: ENGINEERING_DEFAULT
         tracking_sigma=0.25,
         tracking_yaw_sigma=0.35,
-        # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
-        # TYPE: REFERENCE_CODE_DERIVED
-        # Phase-1 starts as pure imitation. Joystick task terms can be mixed in
-        # later, after the reference controller can survive the motion.
-        deepmimic_reward_mode="pure",
+        # REF: PROJECT-GUIDED-BVH-BOOTSTRAP
+        # TYPE: ENGINEERING_DEFAULT
+        # Pure imitation made PPO too indifferent to balance recovery in this
+        # XML. Default training now keeps DeepMimic imitation, but also adds a
+        # denser survival/tracking task component so early learning has a
+        # clearer reason to stay upright and keep support under the body.
+        deepmimic_reward_mode="mixed",
         # Our BVH bridge does not yet retarget arms/head, so the default key
         # markers stay on the feet. Use metatarsal sites instead of foot body
         # origins because they are a better locomotion endpoint for this XML.
@@ -750,8 +752,10 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # early. Re-enable once retargeted wrap playback is spatially stable.
         pose_termination=False,
         pose_termination_dist=1.0,
-        # Match MimicKit's anticipatory target observations for imitation.
-        bvh_target_observation_steps=(1, 2, 3),
+        # Give the policy the currently scored frame plus short lookahead.
+        # Omitting step 0 made the target block feel surprisingly detached from
+        # the reward, especially during early balance failures.
+        bvh_target_observation_steps=(0, 1, 2, 3),
         # Match the conservative reset policy used by the playback audit so
         # training and audit exercise the same valid-init regime.
         reset_sample_attempts=2,
@@ -795,26 +799,18 @@ def default_biomechanics_ppo_config() -> config_dict.ConfigDict:
         num_eval_envs=32,
         episode_length=500,
         action_repeat=1,
-        # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
-        # TYPE: REFERENCE_CODE_DERIVED
-        learning_rate=1e-4,
-        # MimicKit DeepMimic humanoid PPO sets action_entropy_weight: 0.0.
-        entropy_cost=0.0,
-        # REF: MIMICKIT-DEEPMIMIC-HUMANOID-CONFIG
-        # TYPE: REFERENCE_CODE_DERIVED
-        discounting=0.99,
-        # REF: PROJECT-DEFAULT-WARP-4096
-        # TYPE: EXPERIMENTALLY_SELECTED
-        unroll_length=5,
-        # REF: PROJECT-DEFAULT-WARP-4096
-        # TYPE: EXPERIMENTALLY_SELECTED
+        # REF: PROJECT-MAINLIKE-PPO-AGGRESSIVE
+        # TYPE: ENGINEERING_DEFAULT
+        # The MimicKit-like 4k/5-step/1-update schedule was too conservative
+        # for this task. Revert to a more aggressive PPO update cadence closer
+        # to the older main branch while keeping 4096 Warp worlds.
+        learning_rate=3e-4,
+        entropy_cost=3e-3,
+        discounting=0.97,
+        unroll_length=20,
         batch_size=4096,
-        # REF: PROJECT-DEFAULT-WARP-4096
-        # TYPE: EXPERIMENTALLY_SELECTED
-        num_minibatches=1,
-        # REF: PROJECT-DEFAULT-WARP-4096
-        # TYPE: EXPERIMENTALLY_SELECTED
-        num_updates_per_batch=1,
+        num_minibatches=8,
+        num_updates_per_batch=4,
         normalize_observations=True,
         normalize_observations_std_eps=1e-3,
         reward_scaling=1.0,
@@ -894,7 +890,7 @@ class EnvConfig:
     reference_action_range: str = "reference_targets"
     reference_action_range_scale: float = 1.1
     reference_residual_scale: float = 1.0
-    bvh_target_observation_steps: tuple[int, ...] = (1, 2, 3)
+    bvh_target_observation_steps: tuple[int, ...] = (0, 1, 2, 3)
     reference_replay_target_step: int = 0
     deepmimic_root_velocity_weight_scale: float = 1.0
     reference_reset_min_steps_remaining: int = 25
@@ -906,7 +902,7 @@ class EnvConfig:
     reference_stability_sagittal_alpha: float = 1.00
     reference_stability_other_alpha: float = 0.35
     reference_stability_arm_alpha: float = 0.75
-    deepmimic_reward_mode: str = "pure"
+    deepmimic_reward_mode: str = "mixed"
     deepmimic_key_bodies: tuple[str, ...] = (
         "metatarsal_midpoint_right",
         "metatarsal_midpoint_left",
