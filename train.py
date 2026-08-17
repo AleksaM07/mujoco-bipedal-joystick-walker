@@ -64,7 +64,11 @@ def logged_stage(name: str):
 class TrainingProgressLogger:
     """Prima PPO metrike i upisuje samo korisne linije."""
 
-    def __init__(self):
+    def __init__(self, max_episode_steps: int):
+        self.max_episode_steps = max(int(max_episode_steps), 1)
+        self.max_episode_reward = (
+            float(BiomechanicsJoystickEnv.REWARD_MAX) * self.max_episode_steps
+        )
         self.final_reward = None
         self.best_reward = None
         self.best_step = None
@@ -87,20 +91,18 @@ class TrainingProgressLogger:
 
         if episode_length is not None and float(episode_length) > 1e-6:
             length = float(episode_length)
-            survival_percent = 100.0 * length / float(PERFECT_WALK_STEPS)
+            survival_percent = 100.0 * length / float(self.max_episode_steps)
             diagnostics.append(f"survive_pct={survival_percent:.1f}")
             if reward is not None:
-                max_reward = (
-                    float(BiomechanicsJoystickEnv.REWARD_MAX)
-                    * float(PERFECT_WALK_STEPS)
+                reward_percent = (
+                    100.0 * float(reward) / max(self.max_episode_reward, 1e-6)
                 )
-                score_percent = 100.0 * float(reward) / max(max_reward, 1e-6)
                 quality_percent = (
                     100.0
                     * float(reward)
                     / max(float(BiomechanicsJoystickEnv.REWARD_MAX) * length, 1e-6)
                 )
-                diagnostics.append(f"score_pct={score_percent:.1f}")
+                diagnostics.append(f"reward_pct={reward_percent:.1f}")
                 diagnostics.append(f"quality_pct={quality_percent:.1f}")
             per_step_metrics = (
                 ("eval/episode_reward", "reward_step"),
@@ -716,7 +718,9 @@ def run_training(
             debug_preflight(env, train_config.seed)
 
     logger.info("calling ppo.train")
-    progress_logger = TrainingProgressLogger()
+    progress_logger = TrainingProgressLogger(
+        max_episode_steps=int(rl_config.episode_length),
+    )
     save_checkpoint_path = (
         str(checkpoint_dir) if train_config.save_checkpoints else None
     )

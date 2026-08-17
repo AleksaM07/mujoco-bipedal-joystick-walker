@@ -2874,37 +2874,22 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         height_cost = self.LOW_HEIGHT_COST_SCALE * jp.square(low_height)
         if bvh_mode:
             deepmimic = self._get_bvh_deepmimic_reward(data, info)
-            root_velocity_scale = jp.array(
-                float(self._config.get("deepmimic_root_velocity_weight_scale", 1.0)),
-                dtype=jp.float32,
-            )
             foot_contact = self._foot_contact(data, info)
             support_reward = jp.maximum(foot_contact[0], foot_contact[1])
-            joystick_tracking_reward = (
-                0.85 * tracking_lin
-                + 0.35 * tracking_yaw
-                + 0.55 * command_progress
-                + 0.15 * upright
-                + 0.05 * head_up
-            )
-            stability_reward = (
-                0.55 * upright
-                + 0.20 * head_up
-                + 0.45 * base_height_reward
-                + 0.20 * support_reward
-            )
-            joystick_tracking_reward = jp.clip(joystick_tracking_reward, 0.0, 2.5)
-            stability_reward = jp.clip(stability_reward, 0.0, 1.5)
-            # Main-like dense task reward: staying alive while tracking the
-            # command should already be worth something even before imitation
-            # becomes good. BVH mode keeps this task core and adds imitation on top.
-            main_style_task_reward = (
+            # Clean mixed objective:
+            # - DeepMimic handles "look like the reference"
+            # - task reward handles "stay alive and follow the command"
+            # Avoid duplicating reference/posture/gait priors on top of
+            # imitation, because they pull the policy toward overlapping but
+            # slightly different notions of "good walking".
+            task_reward = (
                 self.ALIVE_REWARD_SCALE
                 + velocity_tracking_scale * tracking
                 + forward_progress_scale * command_progress
                 + self.UPRIGHT_REWARD_SCALE * upright
                 + self.HEAD_UP_REWARD_SCALE * head_up
                 + base_height_reward
+                + 0.25 * support_reward
                 - stuck_penalty
                 - action_cost
                 - action_rate_cost
@@ -2923,29 +2908,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 * self._get_swing_clearance_deficit_cost(data, info)
             )
             reward = (
-                0.65 * main_style_task_reward
-                + 0.95 * reference_gait_reward
-                + 0.30 * deepmimic["root_pose"]
-                + 0.45 * root_velocity_scale * deepmimic["root_velocity"]
-                + 0.55 * deepmimic["key_position"]
-                + 0.30 * velocity_tracking_scale * tracking
-                + 0.45 * joystick_tracking_reward
-                + 0.60 * stability_reward
-                - stuck_penalty
-                - action_cost
-                - action_rate_cost
-                - contact_force_cost
-                - height_cost
-                - 0.5 * overspeed_cost
-                - vertical_velocity_cost
-                - angular_velocity_cost
-                - 0.25 * self.FOOT_SLIP_COST_SCALE * self._get_foot_slip_cost(data, info)
-                - 0.35
-                * self.SWING_FOOT_DRAG_COST_SCALE
-                * self._get_swing_foot_drag_cost(data, info)
-                - 0.25
-                * self.SWING_CLEARANCE_DEFICIT_COST_SCALE
-                * self._get_swing_clearance_deficit_cost(data, info)
+                0.85 * deepmimic["total"]
+                + 0.65 * task_reward
             )
         else:
             reward = (

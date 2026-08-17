@@ -4,6 +4,8 @@ import hashlib
 import json
 import os
 import re
+import shutil
+import subprocess
 import time
 from pathlib import Path
 
@@ -461,10 +463,74 @@ def write_video(path: Path, frames: list[np.ndarray], fps: int) -> None:
         iio.imwrite(path, np.asarray(frames), fps=fps)
         return
     except Exception as exc:
-        raise RuntimeError(
-            "Install mediapy or imageio to write MP4 files: "
-            "pip install mediapy imageio imageio-ffmpeg"
-        ) from exc
+        print(f"imageio video writer failed, trying OpenCV | {exc}", flush=True)
+
+    try:
+        import cv2
+
+        height, width = frames[0].shape[:2]
+        writer = cv2.VideoWriter(
+            str(path),
+            cv2.VideoWriter_fourcc(*"mp4v"),
+            float(fps),
+            (width, height),
+        )
+        if not writer.isOpened():
+            raise RuntimeError("OpenCV VideoWriter failed to open output path.")
+        try:
+            for frame in frames:
+                writer.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+        finally:
+            writer.release()
+        return
+    except Exception as exc:
+        print(f"OpenCV video writer failed, trying ffmpeg | {exc}", flush=True)
+
+    ffmpeg_path = shutil.which("ffmpeg")
+    if ffmpeg_path is not None:
+        height, width = frames[0].shape[:2]
+        command = [
+            ffmpeg_path,
+            "-y",
+            "-f",
+            "rawvideo",
+            "-vcodec",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            "-s",
+            f"{width}x{height}",
+            "-r",
+            str(fps),
+            "-i",
+            "-",
+            "-an",
+            "-vcodec",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            str(path),
+        ]
+        try:
+            process = subprocess.run(
+                command,
+                input=np.asarray(frames, dtype=np.uint8).tobytes(),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=True,
+            )
+            del process
+            return
+        except Exception as exc:
+            raise RuntimeError(
+                "All video writers failed, including ffmpeg. "
+                "Install imageio/imageio-ffmpeg or ensure ffmpeg is on PATH."
+            ) from exc
+
+    raise RuntimeError(
+        "No working video writer found. Install imageio/imageio-ffmpeg, "
+        "OpenCV, or ffmpeg."
+    )
 
 
 def score_percent(reward: float, max_steps: int = PERFECT_WALK_STEPS) -> float:
@@ -484,18 +550,54 @@ def quality_percent(reward: float, length: int) -> float:
     return 100.0 * reward / max(max_reward, 1e-6)
 
 
+def build_record_cameras(layout: str) -> list[tuple[float, float, float]]:
+    """Return fixed camera presets as (distance, azimuth, elevation)."""
+    if layout == "quad":
+        return [
+            (4.0, 160.0, -20.0),
+            (4.0, 90.0, -15.0),
+            (4.0, 20.0, -20.0),
+            (4.6, 160.0, -55.0),
+        ]
+    return [(4.0, 160.0, -20.0)]
+
+
+def tile_camera_frames(camera_frames: list[np.ndarray], layout: str) -> np.ndarray:
+    """Combine multiple camera renders into one output frame."""
+    if layout != "quad":
+        return camera_frames[0]
+    if len(camera_frames) != 4:
+        raise ValueError(f"quad layout expects 4 camera frames, got {len(camera_frames)}")
+    top_row = np.concatenate([camera_frames[0], camera_frames[1]], axis=1)
+    bottom_row = np.concatenate([camera_frames[2], camera_frames[3]], axis=1)
+    return np.concatenate([top_row, bottom_row], axis=0)
+
+
 def render_host_replay_frames(
     model: mujoco.MjModel,
     snapshots: list[tuple[np.ndarray, np.ndarray]],
     width: int,
     height: int,
+    layout: str = "single",
 ) -> list[np.ndarray]:
     """Render saved qpos/qvel snapshots with host MuJoCo after rollout."""
-    renderer = mujoco.Renderer(model, height=height, width=width)
-    camera = mujoco.MjvCamera()
-    camera.distance = 4.0
-    camera.azimuth = 160
-    camera.elevation = -20
+    cameras = build_record_cameras(layout)
+    tile_width = width
+    tile_height = height
+    if layout == "quad":
+        tile_width = max(width // 2, 1)
+        tile_height = max(height // 2, 1)
+    renderers = [
+        mujoco.Renderer(model, height=tile_height, width=tile_width)
+        for _ in cameras
+    ]
+    mj_cameras: list[mujoco.MjvCamera] = []
+    for distance, azimuth, elevation in cameras:
+        camera = mujoco.MjvCamera()
+        camera.distance = distance
+        camera.azimuth = azimuth
+        camera.elevation = elevation
+        mj_cameras.append(camera)
     data = mujoco.MjData(model)
     frames: list[np.ndarray] = []
     try:
@@ -503,11 +605,15 @@ def render_host_replay_frames(
             data.qpos[:] = qpos
             data.qvel[:] = qvel
             mujoco.mj_forward(model, data)
-            camera.lookat[:] = data.qpos[:3]
-            renderer.update_scene(data, camera=camera)
-            frames.append(renderer.render())
+            camera_frames: list[np.ndarray] = []
+            for renderer, camera in zip(renderers, mj_cameras, strict=True):
+                camera.lookat[:] = data.qpos[:3]
+                renderer.update_scene(data, camera=camera)
+                camera_frames.append(renderer.render())
+            frames.append(tile_camera_frames(camera_frames, layout))
     finally:
-        renderer.close()
+        for renderer in renderers:
+            renderer.close()
     return frames
 
 
@@ -651,6 +757,7 @@ def record_policy_video(
     width: int,
     height: int,
     continue_after_done: bool,
+    layout: str,
 ) -> None:
     """Render one policy rollout to MP4 and print normalized score diagnostics."""
     state = reset_state(env, rng, command)
@@ -705,13 +812,14 @@ def record_policy_video(
     if not snapshots:
         raise RuntimeError("No frames were rendered.")
     print("rendering host MuJoCo replay frames", flush=True)
-    frames = render_host_replay_frames(model, snapshots, width, height)
+    frames = render_host_replay_frames(model, snapshots, width, height, layout=layout)
     write_video(output_path, frames, fps=fps)
     print(
         "record summary | "
         f"file={output_path} "
         f"frames={len(frames)} "
         f"fps={fps} "
+        f"layout={layout} "
         f"total_reward={total_reward:.3f} "
         f"score_pct={score_percent(total_reward, steps):.1f} "
         f"completed_episodes={completed_episodes} "
@@ -802,6 +910,12 @@ def main():
     parser.add_argument("--record-fps", type=int, default=0)
     parser.add_argument("--record-width", type=int, default=1280)
     parser.add_argument("--record-height", type=int, default=720)
+    parser.add_argument(
+        "--record-layout",
+        choices=["single", "quad"],
+        default="single",
+        help="single renders one camera; quad renders a 2x2 video from four angles.",
+    )
     parser.add_argument(
         "--record-continue-after-done",
         action="store_true",
@@ -1023,6 +1137,7 @@ def main():
             args.record_width,
             args.record_height,
             args.record_continue_after_done,
+            args.record_layout,
         )
         return
 
