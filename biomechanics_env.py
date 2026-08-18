@@ -2874,14 +2874,10 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         height_cost = self.LOW_HEIGHT_COST_SCALE * jp.square(low_height)
         if bvh_mode:
             deepmimic = self._get_bvh_deepmimic_reward(data, info)
-            foot_contact = self._foot_contact(data, info)
-            support_reward = jp.maximum(foot_contact[0], foot_contact[1])
-            # Clean mixed objective:
-            # - DeepMimic handles "look like the reference"
-            # - task reward handles "stay alive and follow the command"
-            # Avoid duplicating reference/posture/gait priors on top of
-            # imitation, because they pull the policy toward overlapping but
-            # slightly different notions of "good walking".
+            # Main-style backbone plus a smaller DeepMimic bonus:
+            # - task reward keeps the dense survival/balance/tracking signal
+            # - DeepMimic nudges the motion toward the reference clip
+            # - omit extra gait/reference shaping here to avoid double-counting
             task_reward = (
                 self.ALIVE_REWARD_SCALE
                 + velocity_tracking_scale * tracking
@@ -2889,27 +2885,24 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 + self.UPRIGHT_REWARD_SCALE * upright
                 + self.HEAD_UP_REWARD_SCALE * head_up
                 + base_height_reward
-                + 0.25 * support_reward
+                + posture_reward
+                + variable_posture_reward
                 - stuck_penalty
                 - action_cost
                 - action_rate_cost
+                - trunk_posture_cost
+                - variable_posture_cost
                 - contact_force_cost
+                - 0.25 * self.FOOT_SLIP_COST_SCALE * self._get_foot_slip_cost(data, info)
                 - height_cost
                 - overspeed_cost
                 - idle_motion_cost
                 - vertical_velocity_cost
                 - angular_velocity_cost
-                - 0.25 * self.FOOT_SLIP_COST_SCALE * self._get_foot_slip_cost(data, info)
-                - 0.35
-                * self.SWING_FOOT_DRAG_COST_SCALE
-                * self._get_swing_foot_drag_cost(data, info)
-                - 0.25
-                * self.SWING_CLEARANCE_DEFICIT_COST_SCALE
-                * self._get_swing_clearance_deficit_cost(data, info)
             )
             reward = (
-                0.85 * deepmimic["total"]
-                + 0.65 * task_reward
+                task_reward
+                + 0.40 * deepmimic["total"]
             )
         else:
             reward = (
