@@ -1,0 +1,191 @@
+MUJOCO BIPEDAL JOYSTICK WALKER - STATUS
+Datum: 2026-10-10
+Grana: experiment/v21-stable-baseline
+
+============================================================
+1. TRENUTNI ZAKLJUCAK
+============================================================
+
+Model moze stabilno da stoji u uskom stavu i fizicki moze da prebaci COM
+prema obe stance noge. Problem vise nije samo hiperparametar niti nemoguca
+anatomija. Trenutno crveno svetlo je PPO fine-tuning: stabilna politika plus
+mali fazni action prior odmah daje dobar rezultat, ali PPO update-i zatim
+udaljavaju politiku od tog resenja i na kraju izazivaju padove.
+
+Jos nemamo nauceni hod. Imamo proverenu stabilnu osnovu i prvi dinamicki
+weight-transfer setup koji na step 0 prolazi 500/500.
+
+Ne nastavljati poslednje run-ove naslepo sa jos 10M koraka. Najbolji rezultat
+poslednjeg curriculuma bio je netrenirani step 0.
+
+============================================================
+2. NAJBOLJA STABILNA POLITIKA
+============================================================
+
+Checkpoint:
+runs/20261009_2241_v22_narrow_stand_continue10m_V1_steps-10m_reward-1304p3926_s/checkpoints/000010035200
+
+Karakteristike:
+- narrow stance: neutral_stance_hip_x = 0.0
+- 18 aktuatora, bez ruku
+- reference_gait = none
+- stabilno stajanje: 500/500
+- ne hoda sama; ovo je baza za sledece eksperimente
+
+============================================================
+3. STA JE DOKAZANO
+============================================================
+
+1) Stari neutralni stav je bio previse sirok.
+   - hip_x +/-0.18 daje oko 52.9 cm razmaka stopala.
+   - hip_x 0.0 daje oko 21.3 cm razmaka stopala.
+
+2) Narrow standing moze da se nauci.
+   - Posle ukupno oko 20M koraka dostignuto je ponovljenih 500/500.
+
+3) Stojanje nije hod.
+   - Stabilni checkpoint ignorise forward/step zahtev i ostaje na mestu.
+
+4) COM transfer je kinematicki i staticki moguc.
+   - Constrained solver je postigao oko 5.3 cm COM pomeranja ulevo i udesno.
+   - Maksimalni drift metatarsal markera bio je oko 0.12 mm.
+   - Potrebni zglobni offseti su mali i u granicama aktuatora.
+
+5) Kalibrisani fazni action prior radi u punoj dinamici.
+   - prior 0.25 prezivljava vise od 500 koraka u headless testu.
+   - prior 1.0 vise pomera COM, ali smanjuje marginu stabilnosti.
+
+6) Reward je imao direktan konflikt.
+   - Zero-command overspeed penal je vec uklonjen za step-in-place.
+   - Lateralni zero-velocity tracking je takodje kaznjavao neophodno
+     levo-desno kretanje. Sada se pri zero-command gait-u i dalje kaznjavaju
+     sagittalni drift i yaw, dok lateralno kretanje nadgleda COM cilj.
+
+7) Standardni PPO update trenutno unistava dobro pocetno resenje.
+   - To se ponovilo sa punim i sa malim curriculum targetom.
+
+============================================================
+4. POSLEDNJI KONTROLISANI EKSPERIMENTI
+============================================================
+
+A) Reward-only weight transfer, 2M
+Run:
+runs/20261009_2349_v22_weight_transfer_2m_V1_steps-2m_reward-pending_running
+
+Rezultat:
+- step 0 COM error: oko 4.6 cm
+- final COM error: oko 7.3 cm
+- final survival: oko 464/500
+- FAIL: reward bez action priorya nije naucio transfer
+
+B) Full calibrated prior 1.0, 1M
+Run:
+runs/20261010_0032_v22_weight_transfer_guided_V1_steps-1m_reward-1068p6672_s
+
+Rezultat:
+- step 0: 417/500, COM error 4.5 cm
+- final: 361/500, COM error 8.7 cm
+- best checkpoint: step 0
+- FAIL: prior mehanicki pomaze, PPO ga zatim pokvari
+
+C) Full prior bez lateralnog velocity konflikta, 1M
+Run:
+runs/20261010_0700_v22_weight_transfer_no_lateral_penalty_V1_steps-1m_reward-1187p4597_s
+
+Rezultat:
+- step 0: 417/500, COM error 4.5 cm
+- 266240: 459/500, COM error 4.8 cm (najbolji sacuvani checkpoint)
+- final: 399/500, COM error 6.2 cm
+- Delimicno bolje, ali COM se nije poboljsao i trening ostaje nestabilan.
+
+D) Mali curriculum: target fraction 0.125, prior 0.25, 1M
+Run:
+runs/20261010_0727_v22_weight_transfer_curriculum_f0125_p02_V1_steps-1m_reward-1405p4250_s
+
+Rezultat:
+- step 0: 500/500, COM error 1.9 cm, balance 0.825, reward 1405
+- 266240: 500/500, COM error 3.6 cm
+- 532480: 413/500, COM error 6.2 cm
+- final: 223/500, COM error 13.6 cm
+- best: step 0, koji nije novi checkpoint nego originalna stable politika
+  kombinovana sa curriculum konfiguracijom
+- FAIL za PPO ucenje, PASS za dinamicku izvodljivost malog curriculuma
+
+============================================================
+5. TRENUTNO NAJBOLJI VIZUELNI TEST NA WINDOWS-U
+============================================================
+
+Pokrenuti iz Git Bash-a, u root-u projekta, kao jednu liniju:
+
+UV_PROJECT_ENVIRONMENT=.venv-win python -m uv run python evaluate.py --checkpoint "runs/20261009_2241_v22_narrow_stand_continue10m_V1_steps-10m_reward-1304p3926_s/checkpoints/000010035200" --device cpu --playground-impl jax --physics-backend mjx_jax --command-profile step_in_place --command-x 0.0 --neutral-stance-hip-x 0.0 --gait-active-without-command --gait-period-steps 100 --gait-warmup-steps 25 --gait-balance-reward-scale 0.5 --gait-balance-target-fraction 0.125 --procedural-balance-prior-scale 0.25
+
+Ocekivano ponasanje:
+- robot ostaje uspravan;
+- blago i periodicno prebacuje tezinu levo-desno;
+- jos ne podize stopalo i ne hoda.
+
+Windows dependencies sada koriste obican CPU JAX wheel. Linux/WSL-only CUDA
+dependency je odvojena platform markerom u pyproject.toml.
+
+============================================================
+6. REFERENCE / DEEPMIMIC STATUS
+============================================================
+
+BVH/SMPL referenca jos nije spremna kao pouzdan low-level tracker.
+Ranije playback varijante su pokazivale root XY/Z, loop seam, foot contact i
+free-root stabilnost probleme. Reference kod i audit alati su unapredjeni, ali
+ne treba mesati reference tracking sa trenutnim reference-free weight-transfer
+eksperimentima.
+
+Pre ponovnog RL reference treninga referenca mora da prodje:
+- dq/dt priblizno qvel;
+- bez skoka na loop spoju;
+- bez penetracije i stance-foot klizanja;
+- bez prekoracenja joint/actuator limita;
+- free-root PD/tracker kroz vise ciklusa.
+
+Relevantni dokumenti:
+- docs/EXPERIMENT_STAGES.md
+- docs/MOTION_METHOD_REVIEW.md
+
+============================================================
+7. BITNE PROMENE U KODU NA OVOJ GRANI
+============================================================
+
+- narrow neutral stance konfiguracija;
+- evaluator rekonstruise sacuvanu env konfiguraciju i podrzava override-e;
+- headless inspect metrike za survival, COM, stopala i drift;
+- pravi mass-weighted COM preko data.xipos;
+- phase-aware COM target/reward i gait warmup;
+- kalibrisani procedural_balance_prior_scale;
+- procedural swing prior ostaje odvojen i trenutno je ugasen;
+- zero-command overspeed i lateral tracking konflikti popravljeni;
+- task-weight-transfer i task-step-in-place preset-i;
+- staticki keypose solveri i reference invariant/dynamics audit alati;
+- Windows/WSL dependency razdvajanje.
+
+Provera:
+- python -m py_compile prolazi za glavne Python fajlove;
+- 12/12 tests.test_experiment_presets testova prolazi;
+- globalni Ruff i dalje prijavljuje ranije postojece probleme u velikim
+  legacy fajlovima; nisu svi deo ovog eksperimenta.
+
+============================================================
+8. PREPORUCENA TACKA ZA NOVU IDEJU
+============================================================
+
+Uvek krenuti od stabilnog checkpointa iz sekcije 2, ne od finalnih checkpointa
+neuspelih PPO run-ova.
+
+Najvredniji novi pravci su oni koji cuvaju staru stabilnu politiku tokom
+adaptacije, na primer:
+- veoma konzervativan fine-tuning sa eksplicitnim KL/behavior anchorom prema
+  standing politici;
+- zamrzavanje standing kontrolera i ucenje malog faznog residuala;
+- poseban low-level weight-transfer tracker pre foot-lift/joystick nivoa;
+- deterministicki curriculum controller kao deo low-level politike, umesto
+  ocekivanja da PPO ponovo otkrije isti transfer samo iz skalarne nagrade.
+
+Ne uvoditi foot lift dok mali COM transfer ne ostane 500/500 i ne zadrzi ili
+smanji COM error posle treninga.
+

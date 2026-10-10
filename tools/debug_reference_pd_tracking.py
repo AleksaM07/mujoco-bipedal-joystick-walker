@@ -20,7 +20,11 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from biomechanics_env import BiomechanicsJoystickEnv  # noqa: E402
 from bvh_reference import LoopMode  # noqa: E402
-from config import DEFAULT_BVH_REFERENCE_LIST, DEFAULT_SMPL_REFERENCE_FILES  # noqa: E402
+from config import (  # noqa: E402
+    DEFAULT_BVH_REFERENCE_LIST,
+    DEFAULT_SMPL_REFERENCE_FILES,
+    EnvConfig,
+)
 from debug_reference_playback import build_full_state, query_reference_np, torso_up  # noqa: E402
 
 
@@ -31,6 +35,86 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--clip-id", type=int, default=None)
     parser.add_argument("--steps", type=int, default=180)
     parser.add_argument("--print-every", type=int, default=20)
+    parser.add_argument(
+        "--reference-loop-mode",
+        choices=["auto", "wrap", "clamp"],
+        default=EnvConfig.reference_loop_mode,
+    )
+    parser.add_argument(
+        "--reference-motion-speed-scale",
+        "--reference-speed-scale",
+        dest="reference_motion_speed_scale",
+        type=float,
+        default=EnvConfig.reference_motion_speed_scale,
+        help="Scale the reference clock and all derived trajectory velocities.",
+    )
+    parser.add_argument(
+        "--reference-root-xy-scale",
+        type=float,
+        default=EnvConfig.reference_root_xy_scale,
+    )
+    parser.add_argument(
+        "--reference-stability-sagittal-alpha",
+        type=float,
+        default=EnvConfig.reference_stability_sagittal_alpha,
+        help="Blend sagittal BVH targets toward the neutral pose (0=neutral, 1=full).",
+    )
+    parser.add_argument(
+        "--reference-stability-other-alpha",
+        type=float,
+        default=EnvConfig.reference_stability_other_alpha,
+        help="Blend non-sagittal BVH targets toward the neutral pose.",
+    )
+    parser.add_argument(
+        "--reference-lock-stance-feet",
+        action=argparse.BooleanOptionalAction,
+        default=EnvConfig.reference_lock_stance_feet,
+    )
+    parser.add_argument(
+        "--reference-stability-before-ik",
+        action=argparse.BooleanOptionalAction,
+        default=EnvConfig.reference_stability_before_ik,
+    )
+    parser.add_argument(
+        "--reference-ik-correction-alpha",
+        type=float,
+        default=EnvConfig.reference_ik_correction_alpha,
+    )
+    parser.add_argument(
+        "--reference-ik-com-weight",
+        type=float,
+        default=EnvConfig.reference_ik_com_weight,
+    )
+    parser.add_argument(
+        "--reference-ik-support-height-scale",
+        type=float,
+        default=EnvConfig.reference_ik_support_height_scale,
+    )
+    parser.add_argument(
+        "--reference-ik-smooth-regularization",
+        type=float,
+        default=EnvConfig.reference_ik_smooth_regularization,
+    )
+    parser.add_argument(
+        "--reference-ik-root-smooth-regularization",
+        type=float,
+        default=EnvConfig.reference_ik_root_smooth_regularization,
+    )
+    parser.add_argument(
+        "--reference-ik-optimize-root-xy",
+        action=argparse.BooleanOptionalAction,
+        default=EnvConfig.reference_ik_optimize_root_xy,
+    )
+    parser.add_argument(
+        "--reference-ik-root-regularization",
+        type=float,
+        default=EnvConfig.reference_ik_root_regularization,
+    )
+    parser.add_argument(
+        "--reference-ik-swing-foot-weight-scale",
+        type=float,
+        default=EnvConfig.reference_ik_swing_foot_weight_scale,
+    )
     return parser.parse_args()
 
 
@@ -78,7 +162,8 @@ def run_clip(
 
     for step in range(steps):
         motion_time = step * float(env.dt)
-        ref = query_reference_np(env, clip_id, motion_time + float(env.dt))
+        target_time = motion_time + float(env.dt)
+        ref = query_reference_np(env, clip_id, target_time)
         target_qpos = np.asarray(ref["qpos"], dtype=np.float64)
         data.ctrl[:] = target_qpos
 
@@ -135,6 +220,33 @@ def main() -> None:
             "physics_backend": "mjx_jax",
             "reference_gait": args.reference_gait,
             "reference_gait_file": reference_files,
+            "reference_loop_mode": args.reference_loop_mode,
+            "reference_motion_speed_scale": args.reference_motion_speed_scale,
+            "reference_root_xy_scale": args.reference_root_xy_scale,
+            "reference_stability_sagittal_alpha": (
+                args.reference_stability_sagittal_alpha
+            ),
+            "reference_stability_other_alpha": args.reference_stability_other_alpha,
+            "reference_lock_stance_feet": args.reference_lock_stance_feet,
+            "reference_stability_before_ik": args.reference_stability_before_ik,
+            "reference_ik_correction_alpha": args.reference_ik_correction_alpha,
+            "reference_ik_com_weight": args.reference_ik_com_weight,
+            "reference_ik_support_height_scale": (
+                args.reference_ik_support_height_scale
+            ),
+            "reference_ik_smooth_regularization": (
+                args.reference_ik_smooth_regularization
+            ),
+            "reference_ik_root_smooth_regularization": (
+                args.reference_ik_root_smooth_regularization
+            ),
+            "reference_ik_optimize_root_xy": args.reference_ik_optimize_root_xy,
+            "reference_ik_root_regularization": (
+                args.reference_ik_root_regularization
+            ),
+            "reference_ik_swing_foot_weight_scale": (
+                args.reference_ik_swing_foot_weight_scale
+            ),
             "enable_erfi": False,
         }
     )
@@ -143,12 +255,23 @@ def main() -> None:
     clip_ids = [args.clip_id] if args.clip_id is not None else list(range(clip_count))
     print(
         f"reference_gait={args.reference_gait} clips={clip_count} "
-        f"tested={clip_ids} dt={float(env.dt):.4f} substeps={env.n_substeps}"
+        f"tested={clip_ids} dt={float(env.dt):.4f} substeps={env.n_substeps} "
+        f"speed_scale={args.reference_motion_speed_scale:.3f} "
+        f"root_xy_scale={args.reference_root_xy_scale:.3f} "
+        f"sagittal_alpha={args.reference_stability_sagittal_alpha:.3f} "
+        f"other_alpha={args.reference_stability_other_alpha:.3f} "
+        f"lock_stance_feet={args.reference_lock_stance_feet}"
     )
     print(f"files={reference_files}")
 
     results = [
-        run_clip(env, env._mj_model, int(clip_id), args.steps, args.print_every)
+        run_clip(
+            env,
+            env._mj_model,
+            int(clip_id),
+            args.steps,
+            args.print_every,
+        )
         for clip_id in clip_ids
     ]
     survived = sum(bool(result["survived"]) for result in results)

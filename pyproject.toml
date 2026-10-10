@@ -6,8 +6,10 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "brax>=0.14",
-    # CUDA-enabled JAX is required for the default MJX-Warp training path.
-    "jax[cuda12]>=0.5.0",
+    # CUDA-enabled JAX is Linux/WSL-only. Native Windows evaluation uses the
+    # regular CPU wheel so a separate .venv-win can coexist with WSL training.
+    "jax[cuda12]>=0.5.0; sys_platform == 'linux'",
+    "jax>=0.5.0; sys_platform != 'linux'",
     "loguru>=0.7",
     "ipykernel>=6.30",
     "matplotlib>=3.10",

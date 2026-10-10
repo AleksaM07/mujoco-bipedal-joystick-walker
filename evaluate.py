@@ -127,11 +127,21 @@ def run_env_value(run_config: dict | None, name: str, default=None):
     return run_config.get("env", {}).get(name, default)
 
 
+def config_tuple(raw_value, caster) -> tuple:
+    """Normalize a JSON list, tuple, or comma-separated config value."""
+    if isinstance(raw_value, str):
+        values = (part.strip() for part in raw_value.split(","))
+        return tuple(caster(value) for value in values if value)
+    return tuple(caster(value) for value in raw_value)
+
+
 def infer_command_profile(checkpoint_path: Path, run_config: dict | None) -> str:
     """Procitaj command_profile iz run configa, uz fallback na obs size."""
     profile = run_env_value(run_config, "command_profile")
     if profile in {
+        "step_in_place",
         "forward_slow",
+        "forward_bridge",
         "forward",
         "walk",
         "steer",
@@ -686,6 +696,13 @@ def inspect_policy(env, policy, rng, command: np.ndarray, steps: int) -> None:
     z_values = []
     torso_up_values = []
     action_norm_values = []
+    forward_velocity_values = []
+    forward_velocity_error_values = []
+    relative_foot_clearance_values = []
+    swing_clearance_deficit_values = []
+    swing_drag_values = []
+    gait_balance_reward_values = []
+    gait_com_error_values = []
 
     print("compiling first JAX inspect step...", flush=True)
     rng, action_key = jax.random.split(rng)
@@ -701,12 +718,29 @@ def inspect_policy(env, policy, rng, command: np.ndarray, steps: int) -> None:
         qpos_z = float(np.asarray(state.data.qpos[2]))
         torso_up = get_torso_up(state)
         action_norm = float(np.asarray(jnp.linalg.norm(action)))
+        forward_velocity = float(np.asarray(state.metrics["forward_vel"]))
+        left_foot_height = float(np.asarray(state.metrics["left_foot_height"]))
+        right_foot_height = float(np.asarray(state.metrics["right_foot_height"]))
+        relative_foot_clearance = abs(left_foot_height - right_foot_height)
 
         total_reward += reward
         current_episode_length += 1
         z_values.append(qpos_z)
         torso_up_values.append(torso_up)
         action_norm_values.append(action_norm)
+        forward_velocity_values.append(forward_velocity)
+        forward_velocity_error_values.append(abs(forward_velocity - command[0]))
+        relative_foot_clearance_values.append(relative_foot_clearance)
+        swing_clearance_deficit_values.append(
+            float(np.asarray(state.metrics["swing_clearance_deficit"]))
+        )
+        swing_drag_values.append(float(np.asarray(state.metrics["swing_drag"])))
+        gait_balance_reward_values.append(
+            float(np.asarray(state.metrics["gait_balance_reward"]))
+        )
+        gait_com_error_values.append(
+            float(np.asarray(state.metrics["gait_com_error"]))
+        )
 
         if step % DEBUG_PRINT_INTERVAL == 0 or done:
             print(
@@ -741,7 +775,21 @@ def inspect_policy(env, policy, rng, command: np.ndarray, steps: int) -> None:
         f"min_z={np.min(z_values):.3f} "
         f"mean_torso_up={np.mean(torso_up_values):.3f} "
         f"min_torso_up={np.min(torso_up_values):.3f} "
-        f"mean_action_norm={np.mean(action_norm_values):.3f}",
+        f"mean_action_norm={np.mean(action_norm_values):.3f} "
+        f"command_x={float(command[0]):.3f} "
+        f"mean_forward_vel={np.mean(forward_velocity_values):.3f} "
+        f"mean_forward_error={np.mean(forward_velocity_error_values):.3f} "
+        f"mean_relative_foot_clearance="
+        f"{np.mean(relative_foot_clearance_values):.4f} "
+        f"max_relative_foot_clearance="
+        f"{np.max(relative_foot_clearance_values):.4f} "
+        f"mean_swing_clearance_deficit="
+        f"{np.mean(swing_clearance_deficit_values):.3f} "
+        f"mean_swing_drag={np.mean(swing_drag_values):.3f} "
+        f"mean_gait_balance_reward={np.mean(gait_balance_reward_values):.3f} "
+        f"mean_gait_com_error={np.mean(gait_com_error_values):.4f} "
+        f"estimated_forward_distance="
+        f"{np.sum(forward_velocity_values) * float(env.dt):.3f}",
         flush=True,
     )
 
@@ -856,7 +904,9 @@ def main():
         "--command-profile",
         choices=[
             "auto",
+            "step_in_place",
             "forward_slow",
+            "forward_bridge",
             "forward",
             "walk",
             "steer",
@@ -883,7 +933,67 @@ def main():
         default=None,
     )
     parser.add_argument("--reference-root-xy-scale", type=float, default=None)
+    parser.add_argument(
+        "--gait-active-without-command",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Override whether the gait clock remains active at zero command.",
+    )
+    parser.add_argument(
+        "--gait-period-steps",
+        type=int,
+        default=None,
+        help="Override control steps per procedural gait cycle.",
+    )
+    parser.add_argument(
+        "--gait-warmup-steps",
+        type=int,
+        default=None,
+        help="Override the phase-conditioned assistance ramp after reset.",
+    )
+    parser.add_argument(
+        "--procedural-balance-prior-scale",
+        type=float,
+        default=None,
+        help="Override phase-conditioned lateral balance assistance.",
+    )
+    parser.add_argument(
+        "--procedural-step-prior-scale",
+        type=float,
+        default=None,
+        help="Override the phase-conditioned action-center assistance scale.",
+    )
+    parser.add_argument(
+        "--gait-balance-reward-scale",
+        type=float,
+        default=None,
+        help="Override the phase-aware lateral COM-transfer reward scale.",
+    )
+    parser.add_argument(
+        "--gait-balance-target-fraction",
+        type=float,
+        default=None,
+        help="Override the midpoint-to-stance-foot COM target fraction.",
+    )
+    parser.add_argument(
+        "--gait-balance-sigma",
+        type=float,
+        default=None,
+        help="Override the lateral COM tracking tolerance in metres.",
+    )
+    parser.add_argument(
+        "--procedural-step-residual-scale",
+        type=float,
+        default=None,
+        help="Override actor authority on the guided swing hip/knee.",
+    )
     parser.add_argument("--action-smoothing", type=float, default=None)
+    parser.add_argument(
+        "--neutral-stance-hip-x",
+        type=float,
+        default=None,
+        help="Override the symmetric neutral hip-abduction magnitude in radians.",
+    )
     parser.add_argument("--init-qpos-file", type=Path, default=None)
     parser.add_argument("--xml-path", type=Path, default=None)
     parser.add_argument(
@@ -960,6 +1070,15 @@ def main():
     accurate_physics = bool(
         run_env_value(run_config, "accurate_physics", True)
     ) and not args.fast_physics
+    neutral_stance_hip_x = float(
+        args.neutral_stance_hip_x
+        if args.neutral_stance_hip_x is not None
+        else run_env_value(
+            run_config,
+            "neutral_stance_hip_x",
+            EnvConfig.neutral_stance_hip_x,
+        )
+    )
 
     command_profile = (
         infer_command_profile(args.checkpoint, run_config)
@@ -996,11 +1115,32 @@ def main():
             run_env_value(run_config, "reference_target_observation", False)
         )
     reference_loop_mode = str(run_env_value(run_config, "reference_loop_mode", "auto"))
+    reference_motion_speed_scale = float(
+        run_env_value(
+            run_config,
+            "reference_motion_speed_scale",
+            EnvConfig.reference_motion_speed_scale,
+        )
+    )
     reference_root_xy_scale = (
         args.reference_root_xy_scale
         if args.reference_root_xy_scale is not None
         else float(run_env_value(run_config, "reference_root_xy_scale", 1.0))
     )
+    reference_root_x_scale = run_env_value(
+        run_config,
+        "reference_root_x_scale",
+        EnvConfig.reference_root_x_scale,
+    )
+    if reference_root_x_scale is not None:
+        reference_root_x_scale = float(reference_root_x_scale)
+    reference_root_y_scale = run_env_value(
+        run_config,
+        "reference_root_y_scale",
+        EnvConfig.reference_root_y_scale,
+    )
+    if reference_root_y_scale is not None:
+        reference_root_y_scale = float(reference_root_y_scale)
     reference_lock_stance_feet = bool(
         run_env_value(
             run_config,
@@ -1013,6 +1153,276 @@ def main():
             run_config,
             "reference_foot_lock_height",
             EnvConfig.reference_foot_lock_height,
+        )
+    )
+    reference_residual_scale = float(
+        run_env_value(
+            run_config,
+            "reference_residual_scale",
+            EnvConfig.reference_residual_scale,
+        )
+    )
+    reference_stability_sagittal_alpha = float(
+        run_env_value(
+            run_config,
+            "reference_stability_sagittal_alpha",
+            EnvConfig.reference_stability_sagittal_alpha,
+        )
+    )
+    reference_stability_other_alpha = float(
+        run_env_value(
+            run_config,
+            "reference_stability_other_alpha",
+            EnvConfig.reference_stability_other_alpha,
+        )
+    )
+    reference_stability_arm_alpha = float(
+        run_env_value(
+            run_config,
+            "reference_stability_arm_alpha",
+            EnvConfig.reference_stability_arm_alpha,
+        )
+    )
+    reference_stability_before_ik = bool(
+        run_env_value(
+            run_config,
+            "reference_stability_before_ik",
+            EnvConfig.reference_stability_before_ik,
+        )
+    )
+    reference_ik_correction_alpha = float(
+        run_env_value(
+            run_config,
+            "reference_ik_correction_alpha",
+            EnvConfig.reference_ik_correction_alpha,
+        )
+    )
+    reference_ik_com_weight = float(
+        run_env_value(
+            run_config,
+            "reference_ik_com_weight",
+            EnvConfig.reference_ik_com_weight,
+        )
+    )
+    reference_ik_support_height_scale = float(
+        run_env_value(
+            run_config,
+            "reference_ik_support_height_scale",
+            EnvConfig.reference_ik_support_height_scale,
+        )
+    )
+    reference_ik_pose_regularization = float(
+        run_env_value(
+            run_config,
+            "reference_ik_pose_regularization",
+            EnvConfig.reference_ik_pose_regularization,
+        )
+    )
+    reference_ik_smooth_regularization = float(
+        run_env_value(
+            run_config,
+            "reference_ik_smooth_regularization",
+            EnvConfig.reference_ik_smooth_regularization,
+        )
+    )
+    reference_ik_root_smooth_regularization = run_env_value(
+        run_config,
+        "reference_ik_root_smooth_regularization",
+        EnvConfig.reference_ik_root_smooth_regularization,
+    )
+    if reference_ik_root_smooth_regularization is not None:
+        reference_ik_root_smooth_regularization = float(
+            reference_ik_root_smooth_regularization
+        )
+    reference_ik_optimize_root_xy = bool(
+        run_env_value(
+            run_config,
+            "reference_ik_optimize_root_xy",
+            EnvConfig.reference_ik_optimize_root_xy,
+        )
+    )
+    reference_ik_root_regularization = float(
+        run_env_value(
+            run_config,
+            "reference_ik_root_regularization",
+            EnvConfig.reference_ik_root_regularization,
+        )
+    )
+    reference_ik_swing_foot_weight_scale = float(
+        run_env_value(
+            run_config,
+            "reference_ik_swing_foot_weight_scale",
+            EnvConfig.reference_ik_swing_foot_weight_scale,
+        )
+    )
+    reference_forced_clip_id = run_env_value(
+        run_config,
+        "reference_forced_clip_id",
+        EnvConfig.reference_forced_clip_id,
+    )
+    if reference_forced_clip_id is not None:
+        reference_forced_clip_id = int(reference_forced_clip_id)
+    bvh_target_observation_steps = config_tuple(
+        run_env_value(
+            run_config,
+            "bvh_target_observation_steps",
+            EnvConfig.bvh_target_observation_steps,
+        ),
+        int,
+    )
+    reference_reset_min_steps_remaining = int(
+        run_env_value(
+            run_config,
+            "reference_reset_min_steps_remaining",
+            EnvConfig.reference_reset_min_steps_remaining,
+        )
+    )
+    reference_min_motion_length = float(
+        run_env_value(
+            run_config,
+            "reference_min_motion_length",
+            EnvConfig.reference_min_motion_length,
+        )
+    )
+    pose_termination = bool(
+        run_env_value(
+            run_config,
+            "pose_termination",
+            EnvConfig.pose_termination,
+        )
+    )
+    pose_termination_dist = float(
+        run_env_value(
+            run_config,
+            "pose_termination_dist",
+            EnvConfig.pose_termination_dist,
+        )
+    )
+    reset_sample_attempts = int(
+        run_env_value(
+            run_config,
+            "reset_sample_attempts",
+            EnvConfig.reset_sample_attempts,
+        )
+    )
+    reset_projection_levels = config_tuple(
+        run_env_value(
+            run_config,
+            "reset_projection_levels",
+            EnvConfig.reset_projection_levels,
+        ),
+        float,
+    )
+    tracking_sigma = float(
+        run_env_value(run_config, "tracking_sigma", EnvConfig.tracking_sigma)
+    )
+    gait_active_without_command = bool(
+        args.gait_active_without_command
+        if args.gait_active_without_command is not None
+        else run_env_value(
+            run_config,
+            "gait_active_without_command",
+            EnvConfig.gait_active_without_command,
+        )
+    )
+    gait_period_steps = int(
+        args.gait_period_steps
+        if args.gait_period_steps is not None
+        else run_env_value(
+            run_config,
+            "gait_period_steps",
+            EnvConfig.gait_period_steps,
+        )
+    )
+    gait_warmup_steps = int(
+        args.gait_warmup_steps
+        if args.gait_warmup_steps is not None
+        else run_env_value(
+            run_config,
+            "gait_warmup_steps",
+            EnvConfig.gait_warmup_steps,
+        )
+    )
+    foot_clearance_target = float(
+        run_env_value(
+            run_config,
+            "foot_clearance_target",
+            EnvConfig.foot_clearance_target,
+        )
+    )
+    gait_balance_reward_scale = float(
+        args.gait_balance_reward_scale
+        if args.gait_balance_reward_scale is not None
+        else run_env_value(
+            run_config,
+            "gait_balance_reward_scale",
+            EnvConfig.gait_balance_reward_scale,
+        )
+    )
+    gait_balance_target_fraction = float(
+        args.gait_balance_target_fraction
+        if args.gait_balance_target_fraction is not None
+        else run_env_value(
+            run_config,
+            "gait_balance_target_fraction",
+            EnvConfig.gait_balance_target_fraction,
+        )
+    )
+    gait_balance_sigma = float(
+        args.gait_balance_sigma
+        if args.gait_balance_sigma is not None
+        else run_env_value(
+            run_config,
+            "gait_balance_sigma",
+            EnvConfig.gait_balance_sigma,
+        )
+    )
+    procedural_balance_prior_scale = float(
+        args.procedural_balance_prior_scale
+        if args.procedural_balance_prior_scale is not None
+        else run_env_value(
+            run_config,
+            "procedural_balance_prior_scale",
+            EnvConfig.procedural_balance_prior_scale,
+        )
+    )
+    procedural_step_prior_scale = float(
+        args.procedural_step_prior_scale
+        if args.procedural_step_prior_scale is not None
+        else run_env_value(
+            run_config,
+            "procedural_step_prior_scale",
+            EnvConfig.procedural_step_prior_scale,
+        )
+    )
+    procedural_step_residual_scale = float(
+        args.procedural_step_residual_scale
+        if args.procedural_step_residual_scale is not None
+        else run_env_value(
+            run_config,
+            "procedural_step_residual_scale",
+            EnvConfig.procedural_step_residual_scale,
+        )
+    )
+    gait_shaping_scale = float(
+        run_env_value(
+            run_config,
+            "gait_shaping_scale",
+            EnvConfig.gait_shaping_scale,
+        )
+    )
+    forward_progress_reward_scale = float(
+        run_env_value(
+            run_config,
+            "forward_progress_reward_scale",
+            EnvConfig.forward_progress_reward_scale,
+        )
+    )
+    overspeed_cost_scale = float(
+        run_env_value(
+            run_config,
+            "overspeed_cost_scale",
+            EnvConfig.overspeed_cost_scale,
         )
     )
     saved_legacy_action_prior = run_env_value(
@@ -1056,6 +1466,7 @@ def main():
         f"playground_impl={playground_impl} | "
         f"physics_backend={physics_backend} | "
         f"command_profile={command_profile} | "
+        f"neutral_stance_hip_x={neutral_stance_hip_x} | "
         f"command_x={command_x} | "
         f"init_qpos_file={init_qpos_file} | "
         f"xml_path={xml_path} | "
@@ -1064,9 +1475,23 @@ def main():
         f"arm_actuators={arm_actuators} | "
         f"reference_gait_file={reference_gait_file} | "
         f"reference_loop_mode={reference_loop_mode} | "
+        f"reference_motion_speed_scale={reference_motion_speed_scale} | "
         f"reference_root_xy_scale={reference_root_xy_scale} | "
+        f"reference_root_x_scale={reference_root_x_scale} | "
+        f"reference_root_y_scale={reference_root_y_scale} | "
+        f"reference_residual_scale={reference_residual_scale} | "
         f"reference_lock_stance_feet={reference_lock_stance_feet} | "
         f"reference_foot_lock_height={reference_foot_lock_height} | "
+        f"reference_stability_sagittal_alpha={reference_stability_sagittal_alpha} | "
+        f"reference_stability_other_alpha={reference_stability_other_alpha} | "
+        f"reference_stability_before_ik={reference_stability_before_ik} | "
+        f"reference_ik_correction_alpha={reference_ik_correction_alpha} | "
+        f"reference_ik_com_weight={reference_ik_com_weight} | "
+        f"reference_ik_optimize_root_xy={reference_ik_optimize_root_xy} | "
+        f"reference_forced_clip_id={reference_forced_clip_id} | "
+        f"bvh_target_observation_steps={bvh_target_observation_steps} | "
+        f"pose_termination={pose_termination} | "
+        f"reset_projection_levels={reset_projection_levels} | "
         f"reference_target_observation={reference_target_observation} | "
         f"deepmimic_reward_mode={deepmimic_reward_mode} | "
         f"deepmimic_key_bodies={deepmimic_key_bodies} | "
@@ -1074,6 +1499,20 @@ def main():
         f"checkpoint_actions={checkpoint_action_size} | "
         f"dict_observation={policy_observation_dict} | "
         f"action_smoothing={action_smoothing} | "
+        f"gait_shaping_scale={gait_shaping_scale} | "
+        f"gait_active_without_command={gait_active_without_command} | "
+        f"gait_period_steps={gait_period_steps} | "
+        f"gait_warmup_steps={gait_warmup_steps} | "
+        f"foot_clearance_target={foot_clearance_target} | "
+        f"gait_balance_reward_scale={gait_balance_reward_scale} | "
+        f"gait_balance_target_fraction={gait_balance_target_fraction} | "
+        f"gait_balance_sigma={gait_balance_sigma} | "
+        f"procedural_balance_prior_scale={procedural_balance_prior_scale} | "
+        f"procedural_step_prior_scale={procedural_step_prior_scale} | "
+        f"procedural_step_residual_scale={procedural_step_residual_scale} | "
+        f"tracking_sigma={tracking_sigma} | "
+        f"forward_progress_reward_scale={forward_progress_reward_scale} | "
+        f"overspeed_cost_scale={overspeed_cost_scale} | "
         f"accurate_physics={accurate_physics}",
         flush=True,
     )
@@ -1087,16 +1526,104 @@ def main():
         warp_njmax=resolve_warp_capacities(1).njmax,
         warp_graph_mode=str(run_env_value(run_config, "warp_graph_mode", "warp")),
         command_profile=command_profile,
+        neutral_stance_hip_x=neutral_stance_hip_x,
+        gait_shaping_scale=gait_shaping_scale,
+        gait_active_without_command=gait_active_without_command,
+        gait_period_steps=gait_period_steps,
+        gait_warmup_steps=gait_warmup_steps,
+        foot_clearance_target=foot_clearance_target,
+        gait_balance_reward_scale=gait_balance_reward_scale,
+        gait_balance_target_fraction=gait_balance_target_fraction,
+        gait_balance_sigma=gait_balance_sigma,
+        procedural_balance_prior_scale=procedural_balance_prior_scale,
+        procedural_step_prior_scale=procedural_step_prior_scale,
+        procedural_step_residual_scale=procedural_step_residual_scale,
+        tracking_sigma=tracking_sigma,
+        forward_progress_reward_scale=forward_progress_reward_scale,
+        overspeed_cost_scale=overspeed_cost_scale,
         reference_gait=reference_gait,
         arm_actuators=arm_actuators,
         reference_gait_file=reference_gait_file,
+        reference_forced_clip_id=reference_forced_clip_id,
+        reference_action_mode=str(
+            run_env_value(
+                run_config,
+                "reference_action_mode",
+                EnvConfig.reference_action_mode,
+            )
+        ),
+        reference_action_center=str(
+            run_env_value(
+                run_config,
+                "reference_action_center",
+                EnvConfig.reference_action_center,
+            )
+        ),
+        reference_action_range=str(
+            run_env_value(
+                run_config,
+                "reference_action_range",
+                EnvConfig.reference_action_range,
+            )
+        ),
+        reference_action_range_scale=float(
+            run_env_value(
+                run_config,
+                "reference_action_range_scale",
+                EnvConfig.reference_action_range_scale,
+            )
+        ),
+        reference_residual_scale=reference_residual_scale,
+        bvh_target_observation_steps=bvh_target_observation_steps,
+        reference_replay_target_step=int(
+            run_env_value(
+                run_config,
+                "reference_replay_target_step",
+                EnvConfig.reference_replay_target_step,
+            )
+        ),
+        deepmimic_root_velocity_weight_scale=float(
+            run_env_value(
+                run_config,
+                "deepmimic_root_velocity_weight_scale",
+                EnvConfig.deepmimic_root_velocity_weight_scale,
+            )
+        ),
+        reference_reset_min_steps_remaining=(
+            reference_reset_min_steps_remaining
+        ),
+        reference_min_motion_length=reference_min_motion_length,
         reference_loop_mode=reference_loop_mode,
+        reference_motion_speed_scale=reference_motion_speed_scale,
         reference_root_xy_scale=reference_root_xy_scale,
+        reference_root_x_scale=reference_root_x_scale,
+        reference_root_y_scale=reference_root_y_scale,
         reference_lock_stance_feet=reference_lock_stance_feet,
         reference_foot_lock_height=reference_foot_lock_height,
+        reference_stability_sagittal_alpha=reference_stability_sagittal_alpha,
+        reference_stability_other_alpha=reference_stability_other_alpha,
+        reference_stability_arm_alpha=reference_stability_arm_alpha,
+        reference_stability_before_ik=reference_stability_before_ik,
+        reference_ik_correction_alpha=reference_ik_correction_alpha,
+        reference_ik_com_weight=reference_ik_com_weight,
+        reference_ik_support_height_scale=reference_ik_support_height_scale,
+        reference_ik_pose_regularization=reference_ik_pose_regularization,
+        reference_ik_smooth_regularization=reference_ik_smooth_regularization,
+        reference_ik_root_smooth_regularization=(
+            reference_ik_root_smooth_regularization
+        ),
+        reference_ik_optimize_root_xy=reference_ik_optimize_root_xy,
+        reference_ik_root_regularization=reference_ik_root_regularization,
+        reference_ik_swing_foot_weight_scale=(
+            reference_ik_swing_foot_weight_scale
+        ),
         reference_target_observation=reference_target_observation,
         deepmimic_reward_mode=deepmimic_reward_mode,
         deepmimic_key_bodies=deepmimic_key_bodies,
+        pose_termination=pose_termination,
+        pose_termination_dist=pose_termination_dist,
+        reset_sample_attempts=reset_sample_attempts,
+        reset_projection_levels=reset_projection_levels,
         policy_observation_size=checkpoint_observation_size,
         policy_observation_dict=policy_observation_dict,
         xml_path=xml_path,
@@ -1196,15 +1723,81 @@ def make_environment(env_config: EnvConfig):
         "warp_graph_mode": env_config.warp_graph_mode,
         "enable_erfi": False,
         "command_profile": env_config.command_profile,
+        "neutral_stance_hip_x": env_config.neutral_stance_hip_x,
+        "gait_shaping_scale": env_config.gait_shaping_scale,
+        "gait_active_without_command": env_config.gait_active_without_command,
+        "gait_period_steps": env_config.gait_period_steps,
+        "gait_warmup_steps": env_config.gait_warmup_steps,
+        "foot_clearance_target": env_config.foot_clearance_target,
+        "gait_balance_reward_scale": env_config.gait_balance_reward_scale,
+        "gait_balance_target_fraction": env_config.gait_balance_target_fraction,
+        "gait_balance_sigma": env_config.gait_balance_sigma,
+        "procedural_balance_prior_scale": (
+            env_config.procedural_balance_prior_scale
+        ),
+        "procedural_step_prior_scale": env_config.procedural_step_prior_scale,
+        "procedural_step_residual_scale": env_config.procedural_step_residual_scale,
+        "tracking_sigma": env_config.tracking_sigma,
+        "forward_progress_reward_scale": env_config.forward_progress_reward_scale,
+        "overspeed_cost_scale": env_config.overspeed_cost_scale,
         "reference_gait": env_config.reference_gait,
         "arm_actuators": env_config.arm_actuators,
+        "reference_forced_clip_id": env_config.reference_forced_clip_id,
+        "reference_action_mode": env_config.reference_action_mode,
+        "reference_action_center": env_config.reference_action_center,
+        "reference_action_range": env_config.reference_action_range,
+        "reference_action_range_scale": env_config.reference_action_range_scale,
+        "reference_residual_scale": env_config.reference_residual_scale,
+        "bvh_target_observation_steps": env_config.bvh_target_observation_steps,
+        "reference_replay_target_step": env_config.reference_replay_target_step,
+        "deepmimic_root_velocity_weight_scale": (
+            env_config.deepmimic_root_velocity_weight_scale
+        ),
+        "reference_reset_min_steps_remaining": (
+            env_config.reference_reset_min_steps_remaining
+        ),
+        "reference_min_motion_length": env_config.reference_min_motion_length,
         "reference_loop_mode": env_config.reference_loop_mode,
+        "reference_motion_speed_scale": env_config.reference_motion_speed_scale,
         "reference_root_xy_scale": env_config.reference_root_xy_scale,
+        "reference_root_x_scale": env_config.reference_root_x_scale,
+        "reference_root_y_scale": env_config.reference_root_y_scale,
         "reference_lock_stance_feet": env_config.reference_lock_stance_feet,
         "reference_foot_lock_height": env_config.reference_foot_lock_height,
+        "reference_stability_sagittal_alpha": (
+            env_config.reference_stability_sagittal_alpha
+        ),
+        "reference_stability_other_alpha": env_config.reference_stability_other_alpha,
+        "reference_stability_arm_alpha": env_config.reference_stability_arm_alpha,
+        "reference_stability_before_ik": env_config.reference_stability_before_ik,
+        "reference_ik_correction_alpha": env_config.reference_ik_correction_alpha,
+        "reference_ik_com_weight": env_config.reference_ik_com_weight,
+        "reference_ik_support_height_scale": (
+            env_config.reference_ik_support_height_scale
+        ),
+        "reference_ik_pose_regularization": (
+            env_config.reference_ik_pose_regularization
+        ),
+        "reference_ik_smooth_regularization": (
+            env_config.reference_ik_smooth_regularization
+        ),
+        "reference_ik_root_smooth_regularization": (
+            env_config.reference_ik_root_smooth_regularization
+        ),
+        "reference_ik_optimize_root_xy": env_config.reference_ik_optimize_root_xy,
+        "reference_ik_root_regularization": (
+            env_config.reference_ik_root_regularization
+        ),
+        "reference_ik_swing_foot_weight_scale": (
+            env_config.reference_ik_swing_foot_weight_scale
+        ),
         "reference_target_observation": env_config.reference_target_observation,
         "deepmimic_reward_mode": env_config.deepmimic_reward_mode,
         "deepmimic_key_bodies": env_config.deepmimic_key_bodies,
+        "pose_termination": env_config.pose_termination,
+        "pose_termination_dist": env_config.pose_termination_dist,
+        "reset_sample_attempts": env_config.reset_sample_attempts,
+        "reset_projection_levels": env_config.reset_projection_levels,
         "policy_observation_size": env_config.policy_observation_size,
         "policy_observation_dict": env_config.policy_observation_dict,
         "action_smoothing": env_config.action_smoothing,

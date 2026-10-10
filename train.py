@@ -113,7 +113,17 @@ class TrainingProgressLogger:
                 ("eval/episode_deepmimic_key_position", "dm_key_step"),
                 ("eval/episode_action_magnitude", "act_mag_step"),
                 ("eval/episode_tracking_lin", "track_lin_step"),
+                ("eval/episode_forward_vel", "forward_vel_step"),
                 ("eval/episode_command_progress", "progress_step"),
+                ("eval/episode_foot_slip", "foot_slip_step"),
+                ("eval/episode_swing_drag", "swing_drag_step"),
+                (
+                    "eval/episode_swing_clearance_deficit",
+                    "clear_deficit_step",
+                ),
+                ("eval/episode_gait_reward", "gait_step"),
+                ("eval/episode_gait_balance_reward", "gait_balance_step"),
+                ("eval/episode_gait_com_error", "gait_com_err_step"),
                 ("eval/episode_height", "height_step"),
                 ("eval/episode_torso_up", "torso_step"),
             )
@@ -423,6 +433,7 @@ def make_ppo_config(
         "num_minibatches": train_config.num_minibatches,
         "num_updates_per_batch": train_config.num_updates_per_batch,
         "learning_rate": train_config.learning_rate,
+        "discounting": train_config.discounting,
     }
     for key, value in overrides.items():
         if value is not None:
@@ -1011,7 +1022,11 @@ def log_environment_summary(env, label: str = "env") -> None:
         "rao_limit={} | reference_target_observation={} | "
         "reference_action_mode={} | reference_action_center={} | "
         "reference_action_range={} | reference_action_range_scale={} | "
-        "reference_residual_scale={} | reference_root_xy_scale={} | "
+        "reference_residual_scale={} | neutral_stance_hip_x={} | "
+        "gait_balance_reward_scale={} | gait_balance_target_fraction={} | "
+        "gait_balance_sigma={} | gait_warmup_steps={} | "
+        "procedural_balance_prior_scale={} | "
+        "reference_root_xy_scale={} | "
         "reference_lock_stance_feet={} | reference_foot_lock_height={} | "
         "reference_forced_clip_id={} | reference_replay_target_step={} | "
         "dm_root_vel_weight_scale={} | legacy_action_prior={} | "
@@ -1039,6 +1054,12 @@ def log_environment_summary(env, label: str = "env") -> None:
         getattr(env._config, "reference_action_range", None),
         getattr(env._config, "reference_action_range_scale", None),
         getattr(env._config, "reference_residual_scale", None),
+        getattr(env._config, "neutral_stance_hip_x", None),
+        getattr(env._config, "gait_balance_reward_scale", None),
+        getattr(env._config, "gait_balance_target_fraction", None),
+        getattr(env._config, "gait_balance_sigma", None),
+        getattr(env._config, "gait_warmup_steps", None),
+        getattr(env._config, "procedural_balance_prior_scale", None),
         getattr(env._config, "reference_root_xy_scale", None),
         getattr(env._config, "reference_lock_stance_feet", None),
         getattr(env._config, "reference_foot_lock_height", None),
@@ -1202,6 +1223,23 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         "warp_graph_mode": env_config.warp_graph_mode,
         "enable_erfi": enable_erfi,
         "command_profile": env_config.command_profile,
+        "neutral_stance_hip_x": env_config.neutral_stance_hip_x,
+        "gait_shaping_scale": env_config.gait_shaping_scale,
+        "gait_active_without_command": env_config.gait_active_without_command,
+        "gait_period_steps": env_config.gait_period_steps,
+        "gait_warmup_steps": env_config.gait_warmup_steps,
+        "foot_clearance_target": env_config.foot_clearance_target,
+        "gait_balance_reward_scale": env_config.gait_balance_reward_scale,
+        "gait_balance_target_fraction": env_config.gait_balance_target_fraction,
+        "gait_balance_sigma": env_config.gait_balance_sigma,
+        "procedural_balance_prior_scale": (
+            env_config.procedural_balance_prior_scale
+        ),
+        "procedural_step_prior_scale": env_config.procedural_step_prior_scale,
+        "procedural_step_residual_scale": env_config.procedural_step_residual_scale,
+        "tracking_sigma": env_config.tracking_sigma,
+        "forward_progress_reward_scale": env_config.forward_progress_reward_scale,
+        "overspeed_cost_scale": env_config.overspeed_cost_scale,
         "reference_gait": env_config.reference_gait,
         "arm_actuators": env_config.arm_actuators,
         "reference_forced_clip_id": env_config.reference_forced_clip_id,
@@ -1221,7 +1259,10 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         ),
         "reference_min_motion_length": env_config.reference_min_motion_length,
         "reference_loop_mode": env_config.reference_loop_mode,
+        "reference_motion_speed_scale": env_config.reference_motion_speed_scale,
         "reference_root_xy_scale": env_config.reference_root_xy_scale,
+        "reference_root_x_scale": env_config.reference_root_x_scale,
+        "reference_root_y_scale": env_config.reference_root_y_scale,
         "reference_lock_stance_feet": env_config.reference_lock_stance_feet,
         "reference_foot_lock_height": env_config.reference_foot_lock_height,
         "reference_stability_sagittal_alpha": (
@@ -1229,6 +1270,28 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         ),
         "reference_stability_other_alpha": env_config.reference_stability_other_alpha,
         "reference_stability_arm_alpha": env_config.reference_stability_arm_alpha,
+        "reference_stability_before_ik": env_config.reference_stability_before_ik,
+        "reference_ik_correction_alpha": env_config.reference_ik_correction_alpha,
+        "reference_ik_com_weight": env_config.reference_ik_com_weight,
+        "reference_ik_support_height_scale": (
+            env_config.reference_ik_support_height_scale
+        ),
+        "reference_ik_pose_regularization": (
+            env_config.reference_ik_pose_regularization
+        ),
+        "reference_ik_smooth_regularization": (
+            env_config.reference_ik_smooth_regularization
+        ),
+        "reference_ik_root_smooth_regularization": (
+            env_config.reference_ik_root_smooth_regularization
+        ),
+        "reference_ik_optimize_root_xy": env_config.reference_ik_optimize_root_xy,
+        "reference_ik_root_regularization": (
+            env_config.reference_ik_root_regularization
+        ),
+        "reference_ik_swing_foot_weight_scale": (
+            env_config.reference_ik_swing_foot_weight_scale
+        ),
         "deepmimic_reward_mode": env_config.deepmimic_reward_mode,
         "deepmimic_key_bodies": env_config.deepmimic_key_bodies,
         "pose_termination": env_config.pose_termination,
@@ -2226,7 +2289,9 @@ def main() -> None:
     parser.add_argument(
         "--command-profile",
         choices=[
+            "step_in_place",
             "forward_slow",
+            "forward_bridge",
             "forward",
             "walk",
             "steer",
@@ -2236,8 +2301,9 @@ def main() -> None:
         default="standard",
         help=(
             "standard je pun joystick; standard_easy je meksi svi-pravci "
-            "curriculum; steer je forward + skretanje; forward_slow/forward "
-            "su bootstrap curriculum; walk je forward sa gait-clock setupom."
+            "curriculum; steer je forward + skretanje; forward_slow, "
+            "forward_bridge i forward su bootstrap nivoi; step_in_place "
+            "izoluje prenos tezine; walk je forward sa gait-clock setupom."
         ),
     )
     parser.add_argument(
@@ -2245,6 +2311,111 @@ def main() -> None:
         type=float,
         default=EnvConfig.action_smoothing,
         help="Filtriranje policy akcije pre servo targeta.",
+    )
+    parser.add_argument(
+        "--neutral-stance-hip-x",
+        type=float,
+        default=EnvConfig.neutral_stance_hip_x,
+        help=(
+            "Symmetric neutral hip-abduction magnitude in radians. 0 gives an "
+            "approximately 21 cm stance instead of the legacy 53 cm stance."
+        ),
+    )
+    parser.add_argument(
+        "--gait-shaping-scale",
+        type=float,
+        default=EnvConfig.gait_shaping_scale,
+        help=(
+            "Multiplier for phase-clock gait reward and swing-foot penalties. "
+            "Use 0 during velocity bootstrap; restore 1 after stable motion."
+        ),
+    )
+    parser.add_argument(
+        "--gait-active-without-command",
+        action=argparse.BooleanOptionalAction,
+        default=EnvConfig.gait_active_without_command,
+        help="Apply phase gait shaping even when the joystick command is zero.",
+    )
+    parser.add_argument(
+        "--gait-period-steps",
+        type=int,
+        default=EnvConfig.gait_period_steps,
+        help="Control steps per complete left/right gait cycle.",
+    )
+    parser.add_argument(
+        "--gait-warmup-steps",
+        type=int,
+        default=EnvConfig.gait_warmup_steps,
+        help="Steps used to ramp in phase-conditioned COM and action assistance.",
+    )
+    parser.add_argument(
+        "--foot-clearance-target",
+        type=float,
+        default=EnvConfig.foot_clearance_target,
+        help="Relative swing-foot clearance target in metres.",
+    )
+    parser.add_argument(
+        "--gait-balance-reward-scale",
+        type=float,
+        default=EnvConfig.gait_balance_reward_scale,
+        help="Reward scale for phase-aware lateral COM transfer to the stance foot.",
+    )
+    parser.add_argument(
+        "--gait-balance-target-fraction",
+        type=float,
+        default=EnvConfig.gait_balance_target_fraction,
+        help="Fraction of midpoint-to-stance-foot distance used as the COM target.",
+    )
+    parser.add_argument(
+        "--gait-balance-sigma",
+        type=float,
+        default=EnvConfig.gait_balance_sigma,
+        help="Gaussian tolerance in metres for lateral gait COM tracking.",
+    )
+    parser.add_argument(
+        "--procedural-balance-prior-scale",
+        type=float,
+        default=EnvConfig.procedural_balance_prior_scale,
+        help=(
+            "Blend statically feasible phase-conditioned lateral balance "
+            "keyposes into the default PD center."
+        ),
+    )
+    parser.add_argument(
+        "--procedural-step-prior-scale",
+        type=float,
+        default=EnvConfig.procedural_step_prior_scale,
+        help=(
+            "Blend a phase-conditioned sinusoidal leg target into the default "
+            "PD center. Intended only for assisted step-in-place curriculum tests."
+        ),
+    )
+    parser.add_argument(
+        "--procedural-step-residual-scale",
+        type=float,
+        default=EnvConfig.procedural_step_residual_scale,
+        help=(
+            "Actor residual multiplier on the guided swing hip/knee. Use 0 for "
+            "fully enforced assistance and restore gradually to 1."
+        ),
+    )
+    parser.add_argument(
+        "--tracking-sigma",
+        type=float,
+        default=EnvConfig.tracking_sigma,
+        help="Squared-error scale for horizontal velocity tracking reward.",
+    )
+    parser.add_argument(
+        "--forward-progress-reward-scale",
+        type=float,
+        default=EnvConfig.forward_progress_reward_scale,
+        help="Multiplier for directional progress reward.",
+    )
+    parser.add_argument(
+        "--overspeed-cost-scale",
+        type=float,
+        default=EnvConfig.overspeed_cost_scale,
+        help="Multiplier for speed above 125%% of the requested command.",
     )
     parser.add_argument(
         "--reference-gait",
@@ -2352,6 +2523,12 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--reference-motion-speed-scale",
+        type=float,
+        default=EnvConfig.reference_motion_speed_scale,
+        help="Scale the reference clock and rederive all trajectory velocities.",
+    )
+    parser.add_argument(
         "--reference-root-xy-scale",
         type=float,
         default=EnvConfig.reference_root_xy_scale,
@@ -2360,6 +2537,89 @@ def main() -> None:
             "Manje vrednosti smanjuju world-space drift ako referenca bezi "
             "brze nego sto kontaktna dinamika moze da isprati."
         ),
+    )
+    parser.add_argument(
+        "--reference-root-x-scale",
+        type=float,
+        default=EnvConfig.reference_root_x_scale,
+        help="Optional forward-root scale overriding --reference-root-xy-scale.",
+    )
+    parser.add_argument(
+        "--reference-root-y-scale",
+        type=float,
+        default=EnvConfig.reference_root_y_scale,
+        help="Optional lateral-root scale overriding --reference-root-xy-scale.",
+    )
+    parser.add_argument(
+        "--reference-stability-sagittal-alpha",
+        type=float,
+        default=EnvConfig.reference_stability_sagittal_alpha,
+        help="Blend sagittal reference joints toward neutral (0=neutral, 1=full).",
+    )
+    parser.add_argument(
+        "--reference-stability-other-alpha",
+        type=float,
+        default=EnvConfig.reference_stability_other_alpha,
+        help="Blend trunk and non-sagittal reference joints toward neutral.",
+    )
+    parser.add_argument(
+        "--reference-stability-before-ik",
+        action=argparse.BooleanOptionalAction,
+        default=EnvConfig.reference_stability_before_ik,
+        help=(
+            "Apply the stability projection before marker IK so IK preserves "
+            "the fitted stance and swing foot positions."
+        ),
+    )
+    parser.add_argument(
+        "--reference-ik-correction-alpha",
+        type=float,
+        default=EnvConfig.reference_ik_correction_alpha,
+        help="Retain this fraction of the marker-IK correction after pre-IK blending.",
+    )
+    parser.add_argument(
+        "--reference-ik-com-weight",
+        type=float,
+        default=EnvConfig.reference_ik_com_weight,
+        help="Weight for moving whole-body COM over the soft stance-foot target.",
+    )
+    parser.add_argument(
+        "--reference-ik-support-height-scale",
+        type=float,
+        default=EnvConfig.reference_ik_support_height_scale,
+        help="Height temperature used to infer soft stance-foot weights.",
+    )
+    parser.add_argument(
+        "--reference-ik-pose-regularization",
+        type=float,
+        default=EnvConfig.reference_ik_pose_regularization,
+    )
+    parser.add_argument(
+        "--reference-ik-smooth-regularization",
+        type=float,
+        default=EnvConfig.reference_ik_smooth_regularization,
+    )
+    parser.add_argument(
+        "--reference-ik-root-smooth-regularization",
+        type=float,
+        default=EnvConfig.reference_ik_root_smooth_regularization,
+    )
+    parser.add_argument(
+        "--reference-ik-optimize-root-xy",
+        action=argparse.BooleanOptionalAction,
+        default=EnvConfig.reference_ik_optimize_root_xy,
+        help="Jointly optimize free-root XY and actuated joints in reference IK.",
+    )
+    parser.add_argument(
+        "--reference-ik-root-regularization",
+        type=float,
+        default=EnvConfig.reference_ik_root_regularization,
+    )
+    parser.add_argument(
+        "--reference-ik-swing-foot-weight-scale",
+        type=float,
+        default=EnvConfig.reference_ik_swing_foot_weight_scale,
+        help="Relative marker weight of the inferred swing foot.",
     )
     parser.add_argument(
         "--reference-lock-stance-feet",
@@ -2478,6 +2738,12 @@ def main() -> None:
     parser.add_argument("--updates-per-batch", type=int, default=None)
     parser.add_argument("--learning-rate", type=float, default=None)
     parser.add_argument(
+        "--discounting",
+        type=float,
+        default=None,
+        help="PPO discount factor. Longer locomotion horizons need values near 1.",
+    )
+    parser.add_argument(
         "--distribution-type",
         choices=["normal", "tanh_normal"],
         default=None,
@@ -2492,11 +2758,106 @@ def main() -> None:
         help="Mali izolacioni run bez domain randomization.",
     )
     parser.add_argument(
+        "--reference-tracker",
         "--one-clip-overfit",
+        dest="reference_tracker",
         action="store_true",
         help=(
-            "Forensic preset: train one wrap BVH clip with residual actions, "
-            "pure imitation reward, no arms, no ERFI, and no randomization."
+            "Stage 2 preset: train one looping BVH clip with residual actions, "
+            "pure imitation reward, zero joystick command, no arms, no ERFI, "
+            "and no domain randomization. --one-clip-overfit is kept as an alias."
+        ),
+    )
+    parser.add_argument(
+        "--reference-tracker-inplace",
+        action="store_true",
+        help=(
+            "Stage 2 diagnostic preset: one-clip residual tracker using the "
+            "free-root in-place reference variant that passed three PD cycles."
+        ),
+    )
+    parser.add_argument(
+        "--reference-tracker-backend",
+        choices=["jax", "warp"],
+        default="jax",
+        help=(
+            "Physics backend for Stage 2 tracker presets. JAX preserves the "
+            "diagnostic path; Warp tests the production training path."
+        ),
+    )
+    parser.add_argument(
+        "--task-only-baseline",
+        action="store_true",
+        help=(
+            "Stage 1 preset: v21 standing reset, default-pose actions, task-only "
+            "reward, forward-slow commands, no mocap, ERFI, or randomization."
+        ),
+    )
+    parser.add_argument(
+        "--task-forward-bootstrap",
+        action="store_true",
+        help=(
+            "Stage 1B bootstrap: learn stable forward motion before enforcing "
+            "phase-clock swing-foot shaping. Intended to resume Stage 1A."
+        ),
+    )
+    parser.add_argument(
+        "--task-step-in-place",
+        action="store_true",
+        help=(
+            "Stage 1B balance-transfer curriculum: resume a standing policy "
+            "and learn slow alternating foot lifts before forward motion."
+        ),
+    )
+    parser.add_argument(
+        "--task-weight-transfer",
+        action="store_true",
+        help=(
+            "Stage 1B pre-swing curriculum: on the narrow stance, learn lateral "
+            "COM transfer toward the stance foot without requesting foot lift."
+        ),
+    )
+    parser.add_argument(
+        "--weight-transfer-scale",
+        type=float,
+        default=0.5,
+        help="Centered COM-target shaping scale used by --task-weight-transfer.",
+    )
+    parser.add_argument(
+        "--weight-transfer-prior-scale",
+        type=float,
+        default=1.0,
+        help=(
+            "Calibrated lateral action-prior scale used by "
+            "--task-weight-transfer."
+        ),
+    )
+    parser.add_argument(
+        "--step-gait-scale",
+        type=float,
+        default=0.25,
+        help="Gait reward/cost multiplier used by --task-step-in-place.",
+    )
+    parser.add_argument(
+        "--step-clearance-target",
+        type=float,
+        default=0.04,
+        help="Initial swing-foot target used by --task-step-in-place.",
+    )
+    parser.add_argument(
+        "--task-forward-curriculum",
+        action="store_true",
+        help=(
+            "Stage 1B preset: reference-free forward commands above the stuck "
+            "threshold. Intended to resume the stable Stage 1A checkpoint."
+        ),
+    )
+    parser.add_argument(
+        "--low-vram",
+        action="store_true",
+        help=(
+            "Memory-safe PPO schedule for 6-8 GiB GPUs: fewer environments, "
+            "shorter rollouts, and a smaller training batch."
         ),
     )
     parser.add_argument(
@@ -2644,8 +3005,43 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=RUNS_DIR)
     args = parser.parse_args()
 
-    if args.one_clip_overfit:
-        apply_one_clip_overfit_preset(args)
+    experiment_count = sum(
+        (
+            bool(args.task_only_baseline),
+            bool(args.task_forward_bootstrap),
+            bool(args.task_weight_transfer),
+            bool(args.task_step_in_place),
+            bool(args.task_forward_curriculum),
+            bool(args.reference_tracker),
+            bool(args.reference_tracker_inplace),
+        )
+    )
+    if experiment_count > 1:
+        parser.error(
+            "Choose only one experiment preset: --task-only-baseline, "
+            "--task-weight-transfer, --task-step-in-place, "
+            "--task-forward-bootstrap, "
+            "--task-forward-curriculum, or "
+            "--reference-tracker/--reference-tracker-inplace."
+        )
+    if args.task_only_baseline:
+        apply_task_only_baseline_preset(args)
+    if args.task_forward_bootstrap:
+        apply_task_forward_bootstrap_preset(args)
+    if args.task_weight_transfer:
+        apply_task_weight_transfer_preset(args)
+    if args.task_step_in_place:
+        apply_task_step_in_place_preset(args)
+    if args.task_forward_curriculum:
+        apply_task_forward_curriculum_preset(args)
+    if args.reference_tracker:
+        apply_reference_tracker_preset(args)
+    if args.reference_tracker_inplace:
+        apply_reference_tracker_inplace_preset(args)
+    if args.reference_tracker or args.reference_tracker_inplace:
+        apply_reference_tracker_backend(args)
+    if args.low_vram and not args.debug_run:
+        apply_low_vram_preset(args)
     if args.device == "cpu" and args.debug_run and args.physics_backend == "mjx_warp":
         args.playground_impl = "jax"
         args.physics_backend = "mjx_jax"
@@ -2657,7 +3053,7 @@ def main() -> None:
         args.reference_gait_file,
         args.reference_gait_list,
     )
-    if args.one_clip_overfit and reference_gait_file is None:
+    if (args.reference_tracker or args.reference_tracker_inplace) and reference_gait_file is None:
         reference_gait_file = expand_reference_gait_files(
             reference_gait_files=[ONE_CLIP_OVERFIT_REFERENCE],
         )
@@ -2678,6 +3074,21 @@ def main() -> None:
         playground_impl=args.playground_impl,
         physics_backend=args.physics_backend,
         command_profile=args.command_profile,
+        neutral_stance_hip_x=args.neutral_stance_hip_x,
+        gait_shaping_scale=args.gait_shaping_scale,
+        gait_active_without_command=args.gait_active_without_command,
+        gait_period_steps=args.gait_period_steps,
+        gait_warmup_steps=args.gait_warmup_steps,
+        foot_clearance_target=args.foot_clearance_target,
+        gait_balance_reward_scale=args.gait_balance_reward_scale,
+        gait_balance_target_fraction=args.gait_balance_target_fraction,
+        gait_balance_sigma=args.gait_balance_sigma,
+        procedural_balance_prior_scale=args.procedural_balance_prior_scale,
+        procedural_step_prior_scale=args.procedural_step_prior_scale,
+        procedural_step_residual_scale=args.procedural_step_residual_scale,
+        tracking_sigma=args.tracking_sigma,
+        forward_progress_reward_scale=args.forward_progress_reward_scale,
+        overspeed_cost_scale=args.overspeed_cost_scale,
         reference_gait=args.reference_gait,
         arm_actuators=args.arm_actuators,
         reference_gait_file=reference_gait_file,
@@ -2688,9 +3099,32 @@ def main() -> None:
         reference_action_range_scale=args.reference_action_range_scale,
         reference_residual_scale=args.reference_residual_scale,
         reference_loop_mode=args.reference_loop_mode,
+        reference_motion_speed_scale=args.reference_motion_speed_scale,
         reference_root_xy_scale=args.reference_root_xy_scale,
+        reference_root_x_scale=args.reference_root_x_scale,
+        reference_root_y_scale=args.reference_root_y_scale,
         reference_lock_stance_feet=args.reference_lock_stance_feet,
         reference_foot_lock_height=args.reference_foot_lock_height,
+        reference_stability_sagittal_alpha=(
+            args.reference_stability_sagittal_alpha
+        ),
+        reference_stability_other_alpha=args.reference_stability_other_alpha,
+        reference_stability_before_ik=args.reference_stability_before_ik,
+        reference_ik_correction_alpha=args.reference_ik_correction_alpha,
+        reference_ik_com_weight=args.reference_ik_com_weight,
+        reference_ik_support_height_scale=args.reference_ik_support_height_scale,
+        reference_ik_pose_regularization=args.reference_ik_pose_regularization,
+        reference_ik_smooth_regularization=(
+            args.reference_ik_smooth_regularization
+        ),
+        reference_ik_root_smooth_regularization=(
+            args.reference_ik_root_smooth_regularization
+        ),
+        reference_ik_optimize_root_xy=args.reference_ik_optimize_root_xy,
+        reference_ik_root_regularization=args.reference_ik_root_regularization,
+        reference_ik_swing_foot_weight_scale=(
+            args.reference_ik_swing_foot_weight_scale
+        ),
         bvh_target_observation_steps=parse_int_tuple(
             args.bvh_target_observation_steps
         ),
@@ -2745,7 +3179,7 @@ def main() -> None:
 
     debug_defaults = debug_run_defaults(
         args.debug_run,
-        one_clip_overfit=args.one_clip_overfit,
+        reference_tracker=(args.reference_tracker or args.reference_tracker_inplace),
     )
     train_config = TrainConfig(
         seed=args.seed,
@@ -2781,6 +3215,7 @@ def main() -> None:
             if args.learning_rate is not None
             else debug_defaults.get("learning_rate")
         ),
+        discounting=args.discounting,
         distribution_type=args.distribution_type,
         enable_erfi=args.erfi,
         enable_domain_randomization=(
@@ -2804,8 +3239,118 @@ def main() -> None:
     run_training(env_config, train_config, args.out)
 
 
-def apply_one_clip_overfit_preset(args: argparse.Namespace) -> None:
-    """Apply env-side defaults for the one-clip forensic overfit experiment."""
+def apply_task_only_baseline_preset(args: argparse.Namespace) -> None:
+    """Configure the v21 reference-free locomotion control experiment."""
+    args.command_profile = "forward_slow"
+    args.reference_gait = "none"
+    args.arm_actuators = False
+    args.erfi = False
+    args.domain_randomization = False
+    args.no_erfi = True
+    args.no_domain_randomization = True
+    args.bare = True
+    if args.run_tag is None:
+        args.run_tag = "v21_task_only_baseline"
+
+
+def apply_task_forward_curriculum_preset(args: argparse.Namespace) -> None:
+    """Require real forward motion after the standing-stability bootstrap."""
+    args.command_profile = "forward"
+    args.reference_gait = "none"
+    args.arm_actuators = False
+    args.erfi = False
+    args.domain_randomization = False
+    args.no_erfi = True
+    args.no_domain_randomization = True
+    args.bare = True
+    if args.learning_rate is None:
+        args.learning_rate = 1e-4
+    if args.run_tag is None:
+        args.run_tag = "v21_forward_curriculum"
+
+
+def apply_task_step_in_place_preset(args: argparse.Namespace) -> None:
+    """Learn alternating weight transfer before asking for forward travel."""
+    args.command_profile = "step_in_place"
+    args.reference_gait = "none"
+    args.arm_actuators = False
+    args.erfi = False
+    args.domain_randomization = False
+    args.no_erfi = True
+    args.no_domain_randomization = True
+    args.bare = True
+    args.neutral_stance_hip_x = 0.0
+    args.gait_active_without_command = True
+    args.gait_shaping_scale = args.step_gait_scale
+    args.gait_period_steps = 100
+    args.gait_warmup_steps = 25
+    args.foot_clearance_target = args.step_clearance_target
+    args.gait_balance_reward_scale = args.weight_transfer_scale
+    args.forward_progress_reward_scale = 0.0
+    args.overspeed_cost_scale = 0.0
+    if args.discounting is None:
+        args.discounting = 0.995
+    if args.learning_rate is None:
+        args.learning_rate = 5e-5
+    if args.run_tag is None:
+        args.run_tag = "v22_step_in_place"
+
+
+def apply_task_weight_transfer_preset(args: argparse.Namespace) -> None:
+    """Learn lateral COM transfer before requesting swing-foot clearance."""
+    args.command_profile = "step_in_place"
+    args.reference_gait = "none"
+    args.arm_actuators = False
+    args.erfi = False
+    args.domain_randomization = False
+    args.no_erfi = True
+    args.no_domain_randomization = True
+    args.bare = True
+    args.neutral_stance_hip_x = 0.0
+    args.gait_active_without_command = True
+    args.gait_period_steps = 100
+    args.gait_warmup_steps = 25
+    args.gait_shaping_scale = 0.0
+    args.gait_balance_reward_scale = args.weight_transfer_scale
+    args.procedural_balance_prior_scale = args.weight_transfer_prior_scale
+    args.procedural_step_prior_scale = 0.0
+    args.procedural_step_residual_scale = 1.0
+    args.forward_progress_reward_scale = 0.0
+    args.overspeed_cost_scale = 0.0
+    if args.discounting is None:
+        args.discounting = 0.995
+    if args.learning_rate is None:
+        args.learning_rate = 5e-5
+    if args.run_tag is None:
+        args.run_tag = "v22_weight_transfer_guided"
+
+
+def apply_task_forward_bootstrap_preset(args: argparse.Namespace) -> None:
+    """Learn stable forward velocity before adding phase-clock foot shaping."""
+    args.command_profile = "forward_bridge"
+    args.reference_gait = "none"
+    args.arm_actuators = False
+    args.erfi = False
+    args.domain_randomization = False
+    args.no_erfi = True
+    args.no_domain_randomization = True
+    args.bare = True
+    args.gait_shaping_scale = 0.0
+    args.tracking_sigma = 0.02
+    args.forward_progress_reward_scale = 0.0
+    args.overspeed_cost_scale = 2.0
+    if args.discounting is None:
+        args.discounting = 0.995
+    if args.learning_rate is None:
+        # The resumed critic was trained with a shorter discount horizon, so
+        # adapt it conservatively instead of destroying the stable actor.
+        args.learning_rate = 5e-5
+    if args.run_tag is None:
+        args.run_tag = "v21_forward_bootstrap"
+
+
+def apply_reference_tracker_preset(args: argparse.Namespace) -> None:
+    """Configure the isolated one-clip reference-tracking experiment."""
     args.playground_impl = "jax"
     args.physics_backend = "mjx_jax"
     args.reference_gait = "bvh"
@@ -2823,13 +3368,65 @@ def apply_one_clip_overfit_preset(args: argparse.Namespace) -> None:
     args.no_erfi = True
     args.no_domain_randomization = True
     args.bare = True
+    if args.discounting is None:
+        # Falls occur roughly 80-120 control steps into the current tracker.
+        # At the project default gamma=0.97 their terminal cost is almost
+        # invisible from earlier gait states; 0.995 keeps that delayed balance
+        # signal material over the 500-step tracker horizon.
+        args.discounting = 0.995
     if args.reference_force_clip_id is None:
         args.reference_force_clip_id = 1
     if args.run_tag is None:
-        args.run_tag = "one_clip_overfit_0201"
+        args.run_tag = "reference_tracker_0201"
 
 
-def debug_run_defaults(enabled: bool, *, one_clip_overfit: bool = False) -> dict:
+def apply_reference_tracker_inplace_preset(args: argparse.Namespace) -> None:
+    """Configure the first dynamically survivable in-place tracker curriculum."""
+    requested_run_tag = args.run_tag
+    apply_reference_tracker_preset(args)
+    args.reference_root_xy_scale = 0.0
+    args.reference_lock_stance_feet = False
+    args.reference_stability_sagittal_alpha = 0.10
+    args.reference_stability_other_alpha = 0.35
+    # The pure imitation branch intentionally omits generic action costs.  At
+    # full residual authority the randomly initialized actor already perturbs
+    # the useful feed-forward PD target strongly (action norm about 2.18) and
+    # training increases that norm while survival collapses.  Preserve the
+    # reference controller and let PPO learn only small balance corrections.
+    args.reference_residual_scale = 0.10
+    if requested_run_tag is None:
+        args.run_tag = "reference_tracker_inplace_residual010_0201"
+
+
+def apply_reference_tracker_backend(args: argparse.Namespace) -> None:
+    """Select the physics implementation for an isolated tracker experiment."""
+    backend = args.reference_tracker_backend
+    args.playground_impl = "warp" if backend == "warp" else "jax"
+    args.physics_backend = "mjx_warp" if backend == "warp" else "mjx_jax"
+
+
+def apply_low_vram_preset(args: argparse.Namespace) -> None:
+    """Use a conservative PPO memory footprint for 6-8 GiB GPUs."""
+    # MJX-JAX materializes a substantially heavier batched physics graph than
+    # the primary Warp path.  Reusing Warp's 512-world preset pushed the WSL
+    # XLA compiler above 7.4 GiB RSS and produced no executable after 20 min.
+    # Keep the algorithm and rollout horizon unchanged, but compile a smaller
+    # batch for reference-tracker experiments that require MJX-JAX.
+    uses_mjx_jax = args.physics_backend == "mjx_jax"
+    defaults = {
+        "num_envs": 128 if uses_mjx_jax else 512,
+        "num_eval_envs": 4 if uses_mjx_jax else 8,
+        "unroll_length": 10,
+        "batch_size": 128 if uses_mjx_jax else 512,
+        "num_minibatches": 4,
+        "updates_per_batch": 2,
+    }
+    for name, value in defaults.items():
+        if getattr(args, name) is None:
+            setattr(args, name, value)
+
+
+def debug_run_defaults(enabled: bool, *, reference_tracker: bool = False) -> dict:
     """Vraca mali debug preset umesto gomile CLI opcija."""
     if enabled:
         return {
@@ -2845,13 +3442,17 @@ def debug_run_defaults(enabled: bool, *, one_clip_overfit: bool = False) -> dict
             "no_domain_randomization": True,
             "bare": True,
         }
-    if one_clip_overfit:
+    if reference_tracker:
         return {
             "num_timesteps": 1_000_000,
             "num_envs": 1024,
             "num_eval_envs": 16,
             "num_evals": 5,
-            "episode_length": 180,
+            # Ten seconds at the 20 ms control step.  The best open-loop
+            # in-place PD diagnostic currently falls at about 4.3 s, so the
+            # old 180-step (3.6 s) horizon could truncate before the known
+            # failure and make tracker evaluations look falsely successful.
+            "episode_length": 500,
             "unroll_length": 10,
             "batch_size": 4096,
             "num_minibatches": 4,

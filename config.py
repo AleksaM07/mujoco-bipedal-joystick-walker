@@ -67,6 +67,7 @@ TRAIN_DIAGNOSTIC_METRICS: Final[tuple[tuple[str, str], ...]] = (
     ("eval/episode_tracking_lin_vel", "tracking"),
     ("eval/episode_tracking_lin", "track_lin"),
     ("eval/episode_tracking_yaw", "track_yaw"),
+    ("eval/episode_forward_vel", "forward_vel"),
     ("eval/episode_command_progress", "progress"),
     ("eval/episode_command_norm", "cmd_norm"),
     ("eval/episode_command_lin_norm", "cmd_lin"),
@@ -86,6 +87,8 @@ TRAIN_DIAGNOSTIC_METRICS: Final[tuple[tuple[str, str], ...]] = (
     ("eval/episode_swing_clearance_deficit", "clear_deficit"),
     ("eval/episode_variable_posture", "var_pose"),
     ("eval/episode_gait_reward", "gait"),
+    ("eval/episode_gait_balance_reward", "gait_balance"),
+    ("eval/episode_gait_com_error", "gait_com_err"),
     ("eval/episode_reference_gait", "ref_gait"),
     ("eval/episode_reference_velocity", "ref_vel"),
     ("eval/episode_reference_fallback", "ref_fallback"),
@@ -676,6 +679,10 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         action_scale=0.5,
         action_smoothing=0.2,
         command_profile="standard",
+        # Symmetric hip-abduction magnitude used by the runtime neutral pose.
+        # 0.18 rad creates a 53 cm stance; experiments may reduce it toward
+        # zero (about 21 cm) before learning single-support locomotion.
+        neutral_stance_hip_x=0.18,
         # REF: MIMICKIT-MOTION-LIBRARY
         # TYPE: REFERENCE_CODE_DERIVED
         reference_gait="bvh",
@@ -714,16 +721,29 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # auto keeps only seam-continuous clips looped. wrap is useful after a
         # visual BVH check confirms manually segmented stride cycles are clean.
         reference_loop_mode="auto",
+        reference_motion_speed_scale=1.0,
         # BVH joint targets are retargeted and stability-projected into this
         # XML, so full mocap root travel can move faster than the simulated
         # feet can support. Keep the root trajectory in the calibrated
         # retargeted range until a clip passes the PD oracle at full scale.
         reference_root_xy_scale=0.35,
+        reference_root_x_scale=None,
+        reference_root_y_scale=None,
         reference_lock_stance_feet=True,
         reference_foot_lock_height=0.035,
         reference_stability_sagittal_alpha=1.00,
         reference_stability_other_alpha=0.35,
         reference_stability_arm_alpha=0.75,
+        reference_stability_before_ik=False,
+        reference_ik_correction_alpha=1.0,
+        reference_ik_com_weight=0.0,
+        reference_ik_support_height_scale=0.03,
+        reference_ik_pose_regularization=0.20,
+        reference_ik_smooth_regularization=0.08,
+        reference_ik_root_smooth_regularization=None,
+        reference_ik_optimize_root_xy=False,
+        reference_ik_root_regularization=0.20,
+        reference_ik_swing_foot_weight_scale=1.0,
         policy_observation_size=None,
         policy_observation_dict=True,
         xml_path=None,
@@ -733,6 +753,34 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # TYPE: ENGINEERING_DEFAULT
         tracking_sigma=0.25,
         tracking_yaw_sigma=0.35,
+        forward_progress_reward_scale=1.0,
+        overspeed_cost_scale=0.75,
+        # Phase-clock foot shaping is useful only after the policy can move
+        # without throwing away balance.  Presets may temporarily lower this
+        # during the forward-motion bootstrap, then restore it to 1.0.
+        gait_shaping_scale=1.0,
+        gait_active_without_command=False,
+        gait_period_steps=50,
+        gait_warmup_steps=0,
+        foot_clearance_target=0.08,
+        # Optional phase-aware lateral weight-transfer curriculum.  The target
+        # moves from the foot midpoint toward the stance foot before asking the
+        # opposite foot to lift.  A zero scale keeps existing runs unchanged.
+        gait_balance_reward_scale=0.0,
+        gait_balance_target_fraction=0.5,
+        gait_balance_sigma=0.035,
+        # Phase-conditioned lateral keyposes found by the static feasibility
+        # solver.  This is separate from the swing-leg prior so weight transfer
+        # can be validated before any foot-lift assistance is enabled.
+        procedural_balance_prior_scale=0.0,
+        # Optional deterministic curriculum assistance.  Zero preserves the
+        # ordinary policy action center; positive values blend in the existing
+        # phase-conditioned sinusoidal leg target before the policy residual.
+        procedural_step_prior_scale=0.0,
+        # 1.0 leaves full actor authority.  Lower values temporarily limit the
+        # actor residual on the guided swing hip/knee so curriculum assistance
+        # cannot be cancelled before balance transfer is learned.
+        procedural_step_residual_scale=1.0,
         # REF: PROJECT-GUIDED-BVH-BOOTSTRAP
         # TYPE: ENGINEERING_DEFAULT
         # Pure imitation made PPO too indifferent to balance recovery in this
@@ -873,6 +921,24 @@ class EnvConfig:
     # "standard" je pun joystick zadatak: napred/nazad, lateralno i yaw.
     # "forward" ostaje dostupan samo kao bootstrap curriculum.
     command_profile: str = "standard"
+    neutral_stance_hip_x: float = 0.18
+
+    # Multiplies gait-clock reward, swing-foot drag, and swing-clearance cost.
+    # Keep the production default unchanged; the forward bootstrap lowers it.
+    gait_shaping_scale: float = 1.0
+    gait_active_without_command: bool = False
+    gait_period_steps: int = 50
+    gait_warmup_steps: int = 0
+    foot_clearance_target: float = 0.08
+    gait_balance_reward_scale: float = 0.0
+    gait_balance_target_fraction: float = 0.5
+    gait_balance_sigma: float = 0.035
+    procedural_balance_prior_scale: float = 0.0
+    procedural_step_prior_scale: float = 0.0
+    procedural_step_residual_scale: float = 1.0
+    tracking_sigma: float = 0.25
+    forward_progress_reward_scale: float = 1.0
+    overspeed_cost_scale: float = 0.75
 
     # BVH/MimicKit-style imitation is the production default. "none" and
     # "sine" remain accepted only for old checkpoint/debug compatibility.
@@ -896,12 +962,25 @@ class EnvConfig:
     reference_reset_min_steps_remaining: int = 25
     reference_min_motion_length: float = 0.8
     reference_loop_mode: str = "auto"
+    reference_motion_speed_scale: float = 1.0
     reference_root_xy_scale: float = 0.35
+    reference_root_x_scale: float | None = None
+    reference_root_y_scale: float | None = None
     reference_lock_stance_feet: bool = True
     reference_foot_lock_height: float = 0.035
     reference_stability_sagittal_alpha: float = 1.00
     reference_stability_other_alpha: float = 0.35
     reference_stability_arm_alpha: float = 0.75
+    reference_stability_before_ik: bool = False
+    reference_ik_correction_alpha: float = 1.0
+    reference_ik_com_weight: float = 0.0
+    reference_ik_support_height_scale: float = 0.03
+    reference_ik_pose_regularization: float = 0.20
+    reference_ik_smooth_regularization: float = 0.08
+    reference_ik_root_smooth_regularization: float | None = None
+    reference_ik_optimize_root_xy: bool = False
+    reference_ik_root_regularization: float = 0.20
+    reference_ik_swing_foot_weight_scale: float = 1.0
     deepmimic_reward_mode: str = "mixed"
     deepmimic_key_bodies: tuple[str, ...] = (
         "metatarsal_midpoint_right",
@@ -955,6 +1034,7 @@ class TrainConfig:
     num_minibatches: int | None = None
     num_updates_per_batch: int | None = None
     learning_rate: float | None = None
+    discounting: float | None = None
     distribution_type: str | None = None
     enable_erfi: bool = False
     enable_domain_randomization: bool = False

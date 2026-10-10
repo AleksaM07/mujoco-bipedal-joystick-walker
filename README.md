@@ -47,6 +47,24 @@ Quick CPU smoke test:
 python -m uv run python train.py --debug-run --device cpu --allow-cpu --bare --no-checkpoints --timesteps 1000 --num-envs 4 --num-evals 0 --episode-length 20 --batch-size 4
 ```
 
+For walking experiments, keep task learning and motion tracking isolated:
+
+```powershell
+# Stage 1: no mocap, standing reset, task reward.
+python train.py --task-only-baseline --low-vram --timesteps 10000000
+
+# Stage 1B: resume stable standing and require real forward movement.
+python train.py --task-forward-curriculum --low-vram --timesteps 10000000 \
+  --resume-from runs/<stage-1-run>/checkpoints/<checkpoint>
+
+# Stage 2: only after the reference preflight gates pass.
+python tools/audit_reference_invariants.py
+python train.py --reference-tracker
+```
+
+See [docs/EXPERIMENT_STAGES.md](docs/EXPERIMENT_STAGES.md) for the gate criteria
+and the current reference status.
+
 ## Legacy Best-Checkpoint Analysis
 
 The old notebook under `legacy/` selected the best logged checkpoint from each

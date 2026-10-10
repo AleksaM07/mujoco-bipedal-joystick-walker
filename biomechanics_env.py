@@ -77,6 +77,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
     FOOT_CONTACT_DISTANCE = 0.01
     FORWARD_SLOW_COMMAND_RANGE = (0.02, 0.12)
     FORWARD_SLOW_ZERO_COMMAND_PROBABILITY = 0.25
+    FORWARD_BRIDGE_COMMAND_RANGE = (0.10, 0.18)
     FORWARD_COMMAND_RANGE = (0.15, 0.35)
     STEER_X_COMMAND_RANGE = (0.05, 0.60)
     STEER_Y_COMMAND_RANGE = (-0.20, 0.20)
@@ -212,7 +213,6 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
     RESET_PROJECTION_LEVELS = (1.0, 0.7, 0.45, 0.25)
     REFERENCE_ROOT_HEIGHT_MAX_SPEED = 0.75
     REFERENCE_RETARGET_ROOT_XY_SCALE = 0.35
-    REFERENCE_RETARGET_VELOCITY_SCALE = 0.25
     CONTACT_FORCE_COST_SCALE = 1e-4
     CONTACT_FORCE_COST_CLIP = 1000.0
     STUCK_COMMAND_THRESHOLD = 0.10
@@ -233,6 +233,22 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         if config is None:
             config = default_biomechanics_env_config()
         super().__init__(config, config_overrides)
+        gait_balance_sigma = float(
+            self._config.get("gait_balance_sigma", 0.035)
+        )
+        if gait_balance_sigma <= 0.0:
+            raise ValueError("gait_balance_sigma must be positive.")
+        gait_balance_target_fraction = float(
+            self._config.get("gait_balance_target_fraction", 0.5)
+        )
+        if not 0.0 <= gait_balance_target_fraction <= 1.0:
+            raise ValueError("gait_balance_target_fraction must be between 0 and 1.")
+        if float(self._config.get("gait_balance_reward_scale", 0.0)) < 0.0:
+            raise ValueError("gait_balance_reward_scale cannot be negative.")
+        if float(self._config.get("procedural_balance_prior_scale", 0.0)) < 0.0:
+            raise ValueError("procedural_balance_prior_scale cannot be negative.")
+        if int(self._config.get("gait_warmup_steps", 0)) < 0:
+            raise ValueError("gait_warmup_steps cannot be negative.")
         configured_xml_path = self._config.get("xml_path", None)
         if configured_xml_path:
             self._xml_path = resolve_project_path(configured_xml_path)
@@ -363,6 +379,77 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         ])
         self._reference_gait_neg_sin_offsets = jp.array([
             {"right_knee_z": -0.45}.get(joint_name, 0.0)
+            for joint_name in actuator_joint_names
+        ])
+        # The older sine target mixes lateral hip motion with knee flexion and
+        # produces almost no foot clearance on this skeleton.  Keep it for
+        # backwards-compatible reward experiments, but use a separately
+        # calibrated sagittal keypose for optional action-center assistance.
+        self._procedural_step_pos_offsets = jp.array([
+            {
+                "left_hip_z": 0.24,
+                "left_knee_z": -0.01,
+            }.get(joint_name, 0.0)
+            for joint_name in actuator_joint_names
+        ])
+        self._procedural_step_neg_offsets = jp.array([
+            {
+                "right_hip_z": 0.24,
+                "right_knee_z": -0.01,
+            }.get(joint_name, 0.0)
+            for joint_name in actuator_joint_names
+        ])
+        # Static constrained optimization found these keyposes while holding
+        # both metatarsal markers fixed. Positive gait phase means left swing
+        # and therefore right stance; negative phase is the mirror case.
+        self._procedural_balance_pos_offsets = jp.array([
+            {
+                "abdomen_x": 0.01705,
+                "abdomen_y": 0.00276,
+                "abdomen_z": 0.00295,
+                "pelvis_x": 0.01315,
+                "pelvis_y": 0.00286,
+                "left_hip_x": 0.03485,
+                "left_hip_y": 0.00390,
+                "left_hip_z": 0.00184,
+                "left_knee_z": -0.00734,
+                "left_ankle_y": 0.00524,
+                "left_ankle_z": -0.04940,
+                "right_hip_x": 0.03521,
+                "right_hip_y": 0.00392,
+                "right_hip_z": -0.00422,
+                "right_ankle_y": 0.00548,
+                "right_ankle_z": 0.01355,
+            }.get(joint_name, 0.0)
+            for joint_name in actuator_joint_names
+        ])
+        self._procedural_balance_neg_offsets = jp.array([
+            {
+                "abdomen_x": -0.01663,
+                "abdomen_y": -0.00268,
+                "abdomen_z": 0.00282,
+                "pelvis_x": -0.01287,
+                "pelvis_y": -0.00278,
+                "left_hip_x": -0.03440,
+                "left_hip_y": -0.00383,
+                "left_hip_z": -0.00410,
+                "left_ankle_y": -0.00534,
+                "left_ankle_z": 0.01363,
+                "right_hip_x": -0.03406,
+                "right_hip_y": -0.00380,
+                "right_hip_z": 0.00182,
+                "right_knee_z": -0.00712,
+                "right_ankle_y": -0.00511,
+                "right_ankle_z": -0.04785,
+            }.get(joint_name, 0.0)
+            for joint_name in actuator_joint_names
+        ])
+        self._procedural_left_swing_residual_mask = jp.array([
+            joint_name in {"left_hip_z", "left_knee_z"}
+            for joint_name in actuator_joint_names
+        ])
+        self._procedural_right_swing_residual_mask = jp.array([
+            joint_name in {"right_hip_z", "right_knee_z"}
             for joint_name in actuator_joint_names
         ])
         self._left_knee_actuator_index = actuator_joint_names.index("left_knee_z")
@@ -722,11 +809,20 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         )
         references = self._filter_reference_clips(references)
         references = self._apply_reference_loop_mode_override(references)
-        self._bvh_reference_frame_times = jp.array(references.frame_times)
+        motion_speed_scale = float(
+            self._config.get("reference_motion_speed_scale", 1.0)
+        )
+        if motion_speed_scale <= 0.0:
+            raise ValueError("reference_motion_speed_scale must be positive.")
+        reference_frame_times = (
+            np.asarray(references.frame_times, dtype=np.float32)
+            / motion_speed_scale
+        )
+        self._bvh_reference_frame_times = jp.array(reference_frame_times)
         self._bvh_reference_frame_counts = jp.array(references.frame_counts)
         self._bvh_reference_motion_lengths = jp.array(
             np.maximum(
-                references.frame_times * np.maximum(references.frame_counts - 1, 1),
+                reference_frame_times * np.maximum(references.frame_counts - 1, 1),
                 1e-6,
             ),
             dtype=jp.float32,
@@ -755,7 +851,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         root_angvel_targets = np.asarray(
             references.root_angvel_targets,
             dtype=np.float32,
-        )
+        ) * motion_speed_scale
         (
             sim_root_pos_targets,
             sim_root_vel_targets,
@@ -764,7 +860,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             references.qpos_targets,
             references.root_pos_targets,
             references.root_quat_targets,
-            references.frame_times,
+            reference_frame_times,
             references.frame_counts,
             references.loop_modes,
         )
@@ -782,26 +878,57 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 tuple(getattr(references, "ik_target_names", ())),
                 references.frame_counts,
             )
-            qpos_targets = self._retarget_reference_qpos_to_ik_targets(
+            stability_before_ik = bool(
+                self._config.get("reference_stability_before_ik", False)
+            )
+            if stability_before_ik:
+                # Applying the stability blend after IK destroys the foot
+                # positions that IK just fitted, especially swing clearance at
+                # low sagittal alpha.  Use the stable pose as the IK seed so
+                # feet remain constrained while the rest of the body stays
+                # close to the safer prior.
+                qpos_targets = self._apply_reference_stability_prior(qpos_targets)
+            ik_seed_targets = qpos_targets.copy()
+            unscaled_root_targets = sim_root_pos_targets.copy()
+            sim_root_pos_targets = self._scale_reference_root_xy_motion(
+                sim_root_pos_targets,
+                references.frame_counts,
+            )
+            root_scale_delta = sim_root_pos_targets - unscaled_root_targets
+            aligned_ik_targets += root_scale_delta[:, :, None, :]
+            ik_seed_root_targets = sim_root_pos_targets.copy()
+            qpos_targets, sim_root_pos_targets = (
+                self._retarget_reference_qpos_to_ik_targets(
                 qpos_targets,
                 aligned_ik_targets,
                 tuple(getattr(references, "ik_target_names", ())),
                 sim_root_pos_targets,
                 references.root_quat_targets,
                 references.frame_counts,
+                )
             )
-            qpos_targets = self._apply_reference_stability_prior(qpos_targets)
-            sim_root_pos_targets = self._scale_reference_root_xy_motion(
-                sim_root_pos_targets,
-                references.frame_counts,
-            )
+            if stability_before_ik:
+                ik_correction_alpha = float(
+                    self._config.get("reference_ik_correction_alpha", 1.0)
+                )
+                qpos_targets = ik_seed_targets + np.clip(
+                    ik_correction_alpha,
+                    0.0,
+                    1.0,
+                ) * (qpos_targets - ik_seed_targets)
+                sim_root_pos_targets = ik_seed_root_targets + np.clip(
+                    ik_correction_alpha,
+                    0.0,
+                    1.0,
+                ) * (sim_root_pos_targets - ik_seed_root_targets)
+            if not stability_before_ik:
+                qpos_targets = self._apply_reference_stability_prior(qpos_targets)
             qvel_targets = self._reference_qvel_from_qpos_targets(
                 qpos_targets,
-                references.frame_times,
+                reference_frame_times,
                 references.frame_counts,
+                references.loop_modes,
             )
-            velocity_scale = float(self.REFERENCE_RETARGET_VELOCITY_SCALE)
-            qvel_targets *= velocity_scale
             (
                 sim_root_pos_targets,
                 sim_root_vel_targets,
@@ -810,18 +937,17 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 qpos_targets,
                 sim_root_pos_targets,
                 references.root_quat_targets,
-                references.frame_times,
+                reference_frame_times,
                 references.frame_counts,
                 references.loop_modes,
             )
-            sim_root_vel_targets *= velocity_scale
-            root_angvel_targets *= velocity_scale
         else:
             qpos_targets = self._apply_reference_stability_prior(qpos_targets)
             qvel_targets = self._reference_qvel_from_qpos_targets(
                 qpos_targets,
-                references.frame_times,
+                reference_frame_times,
                 references.frame_counts,
+                references.loop_modes,
             )
             sim_root_pos_targets = self._scale_reference_root_xy_motion(
                 sim_root_pos_targets,
@@ -835,7 +961,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 qpos_targets,
                 sim_root_pos_targets,
                 references.root_quat_targets,
-                references.frame_times,
+                reference_frame_times,
                 references.frame_counts,
                 references.loop_modes,
             )
@@ -1046,7 +1172,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         root_pos_targets: np.ndarray,
         root_quat_targets: np.ndarray,
         frame_counts: np.ndarray,
-    ) -> np.ndarray:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Fit reference actuator poses to SMPL marker targets in this XML space.
 
         This is the missing DeepMimic/MimicKit-style retarget step: SMPL marker
@@ -1056,9 +1182,13 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         """
         marker_specs = self._resolve_host_ik_markers(ik_target_names)
         if not marker_specs:
-            return np.asarray(qpos_targets, dtype=np.float32)
+            return (
+                np.asarray(qpos_targets, dtype=np.float32),
+                np.asarray(root_pos_targets, dtype=np.float32),
+            )
 
         fitted = np.asarray(qpos_targets, dtype=np.float32).copy()
+        fitted_root = np.asarray(root_pos_targets, dtype=np.float32).copy()
         seed_targets = np.asarray(qpos_targets, dtype=np.float64)
         ik_target_positions = np.asarray(ik_target_positions, dtype=np.float64)
         root_pos_targets = np.asarray(root_pos_targets, dtype=np.float64)
@@ -1077,26 +1207,126 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             ],
             dtype=np.float64,
         )
-        pose_reg = 0.20
-        smooth_reg = 0.08
+        pose_reg = float(self._config.get("reference_ik_pose_regularization", 0.20))
+        smooth_reg = float(
+            self._config.get("reference_ik_smooth_regularization", 0.08)
+        )
+        configured_root_smooth_reg = self._config.get(
+            "reference_ik_root_smooth_regularization",
+            None,
+        )
+        root_smooth_reg = (
+            smooth_reg
+            if configured_root_smooth_reg is None
+            else float(configured_root_smooth_reg)
+        )
+        com_weight = float(self._config.get("reference_ik_com_weight", 0.0))
+        support_height_scale = max(
+            float(self._config.get("reference_ik_support_height_scale", 0.03)),
+            1e-6,
+        )
+        optimize_root_xy = bool(
+            self._config.get("reference_ik_optimize_root_xy", False)
+        )
+        root_reg = float(
+            self._config.get("reference_ik_root_regularization", 0.20)
+        )
+        swing_foot_weight_scale = np.clip(
+            float(
+                self._config.get("reference_ik_swing_foot_weight_scale", 1.0)
+            ),
+            0.0,
+            1.0,
+        )
         damping = 1e-5
         max_update = 0.12
         max_iters = 10
+        balance_update_mask = np.array(
+            [
+                joint_name in TRUNK_ACTUATED_JOINTS
+                or joint_name in LEG_ACTUATED_JOINTS
+                for joint_name in self._actuator_joint_names
+            ],
+            dtype=np.float64,
+        )
+
+        neutral_data = mujoco.MjData(self._mj_model)
+        neutral_data.qpos[:] = self._init_q_np
+        neutral_data.qvel[:] = 0.0
+        mujoco.mj_forward(self._mj_model, neutral_data)
+        neutral_foot_positions = np.asarray(
+            [
+                self._host_marker_position(neutral_data, marker)
+                for marker in marker_specs
+                if bool(marker["is_foot"])
+            ],
+            dtype=np.float64,
+        )
+        neutral_com_offset = np.zeros(2, dtype=np.float64)
+        if len(neutral_foot_positions) > 0:
+            neutral_com = self._host_whole_body_com(neutral_data)
+            neutral_com_offset = neutral_com[:2] - np.mean(
+                neutral_foot_positions[:, :2],
+                axis=0,
+            )
 
         for clip_id in range(seed_targets.shape[0]):
             frame_count = int(frame_counts[clip_id])
             if frame_count <= 0:
                 continue
             previous_qpos: np.ndarray | None = None
+            previous_root_xy: np.ndarray | None = None
             for frame_id in range(frame_count):
                 seed = seed_targets[clip_id, frame_id].copy()
+                root_seed = root_pos_targets[clip_id, frame_id].copy()
+                foot_targets = np.asarray(
+                    [
+                        ik_target_positions[
+                            clip_id,
+                            frame_id,
+                            int(marker["target_index"]),
+                        ]
+                        for marker in marker_specs
+                        if bool(marker["is_foot"])
+                    ],
+                    dtype=np.float64,
+                )
+                desired_com_xy: np.ndarray | None = None
+                support_weight_by_target: dict[int, float] = {}
+                if com_weight > 0.0 and len(foot_targets) > 0:
+                    relative_heights = foot_targets[:, 2] - np.min(
+                        foot_targets[:, 2]
+                    )
+                    support_weights = np.exp(
+                        -relative_heights / support_height_scale
+                    )
+                    support_weights /= max(float(np.sum(support_weights)), 1e-9)
+                    support_index = 0
+                    for marker in marker_specs:
+                        if not bool(marker["is_foot"]):
+                            continue
+                        support_weight_by_target[int(marker["target_index"])] = float(
+                            support_weights[support_index]
+                        )
+                        support_index += 1
+                    desired_support_xy = np.sum(
+                        support_weights[:, None] * foot_targets[:, :2],
+                        axis=0,
+                    )
+                    desired_com_xy = desired_support_xy + neutral_com_offset
                 qpos = seed.copy() if previous_qpos is None else (
                     0.75 * seed + 0.25 * previous_qpos
+                )
+                root_xy = (
+                    root_seed[:2].copy()
+                    if previous_root_xy is None
+                    else 0.75 * root_seed[:2] + 0.25 * previous_root_xy
                 )
                 qpos = np.clip(qpos, lower, upper)
                 for _ in range(max_iters):
                     full_qpos = self._init_q_np.copy()
-                    full_qpos[:3] = root_pos_targets[clip_id, frame_id]
+                    full_qpos[:3] = root_seed
+                    full_qpos[:2] = root_xy
                     full_qpos[3:7] = root_quat_targets[clip_id, frame_id]
                     full_qpos[self._actuator_qpos_indices_np] = qpos
                     data.qpos[:] = full_qpos
@@ -1105,11 +1335,11 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
 
                     residuals: list[np.ndarray] = []
                     jacobian_rows: list[np.ndarray] = []
-                    for target_index, marker in enumerate(marker_specs):
+                    for marker in marker_specs:
                         target_pos = ik_target_positions[
                             clip_id,
                             frame_id,
-                            target_index,
+                            int(marker["target_index"]),
                         ].copy()
                         if marker["is_foot"]:
                             target_pos[2] = max(
@@ -1118,40 +1348,131 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                             )
                         current_pos = self._host_marker_position(data, marker)
                         marker_weight = float(marker["weight"])
+                        if bool(marker["is_foot"]) and support_weight_by_target:
+                            support_weight = support_weight_by_target[
+                                int(marker["target_index"])
+                            ]
+                            maximum_support_weight = max(
+                                support_weight_by_target.values()
+                            )
+                            stance_fraction = support_weight / max(
+                                maximum_support_weight,
+                                1e-9,
+                            )
+                            marker_weight *= (
+                                swing_foot_weight_scale
+                                + (1.0 - swing_foot_weight_scale) * stance_fraction
+                            )
                         sqrt_weight = np.sqrt(marker_weight)
                         residuals.append(sqrt_weight * (target_pos - current_pos))
                         marker_jac = self._host_marker_jacobian(data, marker)
-                        jacobian_rows.append(
-                            sqrt_weight * marker_jac * ik_update_mask[None, :]
+                        marker_jac = marker_jac * ik_update_mask[None, :]
+                        if optimize_root_xy:
+                            root_jacobian = np.zeros((3, 2), dtype=np.float64)
+                            root_jacobian[:2] = np.eye(2, dtype=np.float64)
+                            marker_jac = np.hstack((root_jacobian, marker_jac))
+                        jacobian_rows.append(sqrt_weight * marker_jac)
+
+                    if desired_com_xy is not None:
+                        current_com = self._host_whole_body_com(data)
+                        com_jacobian = self._host_whole_body_com_jacobian(data)
+                        sqrt_com_weight = np.sqrt(com_weight)
+                        residuals.append(
+                            sqrt_com_weight * (desired_com_xy - current_com[:2])
                         )
+                        com_jacobian = (
+                            com_jacobian[:2] * balance_update_mask[None, :]
+                        )
+                        if optimize_root_xy:
+                            com_jacobian = np.hstack(
+                                (np.eye(2, dtype=np.float64), com_jacobian)
+                            )
+                        jacobian_rows.append(sqrt_com_weight * com_jacobian)
 
                     sqrt_pose_reg = np.sqrt(pose_reg)
                     residuals.append(sqrt_pose_reg * (seed - qpos))
-                    jacobian_rows.append(sqrt_pose_reg * np.eye(action_size))
+                    pose_jacobian = np.eye(action_size, dtype=np.float64)
+                    if optimize_root_xy:
+                        pose_jacobian = np.hstack(
+                            (
+                                np.zeros((action_size, 2), dtype=np.float64),
+                                pose_jacobian,
+                            )
+                        )
+                    jacobian_rows.append(sqrt_pose_reg * pose_jacobian)
+                    if optimize_root_xy and root_reg > 0.0:
+                        sqrt_root_reg = np.sqrt(root_reg)
+                        residuals.append(sqrt_root_reg * (root_seed[:2] - root_xy))
+                        root_reg_jacobian = np.hstack(
+                            (
+                                np.eye(2, dtype=np.float64),
+                                np.zeros((2, action_size), dtype=np.float64),
+                            )
+                        )
+                        jacobian_rows.append(
+                            sqrt_root_reg * root_reg_jacobian
+                        )
                     if previous_qpos is not None:
                         sqrt_smooth_reg = np.sqrt(smooth_reg)
                         residuals.append(sqrt_smooth_reg * (previous_qpos - qpos))
-                        jacobian_rows.append(sqrt_smooth_reg * np.eye(action_size))
+                        smooth_jacobian = np.eye(action_size, dtype=np.float64)
+                        if optimize_root_xy:
+                            smooth_jacobian = np.hstack(
+                                (
+                                    np.zeros((action_size, 2), dtype=np.float64),
+                                    smooth_jacobian,
+                                )
+                            )
+                        jacobian_rows.append(sqrt_smooth_reg * smooth_jacobian)
+                    if optimize_root_xy and previous_root_xy is not None:
+                        sqrt_smooth_reg = np.sqrt(root_smooth_reg)
+                        residuals.append(
+                            sqrt_smooth_reg * (previous_root_xy - root_xy)
+                        )
+                        root_smooth_jacobian = np.hstack(
+                            (
+                                np.eye(2, dtype=np.float64),
+                                np.zeros((2, action_size), dtype=np.float64),
+                            )
+                        )
+                        jacobian_rows.append(
+                            sqrt_smooth_reg * root_smooth_jacobian
+                        )
 
                     residual = np.concatenate(residuals)
                     jacobian = np.vstack(jacobian_rows)
                     system = jacobian.T @ jacobian
                     rhs = jacobian.T @ residual
-                    system += damping * np.eye(action_size)
+                    system += damping * np.eye(system.shape[0])
                     try:
                         update = np.linalg.solve(system, rhs)
                     except np.linalg.LinAlgError:
                         update = np.linalg.lstsq(system, rhs, rcond=None)[0]
-                    update = np.clip(update, -max_update, max_update)
-                    qpos = np.clip(qpos + update, lower, upper)
+                    if optimize_root_xy:
+                        root_update = np.clip(update[:2], -0.03, 0.03)
+                        joint_update = np.clip(
+                            update[2:],
+                            -max_update,
+                            max_update,
+                        )
+                        root_xy += root_update
+                    else:
+                        joint_update = np.clip(update, -max_update, max_update)
+                    qpos = np.clip(qpos + joint_update, lower, upper)
                     if float(np.linalg.norm(update)) < 1e-4:
                         break
 
                 fitted[clip_id, frame_id] = qpos.astype(np.float32)
+                fitted_root[clip_id, frame_id, :2] = root_xy.astype(np.float32)
                 previous_qpos = qpos.copy()
+                previous_root_xy = root_xy.copy()
             fitted[clip_id, frame_count:] = fitted[clip_id, frame_count - 1]
+            fitted_root[clip_id, frame_count:] = fitted_root[
+                clip_id,
+                frame_count - 1,
+            ]
 
-        return fitted
+        return fitted, fitted_root
 
     def _normalize_ik_foot_target_heights(
         self,
@@ -1257,7 +1578,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
     ) -> list[dict[str, object]]:
         """Resolve marker names to host MuJoCo site/body ids for IK."""
         specs: list[dict[str, object]] = []
-        for marker_name in marker_names:
+        for target_index, marker_name in enumerate(marker_names):
             is_foot = "metatarsal" in marker_name or "foot" in marker_name
             weight = 4.0 if is_foot else 1.2
             if "pelvis" in marker_name:
@@ -1274,6 +1595,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                         "id": self._mj_model.site(marker_name).id,
                         "weight": weight,
                         "is_foot": is_foot,
+                        "target_index": target_index,
                     }
                 )
                 continue
@@ -1287,11 +1609,32 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                         "id": self._mj_model.body(marker_name).id,
                         "weight": weight,
                         "is_foot": is_foot,
+                        "target_index": target_index,
                     }
                 )
             except KeyError:
                 continue
         return specs
+
+    def _host_whole_body_com(self, data: mujoco.MjData) -> np.ndarray:
+        """Return the mass-weighted host-model COM in world coordinates."""
+        body_masses = np.asarray(self._mj_model.body_mass[1:], dtype=np.float64)
+        total_mass = max(float(np.sum(body_masses)), 1e-9)
+        return np.sum(
+            np.asarray(data.xipos[1:], dtype=np.float64) * body_masses[:, None],
+            axis=0,
+        ) / total_mass
+
+    def _host_whole_body_com_jacobian(self, data: mujoco.MjData) -> np.ndarray:
+        """Return whole-body COM Jacobian columns for actuated hinge DOFs."""
+        jacobian = np.zeros((3, self._mj_model.nv), dtype=np.float64)
+        mujoco.mj_jacSubtreeCom(
+            self._mj_model,
+            data,
+            jacobian,
+            self._torso_body_id,
+        )
+        return jacobian[:, self._actuator_dof_indices_np]
 
     def _host_marker_position(
         self,
@@ -1324,11 +1667,13 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         qpos_targets: np.ndarray,
         frame_times: np.ndarray,
         frame_counts: np.ndarray,
+        loop_modes: np.ndarray,
     ) -> np.ndarray:
-        """Differentiate padded actuator qpos targets clip-by-clip."""
+        """Differentiate actuator targets without a velocity jump at wrap seams."""
         qpos_targets = np.asarray(qpos_targets, dtype=np.float32)
         frame_times = np.asarray(frame_times, dtype=np.float32)
         frame_counts = np.asarray(frame_counts, dtype=np.int32)
+        loop_modes = np.asarray(loop_modes, dtype=np.int32)
         qvel_targets = np.zeros_like(qpos_targets, dtype=np.float32)
         for clip_id in range(qpos_targets.shape[0]):
             frame_count = int(frame_counts[clip_id])
@@ -1340,6 +1685,16 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 dt,
                 axis=0,
             ).astype(np.float32)
+            if (
+                loop_modes[clip_id] == int(LoopMode.WRAP)
+                and frame_count > 2
+            ):
+                seam_velocity = (
+                    qpos_targets[clip_id, 1]
+                    - qpos_targets[clip_id, frame_count - 2]
+                ) / (2.0 * dt)
+                qvel_targets[clip_id, 0] = seam_velocity
+                qvel_targets[clip_id, frame_count - 1] = seam_velocity
             qvel_targets[clip_id, frame_count:] = qvel_targets[
                 clip_id,
                 frame_count - 1,
@@ -1368,6 +1723,19 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 self.REFERENCE_RETARGET_ROOT_XY_SCALE,
             )
         )
+        configured_x_scale = self._config.get("reference_root_x_scale", None)
+        configured_y_scale = self._config.get("reference_root_y_scale", None)
+        root_x_scale = (
+            root_xy_scale
+            if configured_x_scale is None
+            else float(configured_x_scale)
+        )
+        root_y_scale = (
+            root_xy_scale
+            if configured_y_scale is None
+            else float(configured_y_scale)
+        )
+        root_scale = np.array([root_x_scale, root_y_scale], dtype=np.float32)
         for clip_id in range(scaled.shape[0]):
             frame_count = int(frame_counts[clip_id])
             if frame_count <= 0:
@@ -1375,7 +1743,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             origin_xy = scaled[clip_id, 0, :2].copy()
             scaled[clip_id, :frame_count, :2] = (
                 origin_xy
-                + root_xy_scale * (scaled[clip_id, :frame_count, :2] - origin_xy)
+                + root_scale * (scaled[clip_id, :frame_count, :2] - origin_xy)
             )
             scaled[clip_id, frame_count:, :2] = scaled[clip_id, frame_count - 1, :2]
         return scaled
@@ -1503,6 +1871,22 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                     - aligned_root_pos[clip_id, 0]
                 )
                 wrap_deltas[clip_id, 2] = 0.0
+                if frame_count > 2:
+                    previous_position = (
+                        aligned_root_pos[clip_id, frame_count - 2]
+                        - wrap_deltas[clip_id]
+                    )
+                    seam_velocity = (
+                        aligned_root_pos[clip_id, 1] - previous_position
+                    ) / (2.0 * dt)
+                    seam_velocity[2] = np.clip(
+                        seam_velocity[2],
+                        -float(self.REFERENCE_ROOT_HEIGHT_MAX_SPEED),
+                        float(self.REFERENCE_ROOT_HEIGHT_MAX_SPEED),
+                    )
+                    aligned_root_vel[clip_id, 0] = seam_velocity
+                    aligned_root_vel[clip_id, frame_count - 1] = seam_velocity
+                    aligned_root_vel[clip_id, frame_count:] = seam_velocity
 
         return aligned_root_pos, aligned_root_vel, wrap_deltas
 
@@ -1766,6 +2150,14 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
     def _apply_locomotion_neutral_pose(self, qpos: np.ndarray) -> np.ndarray:
         """Centira akcije oko stabilnije stojece poze, ne oko krute A-poze."""
         for joint_name, joint_value in self.NEUTRAL_JOINT_POSE.items():
+            if joint_name == "left_hip_x":
+                joint_value = float(
+                    self._config.get("neutral_stance_hip_x", joint_value)
+                )
+            elif joint_name == "right_hip_x":
+                joint_value = -float(
+                    self._config.get("neutral_stance_hip_x", -joint_value)
+                )
             joint_id = mujoco.mj_name2id(
                 self._mj_model,
                 mujoco.mjtObj.mjOBJ_JOINT,
@@ -2007,7 +2399,9 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 gait_key,
                 shape=(),
                 minval=0,
-                maxval=int(self.GAIT_PERIOD_STEPS),
+                maxval=int(
+                    self._config.get("gait_period_steps", self.GAIT_PERIOD_STEPS)
+                ),
             ),
             "bvh_reference_clip_id": bvh_clip_id,
             "bvh_reference_time_offset": bvh_time_offset,
@@ -2086,6 +2480,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "action_magnitude": jp.array(0.0),
             "variable_posture": jp.array(1.0),
             "gait_reward": jp.array(0.0),
+            "gait_balance_reward": jp.array(0.0),
+            "gait_com_error": jp.array(0.0),
             "reference_gait": initial_reference_gait,
             "reference_velocity": initial_reference_velocity,
             "deepmimic_pose": initial_deepmimic["pose"],
@@ -2210,7 +2606,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         )
         info["gait_step"] = jp.mod(
             info["gait_step"] + jp.array(1, dtype=info["gait_step"].dtype),
-            self.GAIT_PERIOD_STEPS,
+            int(self._config.get("gait_period_steps", self.GAIT_PERIOD_STEPS)),
         )
 
         obs = self._get_obs(data, info)
@@ -2239,6 +2635,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         reference_trace = self._get_reference_trace_metrics(data, info)
         variable_posture = self._get_variable_posture_reward(data, info)
         gait_reward = self._get_gait_reward(data, info)
+        gait_balance_reward, gait_com_error = self._get_gait_balance(data, info)
         reference_gait = self._get_reference_gait_reward(data, info)
         reference_velocity = self._get_reference_velocity_reward(data, info)
         if self._config.get("reference_gait", "none") in ("bvh", "smpl"):
@@ -2292,6 +2689,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         metrics["action_magnitude"] = action_magnitude
         metrics["variable_posture"] = variable_posture
         metrics["gait_reward"] = gait_reward
+        metrics["gait_balance_reward"] = gait_balance_reward
+        metrics["gait_com_error"] = gait_com_error
         metrics["reference_gait"] = reference_gait
         metrics["reference_velocity"] = reference_velocity
         metrics["deepmimic_pose"] = deepmimic["pose"]
@@ -2398,8 +2797,54 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             )
         else:
             reference_ctrl = self._default_ctrl
+            balance_prior_scale = float(
+                self._config.get("procedural_balance_prior_scale", 0.0)
+            )
+            procedural_prior_scale = float(
+                self._config.get("procedural_step_prior_scale", 0.0)
+            )
+            residual_multiplier = jp.ones_like(smoothed_action)
+            gait_warmup_scale = self._get_gait_warmup_scale(info)
+            if balance_prior_scale:
+                balance_target = self._get_procedural_balance_action_target(info)
+                reference_ctrl = reference_ctrl + (
+                    balance_prior_scale
+                    * gait_warmup_scale
+                    * (balance_target - self._default_ctrl)
+                )
+            if procedural_prior_scale:
+                gait_target = self._get_procedural_step_action_target(info)
+                reference_ctrl = reference_ctrl + (
+                    procedural_prior_scale
+                    * gait_warmup_scale
+                    * (gait_target - self._default_ctrl)
+                )
+                guided_residual_scale = float(
+                    self._config.get("procedural_step_residual_scale", 1.0)
+                )
+                guided_residual_scale = 1.0 - gait_warmup_scale * (
+                    1.0 - guided_residual_scale
+                )
+                left_swing = self._is_left_swing(info)
+                guided_mask = jp.where(
+                    left_swing,
+                    self._procedural_left_swing_residual_mask,
+                    self._procedural_right_swing_residual_mask,
+                )
+                residual_multiplier = jp.where(
+                    guided_mask,
+                    guided_residual_scale,
+                    1.0,
+                )
             residual_scale = jp.array(1.0, dtype=smoothed_action.dtype)
-        return reference_ctrl + (smoothed_action * self._action_scale * residual_scale)
+        if reference_gait in ("bvh", "smpl"):
+            residual_multiplier = jp.ones_like(smoothed_action)
+        return reference_ctrl + (
+            smoothed_action
+            * self._action_scale
+            * residual_scale
+            * residual_multiplier
+        )
 
     def _clip_motor_targets(self, motor_targets: jax.Array) -> jax.Array:
         """Clip PD targets to the active action convention."""
@@ -2425,13 +2870,23 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
 
     def sample_command(self, rng: jax.Array) -> jax.Array:
         """Uzorkuje ciljnu brzinu: napred/nazad, levo/desno, yaw."""
-        if self._config.command_profile in ("forward_slow", "forward", "walk"):
+        if self._config.command_profile == "step_in_place":
+            return jp.zeros(3, dtype=jp.float32)
+
+        if self._config.command_profile in (
+            "forward_slow",
+            "forward_bridge",
+            "forward",
+            "walk",
+        ):
             x_key, zero_key = jax.random.split(rng, 2)
-            command_range = (
-                self.FORWARD_SLOW_COMMAND_RANGE
-                if self._config.command_profile == "forward_slow"
-                else self.FORWARD_COMMAND_RANGE
-            )
+            command_ranges = {
+                "forward_slow": self.FORWARD_SLOW_COMMAND_RANGE,
+                "forward_bridge": self.FORWARD_BRIDGE_COMMAND_RANGE,
+                "forward": self.FORWARD_COMMAND_RANGE,
+                "walk": self.FORWARD_COMMAND_RANGE,
+            }
+            command_range = command_ranges[self._config.command_profile]
             zero_probability = (
                 self.FORWARD_SLOW_ZERO_COMMAND_PROBABILITY
                 if self._config.command_profile == "forward_slow"
@@ -2474,8 +2929,9 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         }
         if self._config.command_profile not in command_ranges:
             raise ValueError(
-                "command_profile mora biti 'forward_slow', 'forward', 'walk', "
-                "'steer', 'standard_easy' ili 'standard'."
+                "command_profile mora biti 'step_in_place', 'forward_slow', "
+                "'forward_bridge', 'forward', 'walk', 'steer', "
+                "'standard_easy' ili 'standard'."
             )
 
         x_range, y_range, yaw_range, zero_probability = command_ranges[
@@ -2748,11 +3204,18 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         overspeed = jp.maximum(measured_lin_norm - 1.25 * command_lin_norm, 0.0)
         yaw_overspeed_denominator = jp.maximum(command_yaw_abs, 0.05)
         yaw_overspeed = jp.maximum(measured_yaw_abs - 1.25 * command_yaw_abs, 0.0)
-        overspeed_cost = self.OVERSPEED_COST_SCALE * jp.square(
+        overspeed_cost_scale = self._config.overspeed_cost_scale
+        overspeed_cost = overspeed_cost_scale * jp.square(
             overspeed / overspeed_denominator
-        ) + 0.25 * self.OVERSPEED_COST_SCALE * jp.square(
+        ) + 0.25 * overspeed_cost_scale * jp.square(
             yaw_overspeed / yaw_overspeed_denominator
         )
+        # A zero-command stepping curriculum needs transient horizontal COM
+        # motion to transfer weight between feet.  Treating every such motion
+        # as overspeed creates a large contradictory penalty (the denominator
+        # is only 0.05 m/s), so retain only the mild idle-motion regularizer.
+        zero_command_gait = self._zero_command_gait(info)
+        overspeed_cost = jp.where(zero_command_gait, 0.0, overspeed_cost)
         idle_motion_cost = jp.where(
             command_active,
             0.0,
@@ -2810,11 +3273,22 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         bvh_mode = self._config.get("reference_gait", "none") in ("bvh", "smpl")
         if bvh_mode:
             gait_reward = jp.array(0.0)
+            gait_balance_shaping = jp.array(0.0)
             swing_clearance_deficit_cost = jp.array(0.0)
         else:
-            gait_reward = self._get_gait_reward(data, info)
+            gait_shaping_scale = self._config.gait_shaping_scale
+            gait_reward = gait_shaping_scale * self._get_gait_reward(data, info)
+            gait_balance_reward = self._get_gait_balance(data, info)[0]
+            gait_balance_shaping = float(
+                self._config.get("gait_balance_reward_scale", 0.0)
+            ) * jp.where(
+                self._gait_active(info),
+                gait_balance_reward - 1.0,
+                0.0,
+            )
             swing_clearance_deficit_cost = (
-                self.SWING_CLEARANCE_DEFICIT_COST_SCALE
+                gait_shaping_scale
+                * self.SWING_CLEARANCE_DEFICIT_COST_SCALE
                 * self._get_swing_clearance_deficit_cost(data, info)
             )
         reference_gait_reward = (
@@ -2863,11 +3337,12 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 info,
             )
             swing_drag_cost = (
-                self.SWING_FOOT_DRAG_COST_SCALE
+                self._config.gait_shaping_scale
+                * self.SWING_FOOT_DRAG_COST_SCALE
                 * self._get_swing_foot_drag_cost(data, info)
             )
         velocity_tracking_scale = self.VELOCITY_TRACKING_REWARD_SCALE
-        forward_progress_scale = self.FORWARD_PROGRESS_REWARD_SCALE
+        forward_progress_scale = self._config.forward_progress_reward_scale
         if self._config.command_profile == "forward_slow":
             velocity_tracking_scale = 0.8
             forward_progress_scale = 0.25
@@ -2915,6 +3390,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 + posture_reward
                 + variable_posture_reward
                 + gait_reward
+                + gait_balance_shaping
                 + reference_gait_reward
                 + reference_velocity_reward
                 - stuck_penalty
@@ -3014,14 +3490,28 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         )
         return jp.where(fallback_active, jp.array(False), motion_over)
 
+    def _get_gait_warmup_scale(self, info: dict) -> jax.Array:
+        """Ramp phase-conditioned assistance in after an episode reset."""
+        warmup_steps = int(self._config.get("gait_warmup_steps", 0))
+        if warmup_steps <= 0:
+            return jp.array(1.0, dtype=jp.float32)
+        return jp.clip(
+            (info["motion_step"].astype(jp.float32) + 1.0) / float(warmup_steps),
+            0.0,
+            1.0,
+        )
+
     def _get_gait_phase_angle(self, info: dict) -> jax.Array:
         """Periodican signal koji govori politici koja noga treba da bude swing."""
         if self._config.get("reference_gait", "none") in ("bvh", "smpl"):
             return self._get_bvh_reference_phase_angle(info)
+        gait_period_steps = int(
+            self._config.get("gait_period_steps", self.GAIT_PERIOD_STEPS)
+        )
         phase = jp.mod(
             info["gait_step"].astype(jp.float32),
-            self.GAIT_PERIOD_STEPS,
-        ) / self.GAIT_PERIOD_STEPS
+            gait_period_steps,
+        ) / float(gait_period_steps)
         return 2.0 * jp.pi * phase
 
     def _get_bvh_reference_phase_angle(self, info: dict) -> jax.Array:
@@ -3050,17 +3540,62 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         foot_contact = self._foot_contact(data, info)
         stance_contact = jp.where(left_swing, foot_contact[1], foot_contact[0])
         relative_clearance = self._get_swing_clearance(data, info)
+        clearance_target = float(
+            self._config.get(
+                "foot_clearance_target",
+                self.FOOT_CLEARANCE_TARGET,
+            )
+        )
         clearance_reward = jp.clip(
-            relative_clearance / self.FOOT_CLEARANCE_TARGET,
+            relative_clearance / clearance_target,
             0.0,
             1.0,
         )
-        command_active = self._command_active(info)
+        gait_active = self._gait_active(info)
         return jp.where(
-            command_active,
+            gait_active,
             self.FOOT_CLEARANCE_REWARD_SCALE * clearance_reward
             + self.STANCE_CONTACT_REWARD_SCALE * stance_contact,
             0.0,
+        )
+
+    def _get_gait_balance(
+        self,
+        data: mjx.Data,
+        info: dict,
+    ) -> tuple[jax.Array, jax.Array]:
+        """Reward phase-aware lateral COM transfer toward the stance foot.
+
+        The phase amplitude smoothly returns the target to the midpoint during
+        double-support transitions, avoiding a discontinuous left/right target.
+        """
+        foot_y = self._foot_positions(data)[:, 1]
+        midpoint_y = 0.5 * (foot_y[0] + foot_y[1])
+        left_swing = self._is_left_swing(info)
+        stance_y = jp.where(left_swing, foot_y[1], foot_y[0])
+        phase_amplitude = (
+            self._get_gait_warmup_scale(info)
+            * jp.abs(jp.sin(self._get_gait_phase_angle(info)))
+        )
+        target_fraction = float(
+            self._config.get("gait_balance_target_fraction", 0.5)
+        )
+        target_y = midpoint_y + (
+            target_fraction * phase_amplitude * (stance_y - midpoint_y)
+        )
+        com_error = self._center_of_mass(data)[1] - target_y
+        sigma = jp.maximum(
+            jp.asarray(
+                self._config.get("gait_balance_sigma", 0.035),
+                dtype=com_error.dtype,
+            ),
+            1e-6,
+        )
+        reward = jp.exp(-0.5 * jp.square(com_error / sigma))
+        gait_active = self._gait_active(info)
+        return (
+            jp.where(gait_active, reward, 0.0),
+            jp.where(gait_active, jp.abs(com_error), 0.0),
         )
 
     def _get_swing_foot_drag_cost(self, data: mjx.Data, info: dict) -> jax.Array:
@@ -3068,8 +3603,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         left_swing = self._is_left_swing(info)
         foot_contact = self._foot_contact(data, info)
         swing_contact = jp.where(left_swing, foot_contact[0], foot_contact[1])
-        command_active = self._command_active(info)
-        return jp.where(command_active, swing_contact, 0.0)
+        gait_active = self._gait_active(info)
+        return jp.where(gait_active, swing_contact, 0.0)
 
     def _get_swing_clearance_deficit_cost(
         self,
@@ -3078,10 +3613,16 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
     ) -> jax.Array:
         """Kazni swing fazu ako stopalo nije stvarno odignuto od stance noge."""
         clearance = self._get_swing_clearance(data, info)
-        deficit = jp.maximum(self.FOOT_CLEARANCE_TARGET - clearance, 0.0)
-        normalized_deficit = deficit / self.FOOT_CLEARANCE_TARGET
-        command_active = self._command_active(info)
-        return jp.where(command_active, jp.square(normalized_deficit), 0.0)
+        clearance_target = float(
+            self._config.get(
+                "foot_clearance_target",
+                self.FOOT_CLEARANCE_TARGET,
+            )
+        )
+        deficit = jp.maximum(clearance_target - clearance, 0.0)
+        normalized_deficit = deficit / clearance_target
+        gait_active = self._gait_active(info)
+        return jp.where(gait_active, jp.square(normalized_deficit), 0.0)
 
     def _get_swing_clearance(self, data: mjx.Data, info: dict) -> jax.Array:
         """Relativna visina swing stopala iznad stance stopala."""
@@ -3533,7 +4074,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
     def _center_of_mass(self, data: mjx.Data) -> jax.Array:
         """Mass-weighted body center in world coordinates."""
         return jp.sum(
-            data.xpos[self._deepmimic_body_ids] * self._deepmimic_body_weights[:, None],
+            data.xipos[self._deepmimic_body_ids]
+            * self._deepmimic_body_weights[:, None],
             axis=0,
         )
 
@@ -3563,6 +4105,32 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         target_qpos = self._default_ctrl + offset
         return jp.clip(
             target_qpos,
+            self._actuator_qpos_lower_limits,
+            self._actuator_qpos_upper_limits,
+        )
+
+    def _get_procedural_step_action_target(self, info: dict) -> jax.Array:
+        """Return alternating sagittal keyposes for action-center assistance."""
+        sin_phase = jp.sin(self._get_gait_phase_angle(info))
+        offset = (
+            self._procedural_step_pos_offsets * jp.maximum(sin_phase, 0.0)
+            + self._procedural_step_neg_offsets * jp.maximum(-sin_phase, 0.0)
+        )
+        return jp.clip(
+            self._default_ctrl + offset,
+            self._actuator_qpos_lower_limits,
+            self._actuator_qpos_upper_limits,
+        )
+
+    def _get_procedural_balance_action_target(self, info: dict) -> jax.Array:
+        """Return alternating statically feasible lateral balance keyposes."""
+        sin_phase = jp.sin(self._get_gait_phase_angle(info))
+        offset = (
+            self._procedural_balance_pos_offsets * jp.maximum(sin_phase, 0.0)
+            + self._procedural_balance_neg_offsets * jp.maximum(-sin_phase, 0.0)
+        )
+        return jp.clip(
+            self._default_ctrl + offset,
             self._actuator_qpos_lower_limits,
             self._actuator_qpos_upper_limits,
         )
@@ -4025,6 +4593,16 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             + 0.25 * jp.abs(info["command"][2])
         )
         walking_alpha = jp.clip((command_speed - 0.05) / 0.35, 0.0, 1.0)
+        # Step-in-place has a zero joystick command but must use locomotion
+        # posture tolerances; otherwise the standing prior penalizes precisely
+        # the hip and knee excursions requested by the gait objective.
+        walking_alpha = jp.maximum(
+            walking_alpha,
+            jp.asarray(
+                bool(self._config.get("gait_active_without_command", False)),
+                dtype=walking_alpha.dtype,
+            ),
+        )
         return (
             (1.0 - walking_alpha) * self._posture_std_standing
             + walking_alpha * self._posture_std_walking
@@ -4157,6 +4735,16 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         """Track linear and yaw command as separate physical quantities."""
         # REF: PROJECT-COMMAND-TRACKING-SPLIT
         # TYPE: ENGINEERING_DEFAULT
+        if self._config.command_profile in (
+            "forward_slow",
+            "forward_bridge",
+            "forward",
+            "walk",
+        ):
+            # Forward-only tasks have no yaw objective. Including the yaw term
+            # gave every straight-running policy 25% reward for free and
+            # weakened the velocity-learning signal.
+            return self._get_tracking_lin_reward(data, info)
         return 0.75 * self._get_tracking_lin_reward(
             data,
             info,
@@ -4164,7 +4752,16 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
 
     def _get_tracking_lin_reward(self, data: mjx.Data, info: dict) -> jax.Array:
         """Track commanded horizontal velocity in m/s."""
-        error = jp.sum(jp.square(info["command"][:2] - self._measured_command(data)[:2]))
+        velocity_error = info["command"][:2] - self._measured_command(data)[:2]
+        # A zero-command step-in-place task must move laterally to transfer
+        # support. Keep sagittal drift at zero, but let the phase-aware COM
+        # target supervise the necessary side-to-side motion.
+        lateral_error = jp.where(
+            self._zero_command_gait(info),
+            0.0,
+            jp.square(velocity_error[1]),
+        )
+        error = jp.square(velocity_error[0]) + lateral_error
         return jp.exp(-error / self._config.tracking_sigma)
 
     def _get_tracking_yaw_reward(self, data: mjx.Data, info: dict) -> jax.Array:
@@ -4235,6 +4832,18 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         return (
             jp.linalg.norm(command[:2]) > self.STUCK_COMMAND_THRESHOLD
         ) | (jp.abs(command[2]) > self.STUCK_COMMAND_THRESHOLD)
+
+    def _zero_command_gait(self, info: dict) -> jax.Array:
+        """Return true for a phase-clock gait curriculum at zero command."""
+        return (~self._command_active(info)) & jp.array(
+            bool(self._config.get("gait_active_without_command", False))
+        )
+
+    def _gait_active(self, info: dict) -> jax.Array:
+        """Allow a stepping curriculum to shape feet at zero joystick command."""
+        return self._command_active(info) | jp.array(
+            bool(self._config.get("gait_active_without_command", False))
+        )
 
     def _get_command_progress(self, data: mjx.Data, info: dict) -> jax.Array:
         """Reward progress without mixing m/s and rad/s in one norm."""
