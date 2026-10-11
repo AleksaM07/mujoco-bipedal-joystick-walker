@@ -1,0 +1,179 @@
+STATUS: MAIN + MODERN BVH
+Datum: 2026-10-11
+Grana: experiment/main-modern-bvh
+
+TRENUTNO STANJE: ZAUSTAVLJENO NA ZAHTEV KORISNIKA
+Dugi run vise ne radi; sacuvano je 61,358,080 ukupnih koraka sa pilotom.
+Folder ostaje _running radi postojecih putanja, ali run_status.json ima
+status=interrupted. Istorijski opis pokretanja ispod nije trenutni status.
+Nema novog treninga ili automatskog nastavka. Korisnik razmatra sledeci korak.
+
+DUBINSKA DIJAGNOSTIKA SVIH GRANA: 2026-10-11
+Detaljan pregled: PROJECT_DIAGNOSIS_2026-10-11.md
+Potvrdjeno je da istorijski walker koristi v16 i legacy_action_prior=true;
+ovaj v17 eksperiment zato nije reprodukcija iste uspesne konfiguracije.
+Novi izvestaj razdvaja potvrdene greske, korisne rezultate stable grane i
+predlog nastavka iz project_v2_refrences_only. Nije pokrenut novi trening.
+
+CILJ
+Uzeti sistem sa main i promeniti samo BVH referencu/preprocessing.
+Ovo nije nastavak v21/v22 treninga niti novi DeepMimic reward eksperiment.
+
+IZVORI
+- Main baza: 33eaa1f.
+- Modern BVH i host IK/floor/foot-lock pipeline: cd6557c.
+- Prethodni rad ostaje na experiment/v21-stable-baseline, commit cd6557c.
+- Nova grana je napravljena direktno iz main. Nije merge celog v21 env-a.
+
+STA OSTAJE SA MAIN
+- biomechanics_model.py: nepromenjen; trainfast_v17, 18 aktuatora.
+- Reward formule, koeficijenti i originalna maska za reference: nepromenjeni.
+- Standing reset, bez reference-state initialization.
+- Absolute/default-pose motor targeti i originalni action scales/smoothing.
+- Originalni termination, kontakti, observation layout i joystick zadatak.
+- PPO 512/256/128, SiLU, lr=3e-4, gamma=0.97, entropy=0.003, clipping=0.2.
+- Originalni ERFI i domain randomization u pilot treningu.
+- Main default i dalje nema BVH prior. Eksperiment ga ukljucuje CLI opcijama.
+
+STA JE PRENETO
+- bvh_reference.py: moderni BVH parser, FK, mapiranje, segmentacija ciklusa.
+- bvh_retargeting.py: host-only IK na stvarnom main modelu, root/floor
+  alignment, stance foot locking, stability blend, konzistentne brzine.
+- Novi motion_step sat ne resetuje referencu kada se promeni joystick.
+- Modern referenca ima interpolaciju i postuje wrap/clamp metadata.
+- Motion speed menja frame time i derivirane brzine zajedno; nema zasebnog
+  skrivenog 0.25 skaliranja brzina.
+- bvh_reference_main.py cuva nepromenjen stari loader za A/B poredenje.
+- Training i Windows evaluate cuvaju/ucitavaju reference_pipeline i ostale
+  retarget opcije preko config.json.
+- Operativne dependency oznake/pinovi i lock preneti su radi istog okruzenja:
+  CUDA JAX samo na Linux/WSL, CPU JAX na Windows, MuJoCo/MJX 3.10.
+
+PROVERE
+- 9 pytest testova prolazi, ukljucujuci AST parity glavnog rewarda, reset-a,
+  akcija/koraka, modela, PPO defaulta i originalnog BVH loadera.
+- Moderni 02_01.bvh se ucitava na main modelu: 3 ciklusa, 136/134/131 frameova.
+- GPU JIT smoke prolazi: 12 physics koraka, 18 akcija, observation 116,
+  finite reward/stanje, done=0. Ovo NIJE naucen hod.
+- uv lock --check --offline prolazi.
+- Ruff provera novih modula prolazi.
+- Prvi debug smoke je rucno prekinut tokom spore eager kompilacije;
+  folder je obelezen _interrupted. Zasebna JIT provera je zavrsena.
+- Status run-a sada se cuva i u run_status.json. PermissionError pri
+  preimenovanju foldera na Windows/WSL vise ne ponistava zavrsen trening.
+
+CRVENA SVETLA: NE TVRDITI DA JE REFERENCA POTPUNO VALIDNA
+- Interior dq/dt i qvel se poklapaju; actuator/control limit violations = 0.
+- Ipak, oko 9.2-12.2% joint target vrednosti ne moze da se zada kao motor
+  target kroz main-ov default +/- action_scale opseg.
+  To ne znaci da robot fizicki ne moze zauzeti te poze kroz dinamiku, ali
+  direktno pose tracking nije dostizan preko trenutnog action parametrizovanja.
+- Hip_z koristi nova sagittal referenca, ali ga originalni main reference
+  reward mask NE nagradjuje; hip_z action scale je samo 0.14 rad.
+- Posle IK/blending-a endpoint pose gap iznosi oko 0.049-0.138 rad.
+- Kinematicko foot skating p95 je oko 0.26-0.61 m/s. "Stance" je ovde
+  geometrijska aproksimacija: dno stopala ispod 3.5 cm u oba susedna framea,
+  ne dokaz stvarnog fizickog oslonca/contact-force faze.
+- Minimalna visina stopala je oko -0.005 m (nasledjeni 5 mm contact preload).
+- Ne menjamo ove stvari u prvom strict-main testu; eventualne korekcije
+  treba testirati odvojeno da ne izgubimo uzrok/posledicu.
+- Main HEAD model v17 nije automatski isto sto i svaki istorijski dobar
+  v16 checkpoint. Stari v21/v22 checkpoint nije inicijalizacija ovog pilota.
+
+ZAVRSEN PILOT: SAMO PROVERA SPOJA, NE KONACAN EKSPERIMENT
+- Novi trening od nule: 1M koraka, standard joystick, modern 02_01.bvh.
+- 256 train envs i 8 eval envs zbog RTX 2060 / 6 GB VRAM; 3 evaluacije.
+- PPO defaulti, batch=512, episode=500, reward i kontrola ostaju sa main.
+- Broj envs/evaluacija i trajanje su eksplicitno kraci od full main defaulta.
+- Run: runs/20261010_1129_bio_main_modern_bvh_pilot_1m_running
+- Zavrsio je na 1,146,880 koraka (PPO block rounding).
+- Poslednji checkpoint: checkpoints/000001146880.
+- Reward: step=0 -323.704; step=573440 -324.167; step=1146880 -213.504.
+- Poslednja prosecna epizoda: 87.375 koraka. Ovo nije dokaz uspesnog hoda.
+- PPO je zavrsio; potom je WSL/Windows odbio rename foldera.
+- Folder zato i dalje nosi _running, ali run_status.json potvrdjuje status=s.
+- Checkpointi nisu izgubljeni. Iz poslednjeg nastavlja dugi eksperiment.
+
+DUGI EKSPERIMENT: NAJMANJE 80M UKUPNO
+- Korisnik je potvrdio da je minimum 80M potreban za realan eksperiment.
+- Pokrenut nastavak, bez drugog istovremenog GPU treninga.
+- Pilot 1,146,880 + zahtevani nastavak 78,853,120 = 80,000,000 ukupno.
+- Zbog PPO block/eval rounding-a ocekujemo 80,281,600 novih koraka,
+  odnosno 81,428,480 ukupno; cilj je najmanje 80M, ne tacno 80M.
+- Novi run:
+  runs/20261010_1204_bio_main_modern_bvh_80m_total_78m8_running
+- U nazivu stoji 78m8 zato sto je to preostali budzet, bez vec sacuvanog pilota.
+- 21 evaluacija: pocetna + 20 posle trening blokova, oko 4M izmedju checkpointa.
+- 256 train envs, 8 eval envs; seed=7, reward, akcije i glavni PPO parametri isti.
+- Resume cuva policy/value mreze i observation normalizaciju.
+- Brax main resume NE cuva Adam optimizer stanje, RNG ili svoj step brojac;
+  ovo je nastavak sa checkpoint parametrima, ne bit-identican neprekinut run.
+- Lokalni step broj novog run-a krece od 0; za ukupno dodati 1,146,880.
+- Proces pokrenut nezavisno od terminala, skriven Windows wsl PID 15264,
+  Linux Python PID 332 (PID-ovi vaze u trenutku pisanja ovog statusa).
+- Ne gasiti WSL distribuciju (wsl --shutdown) ili racunar. Obican terminal
+  moze se zatvoriti; proces je nezavisan. Viewer nije povezan s treningom.
+- Ne prekidati zbog loseg rewarda na prvih 1M: pilot nije dovoljan za sud
+  o konvergenciji. Poznati reference/action problemi ostaju zabelezeni.
+
+PRACENJE DUGOG RUN-A IZ GIT BASH-A NA WINDOWS-U
+tail -f artifacts/main_modern_bvh_80m.stdout.log
+Ovaj log ima stabilan naziv cak i kada se run folder na kraju preimenuje.
+Eventualne greske: artifacts/main_modern_bvh_80m.stderr.log
+
+REFERENCA: NATIVE WINDOWS / GIT BASH
+Ovo prikazuje kinematicki BVH, ne naucenu politiku:
+./.venv-win/Scripts/python.exe -m tools.audit_main_modern_bvh --preview
+
+AUDIT BEZ VIEWER-A
+./.venv-win/Scripts/python.exe -m tools.audit_main_modern_bvh
+Izvestaj: artifacts/main_modern_bvh_audit.json
+
+TESTOVI (Windows, ako pytest nije u venv-u)
+python -m uv pip install --python .venv-win/Scripts/python.exe pytest
+./.venv-win/Scripts/python.exe -m pytest tests/test_main_modern_bvh.py tests/test_run_status.py -q
+
+PONOVNO POKRETANJE PILOTA: WSL BASH
+XLA_PYTHON_CLIENT_PREALLOCATE=false JAX_COMPILATION_CACHE_DIR=.jax-cache/main-modern-bvh .venv/bin/python -u train.py --device gpu --reference-gait bvh --reference-pipeline modern --reference-gait-file BVH_walking_animation/cmuconvert-max-01-09/02/02_01.bvh --timesteps 1000000 --num-envs 256 --num-eval-envs 8 --num-evals 3 --run-tag main_modern_bvh_pilot
+Ne pokretati drugi GPU trening paralelno sa pilotom.
+
+AUTOMATSKI NASTAVAK POSLE USPESNOG PILOTA (WSL BASH)
+.venv/bin/python -u -m tools.continue_main_modern_bvh --total-timesteps 80000000 --num-evals 21
+Ako pilot jos radi, dodati --pilot-pid njegov_tacni_PID da launcher prvo ceka.
+Ova komanda je vec pokrenuta; ne pokretati je ponovo paralelno.
+
+A/B BASELINE POSLE DUGOG EKSPERIMENTA
+Za kontrolni main run koristiti 80M i isti seed/PPO/eval/resource setup,
+ali --reference-pipeline main i poseban --run-tag main_bvh_80m.
+Za rigorozan A/B, oba kraka moraju imati isti fresh-start/resume protokol;
+ovaj modern krak ima pilot + checkpoint warm-start, nije potpuno fresh 80M.
+Ne menjati XML, reward, action scales ili PPO izmedju ova dva testa.
+
+POLICY EVALUATE: NATIVE WINDOWS / GIT BASH, POSLE CHECKPOINT-A
+Zameni CHECKPOINT_DIR stvarnim numeric checkpoint folderom novog run-a:
+./.venv-win/Scripts/python.exe evaluate.py --checkpoint "CHECKPOINT_DIR" --device cpu --command-x 0.14
+Evaluator automatski cita modern pipeline iz run configa. Koristi se novi
+main-based checkpoint, ne stari v21/v22 checkpoint.
+
+KRITERIJUM ZA SLEDECI KORAK
+Uporediti padove, brzinu prema komandi, klizanje i video, ne samo reward.
+Ako posle adekvatnog budzeta strict-main + modern BVH opet samo stoji, testirati
+dostiznost
+targeta, reward mask i kontinuitet reference u odvojenim ablation testovima.
+Ne produzavati run samo zato sto je ukupni reward presao nulu.
+
+ZAUSTAVLJANJE: 2026-10-11
+- Korisnik je vizuelno pregledao +285 checkpoint i prijavio da ne hoda.
+- Na njegov zahtev zaustavljen je samo provereni Linux trening PID 332.
+- SIGINT nije doveo do izlaska tokom kratke provere; zatim poslat SIGTERM.
+- Potvrdjeno: PID 332 vise ne postoji i nema GPU compute procesa.
+- Sacuvani checkpointi, config i logovi nisu obrisani niti preimenovani.
+- Run: runs/20261010_1204_bio_main_modern_bvh_80m_total_78m8_running
+- Poslednji sacuvani checkpoint: checkpoints/000060211200.
+- Sa pilotom 1,146,880 to je 61,358,080 sacuvanih koraka; cilj 80M NIJE dostignut.
+- Poslednja evaluacija: reward +147.664, epizoda 143.25/500, padovi 7/8.
+- Najbolji reward: +285.146, checkpoints/000048168960; to nije dokaz hoda.
+- Nesacuvani koraci posle poslednjeg checkpointa nisu deo nastavka.
+- run_status.json oznacava status=interrupted, ne success ili trening gresku.
+- Nastavak je moguc iz sacuvanih parametara, ali main/Brax ne vraca optimizer,
+  RNG ni step brojac. Ne pokretati nastavak bez nove odluke korisnika.

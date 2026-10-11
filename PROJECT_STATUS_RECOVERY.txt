@@ -1,0 +1,102 @@
+PROJECT-V2 RECOVERY - 2026-10-11
+Branch: recovery/project-v2-imitation
+Base: project_v2_refrences_only @ 8b4d442
+
+GIT IS RECOVERED
+- Resolved the one modify/delete conflict by KEEPING the stashed
+  PROJECT_STATUS_MAIN_MODERN_BVH.txt. That file describes the OLD experiment.
+- All 8 stash files were restored/verified against their saved Git blobs.
+- 4,638 unrelated JAX cache files were hidden with .gitignore, not deleted.
+- stash@{0} (dijagnostika) remains as a backup. Do NOT apply it again.
+- Git recovery did not delete branches, stash or checkpoints. No push was made.
+- Phase 1 is being committed on user request as:
+  fix: restore project-v2 recovery baseline with versioned physics
+- The original project-v2 branch still points to 8b4d442.
+
+PHASE 1: IMPLEMENTED AND TESTED
+The new behavior is EXPLICIT: recovery_physics_version="consistent_v1".
+The default remains "legacy" for existing project-v2 configurations.
+
+1. Reference timing
+   Removed hidden velocity-only x0.25 in the corrected path.
+   reference_motion_speed_scale changes frame intervals and derived velocities
+   together. At 0.25 the same poses take four times as long.
+   Geometry/IK is processed at source speed before time scaling, so this setting
+   does not secretly alter root-height smoothing or the resulting pose path.
+
+2. Measurements
+   Correct torso-local angular velocity (no second rotation of local qvel).
+   Use world-Z angular velocity for the corrected yaw-command measurement.
+   COM position uses inertial segment centers (xipos).
+   Body-origin/COM linear velocities shift cvel from its spatial origin.
+   Reference FK uses the SAME corrected definitions as the live measurements.
+   Legacy formulas are retained under the compatibility version.
+
+3. Evaluation and checkpoint safety
+   Restore every supported saved EnvConfig field, not just a partial list.
+   Preserve explicit CLI and checkpoint-shape overrides.
+   Reject unsupported fields/profiles instead of silently discarding semantics.
+   SMPL references are no longer silently replaced with "none" in auto mode.
+   Training refuses implicit legacy <-> consistent_v1 checkpoint migration.
+   Old main/stable checkpoints still require their matching source branch;
+   "legacy" does NOT claim universal historical compatibility.
+
+VALIDATION
+- 27 regression tests pass (unittest runner; pytest-compatible test classes).
+  pytest is not installed in .venv-win; no dependencies were installed.
+- Native MuJoCo Jacobian/finite-difference checks pass, including actual v21 XML
+  and randomized root orientation/articulated velocity cases.
+- Corrected reference FK and live measurements agree.
+- Real BVH 02_01, clip 1 (source frames 79:213): full/quarter-speed geometry
+  identical; duration and all tested velocities scale consistently.
+- One actual CPU MJX reset + step passed: finite state, done=0.
+  This is an integration smoke test, NOT evidence of learned walking.
+- New files pass Ruff E/F/I checks; changed modules compile; git diff --check
+  passes. Whole-environment Ruff F check retains 3 PRE-EXISTING unused-local
+  warnings, verified against HEAD, outside the changed code.
+
+EVIDENCE: analysis_outputs/recovery_phase1_20261011.json
+The file records model/source/reference hashes and the diagnostic config.
+
+THE NEXT RED LIGHT - NOT YET FIXED
+Same clip, same source geometry, 32 between-frame samples at full speed:
+                           legacy       consistent_v1
+joint dq/dt target RMSE     1.074998      0.106101 rad/s
+root derivative RMSE       0.160686      0.033605 m/s
+endpoint joint pose gap    0.049218      0.049218 rad
+endpoint joint speed gap   1.009938      4.039754 rad/s
+
+The remaining derivative error is real: independently interpolated nodal
+gradients need not equal the derivative of the interpolated position path.
+The endpoint speed gap became larger because its old x0.25 attenuation was
+removed, not because we changed the pose geometry. Loop mode is WRAP here.
+These are sampled reference-path diagnostics, not policy rollout statistics.
+
+NEXT, IN ORDER
+1. Fix/check runtime interpolation and loop continuity (joints + root quaternion),
+   and check reset projections against the SAME phase. Avoid hiding a bad seam
+   by merely increasing tolerances or reducing velocity targets.
+2. Recheck stance/contact/slip, penetration, reachable motor targets and torque
+   saturation with explicit definitions. PD replay is diagnostic, not an
+   absolute theoretical prerequisite for RL.
+3. Contrast actual reward on reference vs standing, wrong phase, swapped legs
+   and sliding. Mean-vs-sum scaling has NOT been changed in this patch.
+4. Complete training provenance manifest, a fixed pure-tracker preset and
+   reproducible multi-phase evaluation; then a short integration pilot.
+5. Only then start the agreed serious training budget (e.g. 80M), without
+   introducing joystick/DR/assisted curriculum changes simultaneously.
+
+NOT DONE: learned gait, full physics/contact certification, reward redesign,
+Windows/WSL dependency lockfile port, long training or policy migration.
+No PPO run was started. Existing checkpoints and diagnostic stash are intact.
+
+REPRODUCE IN WINDOWS GIT BASH (from repository root)
+./.venv-win/Scripts/python.exe -m unittest discover -s tests -v
+./.venv-win/Scripts/python.exe -m tools.check_recovery_reference --output analysis_outputs/recovery_phase1_20261011.json
+
+Optional slow first CPU compilation, one reset/step and no PPO:
+./.venv-win/Scripts/python.exe -m tools.check_recovery_reference --output analysis_outputs/recovery_phase1_20261011.json --mjx-smoke
+
+The timing tool does NOT declare the whole reference valid; read its remaining
+runtime errors and limitations. Earlier cross-branch analysis remains in
+PROJECT_DIAGNOSIS_2026-10-11.md as the historical diagnosis before these fixes.

@@ -7,7 +7,9 @@ import re
 import shutil
 import subprocess
 import time
+from dataclasses import asdict, fields
 from pathlib import Path
+from typing import Any
 
 # REF: PROJECT-XLA-PREALLOCATE-DEFAULT
 # TYPE: ENGINEERING_DEFAULT
@@ -127,6 +129,50 @@ def run_env_value(run_config: dict | None, name: str, default=None):
     return run_config.get("env", {}).get(name, default)
 
 
+def restore_saved_env_config(
+    run_config: dict | None, **overrides: Any
+) -> EnvConfig:
+    """Restore all supported saved settings, then apply explicit eval overrides.
+
+    Missing fields keep this branch's compatibility defaults. In particular, an
+    old checkpoint must not silently opt into corrected physics observations.
+    Unknown fields fail closed: a checkpoint from a different experiment may
+    depend on action or reference semantics that this branch cannot reproduce.
+    """
+    saved = {} if run_config is None else run_config.get("env", {})
+    if not isinstance(saved, dict):
+        raise ValueError("Saved run config 'env' must be a JSON object.")
+    valid_names = {field.name for field in fields(EnvConfig)}
+    unknown_names = (set(saved) | set(overrides)) - valid_names
+    if unknown_names:
+        raise ValueError(
+            "This branch cannot restore these saved EnvConfig fields: "
+            f"{', '.join(sorted(unknown_names))}. "
+            "Use the checkpoint's original branch or explicitly port its settings; "
+            "discarding them could change the policy's behavior."
+        )
+
+    values = dict(saved)
+    if "recovery_physics_version" in valid_names:
+        values.setdefault("recovery_physics_version", "legacy")
+    values.update(overrides)
+    tuple_fields = {
+        "bvh_target_observation_steps": int,
+        "deepmimic_key_bodies": str,
+        "reset_projection_levels": float,
+    }
+    for name, caster in tuple_fields.items():
+        if name not in values:
+            continue
+        raw_value = values[name]
+        if isinstance(raw_value, str):
+            raw_value = [part.strip() for part in raw_value.split(",") if part.strip()]
+        if not isinstance(raw_value, (list, tuple)):
+            raise ValueError(f"Saved EnvConfig '{name}' must be a list or tuple.")
+        values[name] = tuple(caster(value) for value in raw_value)
+    return EnvConfig(**values)
+
+
 def infer_command_profile(checkpoint_path: Path, run_config: dict | None) -> str:
     """Procitaj command_profile iz run configa, uz fallback na obs size."""
     profile = run_env_value(run_config, "command_profile")
@@ -139,6 +185,8 @@ def infer_command_profile(checkpoint_path: Path, run_config: dict | None) -> str
         "standard",
     }:
         return profile
+    if profile is not None:
+        raise ValueError(f"Unsupported saved command profile on this branch: {profile!r}")
 
     obs_size = read_checkpoint_observation_size(checkpoint_path)
     if obs_size == 92:
@@ -149,9 +197,9 @@ def infer_command_profile(checkpoint_path: Path, run_config: dict | None) -> str
 def infer_reference_gait(run_config: dict | None) -> str:
     """Procitaj reference_gait iz run configa."""
     reference_gait = run_env_value(run_config, "reference_gait", "none")
-    if reference_gait in {"none", "sine", "bvh"}:
+    if reference_gait in {"none", "sine", "bvh", "smpl"}:
         return reference_gait
-    return "none"
+    raise ValueError(f"Unsupported saved reference gait: {reference_gait!r}")
 
 
 def find_run_config(checkpoint_path: Path) -> dict | None:
@@ -867,7 +915,7 @@ def main():
     )
     parser.add_argument(
         "--reference-gait",
-        choices=["auto", "none", "sine", "bvh"],
+        choices=["auto", "none", "sine", "bvh", "smpl"],
         default="auto",
     )
     parser.add_argument(
@@ -989,7 +1037,7 @@ def main():
             args.reference_gait_file,
             args.reference_gait_list,
         )
-        reference_target_observation = reference_gait == "bvh"
+        reference_target_observation = reference_gait in {"bvh", "smpl"}
     else:
         reference_gait_file = run_env_value(run_config, "reference_gait_file")
         reference_target_observation = bool(
@@ -1078,7 +1126,8 @@ def main():
         flush=True,
     )
 
-    env_config = EnvConfig(
+    env_config = restore_saved_env_config(
+        run_config,
         env_version=env_version,
         playground_impl=playground_impl,
         physics_backend=physics_backend,
@@ -1104,6 +1153,16 @@ def main():
         action_smoothing=action_smoothing,
         init_qpos_file=init_qpos_file,
         accurate_physics=accurate_physics,
+    )
+    print(
+        "eval restored settings | "
+        f"recovery_physics_version={getattr(env_config, 'recovery_physics_version', 'legacy')} | "
+        f"reference_motion_speed_scale={getattr(env_config, 'reference_motion_speed_scale', 1.0)} | "
+        f"reference_action_mode={env_config.reference_action_mode} | "
+        f"reference_residual_scale={env_config.reference_residual_scale} | "
+        f"reference_stability_sagittal_alpha={env_config.reference_stability_sagittal_alpha} | "
+        f"bvh_target_observation_steps={env_config.bvh_target_observation_steps}",
+        flush=True,
     )
     env = make_environment(env_config)
     validate_xml_manifest(args.checkpoint, env)
@@ -1186,38 +1245,17 @@ def main():
 
 
 def make_environment(env_config: EnvConfig):
-    """Napravi env za viewer."""
-    config_overrides = {
-        "impl": env_config.playground_impl,
-        "physics_backend": env_config.physics_backend,
-        "warp_num_worlds": env_config.warp_num_worlds,
-        "warp_naconmax": env_config.warp_naconmax,
-        "warp_njmax": env_config.warp_njmax,
-        "warp_graph_mode": env_config.warp_graph_mode,
-        "enable_erfi": False,
-        "command_profile": env_config.command_profile,
-        "reference_gait": env_config.reference_gait,
-        "arm_actuators": env_config.arm_actuators,
-        "reference_loop_mode": env_config.reference_loop_mode,
-        "reference_root_xy_scale": env_config.reference_root_xy_scale,
-        "reference_lock_stance_feet": env_config.reference_lock_stance_feet,
-        "reference_foot_lock_height": env_config.reference_foot_lock_height,
-        "reference_target_observation": env_config.reference_target_observation,
-        "deepmimic_reward_mode": env_config.deepmimic_reward_mode,
-        "deepmimic_key_bodies": env_config.deepmimic_key_bodies,
-        "policy_observation_size": env_config.policy_observation_size,
-        "policy_observation_dict": env_config.policy_observation_dict,
-        "action_smoothing": env_config.action_smoothing,
-        "legacy_action_prior": env_config.legacy_action_prior,
-    }
-    if env_config.xml_path is not None:
-        config_overrides["xml_path"] = env_config.xml_path
-    if env_config.reference_gait_file is not None:
-        config_overrides["reference_gait_file"] = env_config.reference_gait_file
-    if env_config.init_qpos_file is not None:
-        config_overrides["init_qpos_file"] = env_config.init_qpos_file
-    if env_config.accurate_physics:
+    """Build the viewer environment without dropping saved action/reset settings."""
+    config_overrides = asdict(env_config)
+    config_overrides.pop("env_version")
+    config_overrides["impl"] = config_overrides.pop("playground_impl")
+    accurate_physics = config_overrides.pop("accurate_physics")
+    config_overrides["enable_erfi"] = False
+    if accurate_physics:
         config_overrides["sim_dt"] = 0.005
+    for name in ("xml_path", "reference_gait_file", "init_qpos_file"):
+        if config_overrides[name] is None:
+            config_overrides.pop(name)
     return BiomechanicsJoystickEnv(
         env_version=env_config.env_version,
         config_overrides=config_overrides,

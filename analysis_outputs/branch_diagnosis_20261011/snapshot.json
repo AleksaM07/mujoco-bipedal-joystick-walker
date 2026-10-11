@@ -1,0 +1,21 @@
+{
+  "current_branch": "experiment/main-modern-bvh",
+  "branches": {
+    "backup/with-7f1294e-before-test": "de5cc52863dcbd1209231e01c88392849294794a",
+    "experiment/main-modern-bvh": "a6ca23d1e8a5cb0ca1ea8710631a83a11dcbaf20",
+    "experiment/v21-stable-baseline": "cd6557c4678cb6e3f884b5f6531e25b803d922b4",
+    "lets_call_it_dave": "0cd3da8135a7380dfb09c81ff29cba774cb5fdcf",
+    "main": "33eaa1fb76f2ffb0fb8a821deb9cad27f3989426",
+    "project_v2_refrences_only": "8b4d442c0ea37711f8c5d9203c6140b643bd03c3"
+  },
+  "run_count": 172,
+  "evaluation_count": 1159,
+  "read_errors": [],
+  "limitations": [
+    "Run configs often lack a Git commit; directory dates are not provenance.",
+    "Raw reward values across different objectives are not comparable.",
+    "Checkpoint step counters restart for warm-started runs.",
+    "Folder suffixes alone do not prove completion or locomotion success.",
+    "Reported metrics are saved evaluations, not new rollouts."
+  ]
+}

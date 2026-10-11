@@ -543,6 +543,32 @@ def make_json_safe(value):
     return value
 
 
+def validate_resume_physics_version(
+    checkpoint_path: Path | None, env_config: EnvConfig
+) -> None:
+    """Prevent a resume from silently changing the policy's observation semantics."""
+    if checkpoint_path is None:
+        return
+    run_dir = find_run_dir_for_checkpoint(checkpoint_path)
+    config_path = run_dir / "config.json" if run_dir else None
+    if config_path is None or not config_path.is_file():
+        if env_config.recovery_physics_version != "legacy":
+            raise ValueError(
+                "Cannot verify checkpoint physics version without its config.json. "
+                "Start the recovery experiment from scratch or evaluate on its "
+                "original branch; implicit observation migration is not supported."
+            )
+        return
+    saved = json.loads(config_path.read_text(encoding="utf-8"))
+    saved_version = saved.get("env", {}).get("recovery_physics_version", "legacy")
+    if saved_version != env_config.recovery_physics_version:
+        raise ValueError(
+            f"Checkpoint physics version {saved_version!r} differs from requested "
+            f"{env_config.recovery_physics_version!r}. Start from scratch or use "
+            "the matching semantics; an explicit migration needs a separate test."
+        )
+
+
 def run_training(
     env_config: EnvConfig,
     train_config: TrainConfig,
@@ -588,6 +614,7 @@ def run_training(
         else run_dir / "checkpoints"
     )
     restore_checkpoint = resolve_resume_checkpoint_path(train_config.resume_from)
+    validate_resume_physics_version(restore_checkpoint, env_config)
     restore_checkpoint_path = str(restore_checkpoint) if restore_checkpoint else None
     if restore_checkpoint is not None and env_config.xml_path is None:
         inferred_xml_path = infer_xml_path_from_resume(restore_checkpoint)
@@ -1202,6 +1229,8 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         "warp_graph_mode": env_config.warp_graph_mode,
         "enable_erfi": enable_erfi,
         "command_profile": env_config.command_profile,
+        "recovery_physics_version": env_config.recovery_physics_version,
+        "reference_motion_speed_scale": env_config.reference_motion_speed_scale,
         "reference_gait": env_config.reference_gait,
         "arm_actuators": env_config.arm_actuators,
         "reference_forced_clip_id": env_config.reference_forced_clip_id,
@@ -2343,6 +2372,18 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--recovery-physics-version",
+        choices=["legacy", "consistent_v1"],
+        default=EnvConfig.recovery_physics_version,
+        help="Opt into corrected measurements and reference timing for new runs.",
+    )
+    parser.add_argument(
+        "--reference-motion-speed-scale",
+        type=float,
+        default=EnvConfig.reference_motion_speed_scale,
+        help="Positive playback speed multiplier; requires consistent_v1.",
+    )
+    parser.add_argument(
         "--reference-loop-mode",
         choices=["auto", "wrap", "clamp"],
         default=EnvConfig.reference_loop_mode,
@@ -2678,6 +2719,8 @@ def main() -> None:
         playground_impl=args.playground_impl,
         physics_backend=args.physics_backend,
         command_profile=args.command_profile,
+        recovery_physics_version=args.recovery_physics_version,
+        reference_motion_speed_scale=args.reference_motion_speed_scale,
         reference_gait=args.reference_gait,
         arm_actuators=args.arm_actuators,
         reference_gait_file=reference_gait_file,

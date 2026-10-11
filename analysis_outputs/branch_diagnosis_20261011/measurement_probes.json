@@ -1,0 +1,165 @@
+{
+  "mujoco_version": "3.10.0",
+  "xml": "generated_models/human_male_180cm_75kg_standard_trainfast_v21_noarms.xml",
+  "xml_sha256": "125b4b1285e44ea7ddd53f2b8713dcab2300079e95c825c4139c639589de4c87",
+  "state_description": "a-pose raised 1m; seed7 joint velocities std0.4 rad/s; explicit root velocity",
+  "root_qvel": [
+    0.3,
+    -0.1,
+    0.05,
+    0.4,
+    0.7,
+    -0.2
+  ],
+  "native_pelvis_jacobian_fd_error": 1.57818396570804e-10,
+  "native_com_subtree_fd_error": 1.8975901075741732e-10,
+  "branch_measurements": {
+    "project_v2_refrences_only": {
+      "_local_root_angvel": {
+        "branch_result": [
+          0.40000000000000013,
+          -0.20000000000000007,
+          -0.7000000000000001
+        ],
+        "native_reference": [
+          0.40000000000000024,
+          0.7000000000000002,
+          -0.20000000000000012
+        ],
+        "l2_error": 1.0295630140987002
+      },
+      "_reference_anchor_linvel": {
+        "branch_result": [
+          0.2222974778838772,
+          0.0601777530828702,
+          0.05023103642618538
+        ],
+        "native_reference": [
+          0.22327726300969586,
+          0.059176253611060055,
+          0.05
+        ],
+        "l2_error": 0.0014199851812733875
+      },
+      "_center_of_mass": {
+        "branch_result": [
+          0.0018126458946513754,
+          2.168404344971009e-18,
+          2.141318385297994
+        ],
+        "native_reference": [
+          -0.0016055719070333905,
+          0.0006203805947427184,
+          2.016095037099517
+        ],
+        "l2_error": 0.12527152916388884
+      },
+      "_center_of_mass_velocity": {
+        "branch_result": [
+          0.23761532987113687,
+          0.0659756521384582,
+          0.043428919061466724
+        ],
+        "native_reference": [
+          0.21211840468730717,
+          0.055241613435923875,
+          0.05041649381301851
+        ],
+        "l2_error": 0.028533120782799737
+      }
+    },
+    "experiment/v21-stable-baseline": {
+      "_local_root_angvel": {
+        "branch_result": [
+          0.40000000000000013,
+          -0.20000000000000007,
+          -0.7000000000000001
+        ],
+        "native_reference": [
+          0.40000000000000024,
+          0.7000000000000002,
+          -0.20000000000000012
+        ],
+        "l2_error": 1.0295630140987002
+      },
+      "_reference_anchor_linvel": {
+        "branch_result": [
+          0.2222974778838772,
+          0.0601777530828702,
+          0.05023103642618538
+        ],
+        "native_reference": [
+          0.22327726300969586,
+          0.059176253611060055,
+          0.05
+        ],
+        "l2_error": 0.0014199851812733875
+      },
+      "_center_of_mass": {
+        "branch_result": [
+          -0.0016055719070333905,
+          0.0006203805947427184,
+          2.016095037099517
+        ],
+        "native_reference": [
+          -0.0016055719070333905,
+          0.0006203805947427184,
+          2.016095037099517
+        ],
+        "l2_error": 0.0
+      },
+      "_center_of_mass_velocity": {
+        "branch_result": [
+          0.23761532987113687,
+          0.0659756521384582,
+          0.043428919061466724
+        ],
+        "native_reference": [
+          0.21211840468730717,
+          0.055241613435923875,
+          0.05041649381301851
+        ],
+        "l2_error": 0.028533120782799737
+      }
+    },
+    "main": {
+      "_local_root_angvel": {
+        "branch_result": [
+          0.40000000000000013,
+          -0.20000000000000007,
+          -0.7000000000000001
+        ],
+        "native_reference": [
+          0.40000000000000024,
+          0.7000000000000002,
+          -0.20000000000000012
+        ],
+        "l2_error": 1.0295630140987002
+      }
+    }
+  },
+  "reward_examples": [
+    {
+      "description": "1 of 18 independent hinges each off by 20 degrees",
+      "project_mean_pose_reward": 0.9983091121655391,
+      "same_hinges_unweighted_sum_reward": 0.969997541543972
+    },
+    {
+      "description": "18 of 18 independent hinges each off by 20 degrees",
+      "project_mean_pose_reward": 0.969997541543972,
+      "same_hinges_unweighted_sum_reward": 0.5779248964927293
+    },
+    {
+      "description": "18 of 18 independent hinges each off by 45 degrees",
+      "project_mean_pose_reward": 0.8570898111217011,
+      "same_hinges_unweighted_sum_reward": 0.06229798247098888
+    }
+  ],
+  "limitations": [
+    "Synthetic instantaneous state is a formula counterexample, not a gait test.",
+    "Same v21 model isolates measurement formulas; no checkpoint was evaluated.",
+    "MimicKit uses weighted quaternion-angle sums, not unweighted hinge sums.",
+    "The gyro issue also exists on main; it alone cannot explain regression.",
+    "These checks do not measure causal contributions to training failure."
+  ]
+}

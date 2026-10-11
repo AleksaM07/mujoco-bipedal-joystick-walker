@@ -25,6 +25,10 @@ from config import (
     resolve_project_path,
 )
 from phase1_backends import make_data_kwargs, put_model_for_backend, select_data
+from reference_kinematics import (
+    differentiate_reference_positions,
+    scale_reference_frame_times,
+)
 from smpl_reference import load_smpl_references
 
 
@@ -233,6 +237,19 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         if config is None:
             config = default_biomechanics_env_config()
         super().__init__(config, config_overrides)
+        physics_version = self._config.get("recovery_physics_version", "legacy")
+        if physics_version not in {"legacy", "consistent_v1"}:
+            raise ValueError(
+                "recovery_physics_version must be 'legacy' or 'consistent_v1'."
+            )
+        self._consistent_physics = physics_version == "consistent_v1"
+        motion_speed = float(self._config.get("reference_motion_speed_scale", 1.0))
+        if not np.isfinite(motion_speed) or motion_speed <= 0.0:
+            raise ValueError("reference_motion_speed_scale must be finite and positive.")
+        if not self._consistent_physics and motion_speed != 1.0:
+            raise ValueError(
+                "reference_motion_speed_scale requires consistent_v1 physics."
+            )
         configured_xml_path = self._config.get("xml_path", None)
         if configured_xml_path:
             self._xml_path = resolve_project_path(configured_xml_path)
@@ -243,6 +260,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 arm_actuators=bool(self._config.get("arm_actuators", False)),
             )
         self._mj_model = mujoco.MjModel.from_xml_path(str(self._xml_path))
+        self._body_root_ids = jp.array(self._mj_model.body_rootid)
         self._mj_model.opt.timestep = self._sim_dt
         init_q = np.array(self._mj_model.keyframe("a-pose").qpos, copy=True)
         init_q = self._build_initial_qpos(init_q)
@@ -722,11 +740,17 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         )
         references = self._filter_reference_clips(references)
         references = self._apply_reference_loop_mode_override(references)
-        self._bvh_reference_frame_times = jp.array(references.frame_times)
+        reference_frame_times = references.frame_times
+        motion_speed = float(self._config.get("reference_motion_speed_scale", 1.0))
+        if self._consistent_physics:
+            reference_frame_times = scale_reference_frame_times(
+                reference_frame_times, motion_speed
+            )
+        self._bvh_reference_frame_times = jp.array(reference_frame_times)
         self._bvh_reference_frame_counts = jp.array(references.frame_counts)
         self._bvh_reference_motion_lengths = jp.array(
             np.maximum(
-                references.frame_times * np.maximum(references.frame_counts - 1, 1),
+                reference_frame_times * np.maximum(references.frame_counts - 1, 1),
                 1e-6,
             ),
             dtype=jp.float32,
@@ -800,7 +824,10 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 references.frame_times,
                 references.frame_counts,
             )
-            velocity_scale = float(self.REFERENCE_RETARGET_VELOCITY_SCALE)
+            velocity_scale = (
+                1.0 if self._consistent_physics
+                else float(self.REFERENCE_RETARGET_VELOCITY_SCALE)
+            )
             qvel_targets *= velocity_scale
             (
                 sim_root_pos_targets,
@@ -839,6 +866,19 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 references.frame_counts,
                 references.loop_modes,
             )
+        if self._consistent_physics:
+            # Retarget geometry at source speed, then change only its time base.
+            # Passing slowed intervals to the geometry pass would also change
+            # root-height smoothing, confounding speed with a different path.
+            qvel_targets = differentiate_reference_positions(
+                qpos_targets, reference_frame_times, references.frame_counts
+            )
+            sim_root_vel_targets = differentiate_reference_positions(
+                sim_root_pos_targets, reference_frame_times, references.frame_counts
+            )
+            root_angvel_targets = np.asarray(
+                references.root_angvel_targets, dtype=np.float32
+            ) * motion_speed
         self._bvh_reference_qpos_targets = jp.array(qpos_targets)
         self._bvh_reference_qvel_targets = jp.array(qvel_targets)
         self._configure_mimickit_action_bounds(qpos_targets)
@@ -1677,15 +1717,36 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 ) @ heading.T
                 root_pos[clip_id, frame_id] = anchor_pos
                 root_quat[clip_id, frame_id] = anchor_quat
-                root_vel[clip_id, frame_id] = anchor_cvel[3:6]
+                anchor_velocity = anchor_cvel[3:6]
+                if self._consistent_physics:
+                    spatial_origin = data.subtree_com[
+                        self._mj_model.body_rootid[self._reference_anchor_body_id]
+                    ]
+                    anchor_velocity = anchor_velocity + np.cross(
+                        anchor_cvel[:3], anchor_pos - spatial_origin
+                    )
+                root_vel[clip_id, frame_id] = anchor_velocity
                 root_angvel[clip_id, frame_id] = anchor_cvel[:3]
                 current_com = np.average(
-                    data.xpos[self._deepmimic_body_ids_np],
+                    (data.xipos if self._consistent_physics else data.xpos)[
+                        self._deepmimic_body_ids_np
+                    ],
                     axis=0,
                     weights=self._deepmimic_body_weights_np,
                 )
                 com[clip_id, frame_id] = current_com
-                if previous_com is None:
+                if self._consistent_physics:
+                    body_ids = self._deepmimic_body_ids_np
+                    offsets = data.xipos[body_ids] - data.subtree_com[
+                        self._mj_model.body_rootid[body_ids]
+                    ]
+                    body_velocities = data.cvel[body_ids, 3:6] + np.cross(
+                        data.cvel[body_ids, :3], offsets
+                    )
+                    com_vel[clip_id, frame_id] = np.average(
+                        body_velocities, axis=0, weights=self._deepmimic_body_weights_np
+                    )
+                elif previous_com is None:
                     com_vel[clip_id, frame_id] = 0.0
                 else:
                     frame_time = float(np.asarray(self._bvh_reference_frame_times)[clip_id])
@@ -2234,7 +2295,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         foot_heights = self._foot_heights(data)
         com_height = self._center_of_mass(data)[2]
         root_vertical_velocity = self._reference_anchor_linvel(data)[2]
-        pelvis_vertical_velocity = data.cvel[self._reference_anchor_body_id, 5]
+        pelvis_vertical_velocity = root_vertical_velocity
         action_magnitude = jp.linalg.norm(action)
         reference_trace = self._get_reference_trace_metrics(data, info)
         variable_posture = self._get_variable_posture_reward(data, info)
@@ -3291,7 +3352,23 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
 
     def _reference_anchor_linvel(self, data: mjx.Data) -> jax.Array:
         """World linear velocity of the locomotion anchor body."""
+        if self._consistent_physics:
+            return self._body_linear_velocity(
+                data,
+                self._reference_anchor_body_id,
+                data.xpos[self._reference_anchor_body_id],
+            )
         return data.cvel[self._reference_anchor_body_id, 3:6]
+
+    def _body_linear_velocity(
+        self, data: mjx.Data, body_ids: int | jax.Array, positions: jax.Array
+    ) -> jax.Array:
+        """Shift world-aligned cvel from the root subtree COM to given points."""
+        spatial_velocity = data.cvel[body_ids]
+        offsets = positions - data.subtree_com[self._body_root_ids[body_ids]]
+        return spatial_velocity[..., 3:6] + jp.cross(
+            spatial_velocity[..., :3], offsets
+        )
 
     def _reference_anchor_angvel(self, data: mjx.Data) -> jax.Array:
         """World angular velocity of the locomotion anchor body."""
@@ -3532,16 +3609,21 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
 
     def _center_of_mass(self, data: mjx.Data) -> jax.Array:
         """Mass-weighted body center in world coordinates."""
+        positions = data.xipos if self._consistent_physics else data.xpos
         return jp.sum(
-            data.xpos[self._deepmimic_body_ids] * self._deepmimic_body_weights[:, None],
+            positions[self._deepmimic_body_ids] * self._deepmimic_body_weights[:, None],
             axis=0,
         )
 
     def _center_of_mass_velocity(self, data: mjx.Data) -> jax.Array:
         """Mass-weighted linear body velocity from MJX body spatial velocities."""
+        velocities = data.cvel[self._deepmimic_body_ids, 3:6]
+        if self._consistent_physics:
+            velocities = self._body_linear_velocity(
+                data, self._deepmimic_body_ids, data.xipos[self._deepmimic_body_ids]
+            )
         return jp.sum(
-            data.cvel[self._deepmimic_body_ids, 3:6]
-            * self._deepmimic_body_weights[:, None],
+            velocities * self._deepmimic_body_weights[:, None],
             axis=0,
         )
 
@@ -4139,6 +4221,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
 
     def _local_root_angvel(self, data: mjx.Data) -> jax.Array:
         """Root angularna brzina izrazena u lokalnom frame-u toraksa."""
+        if self._consistent_physics:
+            return self._body_xmat(data).T @ data.cvel[self._torso_body_id, :3]
         return self._body_xmat(data).T @ data.qvel[3:6]
 
     def _projected_gravity(self, data: mjx.Data) -> jax.Array:
@@ -4178,10 +4262,13 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         # TYPE: MODEL_CALIBRATED
         world_to_heading = self._heading_world_to_local(data)
         heading_linvel = world_to_heading @ data.qvel[:3]
+        yaw_velocity = data.qvel[5]
+        if self._consistent_physics:
+            yaw_velocity = data.cvel[self._torso_body_id, 2]
         return jp.array([
             heading_linvel[0],
             heading_linvel[1],
-            data.qvel[5],
+            yaw_velocity,
         ])
 
     def _heading_world_to_local(self, data: mjx.Data) -> jax.Array:

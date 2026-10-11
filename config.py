@@ -676,6 +676,9 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         action_scale=0.5,
         action_smoothing=0.2,
         command_profile="standard",
+        # Preserve historical checkpoint semantics unless recovery is explicit.
+        recovery_physics_version="legacy",
+        reference_motion_speed_scale=1.0,
         # REF: MIMICKIT-MOTION-LIBRARY
         # TYPE: REFERENCE_CODE_DERIVED
         reference_gait="bvh",
@@ -873,6 +876,11 @@ class EnvConfig:
     # "standard" je pun joystick zadatak: napred/nazad, lateralno i yaw.
     # "forward" ostaje dostupan samo kao bootstrap curriculum.
     command_profile: str = "standard"
+
+    # New measurements/time semantics are opt-in: old policies must keep their
+    # original observation distribution when evaluated without a migration.
+    recovery_physics_version: str = "legacy"
+    reference_motion_speed_scale: float = 1.0
 
     # BVH/MimicKit-style imitation is the production default. "none" and
     # "sine" remain accepted only for old checkpoint/debug compatibility.

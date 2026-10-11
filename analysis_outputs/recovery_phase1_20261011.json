@@ -1,0 +1,132 @@
+{
+  "scope": "Timing and measurement integration only; not a walking success gate.",
+  "git_head": "8b4d442c0ea37711f8c5d9203c6140b643bd03c3",
+  "working_tree_status": [
+    " M .gitignore",
+    "A  PROJECT_STATUS_MAIN_MODERN_BVH.txt",
+    " M biomechanics_env.py",
+    " M config.py",
+    " M evaluate.py",
+    " M train.py",
+    "?? PROJECT_DIAGNOSIS_2026-10-11.md",
+    "?? PROJECT_STATUS_RECOVERY.txt",
+    "?? analysis_outputs/",
+    "?? reference_kinematics.py",
+    "?? tests/",
+    "?? tools/check_recovery_reference.py",
+    "?? tools/probe_branch_invariants.py",
+    "?? tools/summarize_branch_evidence.py"
+  ],
+  "xml_sha256": "125b4b1285e44ea7ddd53f2b8713dcab2300079e95c825c4139c639589de4c87",
+  "bvh_sha256": "6c958f1fe020b2d3c6380daa2fea24f58ca01959bc218454adc9220d54157ccd",
+  "config": {
+    "env_version": "standard",
+    "playground_impl": "jax",
+    "physics_backend": "mjx_jax",
+    "warp_num_worlds": 1,
+    "warp_naconmax": null,
+    "warp_njmax": null,
+    "warp_graph_mode": "warp",
+    "command_profile": "standard",
+    "recovery_physics_version": "consistent_v1",
+    "reference_motion_speed_scale": 1.0,
+    "reference_gait": "bvh",
+    "arm_actuators": false,
+    "reference_gait_file": [
+      "C:\\Users\\aleks\\Desktop\\Aleksie kerefeke\\master\\RS projekat - RL politika ucenja joystick\\mujoco-bipedal-joystick-walker\\BVH_walking_animation\\cmuconvert-max-01-09\\02\\02_01.bvh"
+    ],
+    "reference_forced_clip_id": 1,
+    "reference_target_observation": true,
+    "reference_action_mode": "residual",
+    "reference_action_center": "default",
+    "reference_action_range": "reference_targets",
+    "reference_action_range_scale": 1.1,
+    "reference_residual_scale": 1.0,
+    "bvh_target_observation_steps": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "reference_replay_target_step": 0,
+    "deepmimic_root_velocity_weight_scale": 1.0,
+    "reference_reset_min_steps_remaining": 25,
+    "reference_min_motion_length": 0.8,
+    "reference_loop_mode": "auto",
+    "reference_root_xy_scale": 0.35,
+    "reference_lock_stance_feet": true,
+    "reference_foot_lock_height": 0.035,
+    "reference_stability_sagittal_alpha": 1.0,
+    "reference_stability_other_alpha": 0.35,
+    "reference_stability_arm_alpha": 0.75,
+    "deepmimic_reward_mode": "pure",
+    "deepmimic_key_bodies": [
+      "metatarsal_midpoint_right",
+      "metatarsal_midpoint_left"
+    ],
+    "pose_termination": false,
+    "pose_termination_dist": 1.0,
+    "reset_sample_attempts": 2,
+    "reset_projection_levels": [
+      1.0,
+      0.7,
+      0.45
+    ],
+    "policy_observation_size": null,
+    "policy_observation_dict": true,
+    "xml_path": "C:\\Users\\aleks\\Desktop\\Aleksie kerefeke\\master\\RS projekat - RL politika ucenja joystick\\mujoco-bipedal-joystick-walker\\generated_models\\human_male_180cm_75kg_standard_trainfast_v21_noarms.xml",
+    "legacy_action_prior": false,
+    "action_smoothing": 0.2,
+    "init_qpos_file": null,
+    "accurate_physics": true
+  },
+  "processed_reference_sha256": "b756750643a4600ac55238b0f772c6818b568ef43c9732afd5e70311fab14309",
+  "source_sha256": {
+    "biomechanics_env.py": "54aab5366431e5d2a48dd92d9bbd430c2b863171379f31fa7bb1d84f4f9d794e",
+    "config.py": "df233564ff37ceacfdcdd062629b4c5e90114251316f7a4595eef190ca64a2a9",
+    "evaluate.py": "8c7636e1b728f3b36d707958903263eaa7c6c75cb2c6ec67e056ca82f5406268",
+    "train.py": "36772161f845233273903ffe6474073b3262eeb8fba5f380c5d94a87b72d5b42",
+    "reference_kinematics.py": "30923eb983654847d267a4346618d796882ee4378f484285a7293470dd28d21e",
+    "bvh_reference.py": "ad1ec31a80579522ebc2f44170d3148ccf5e41d74abce002bfb1027c5e70b699",
+    "biomechanics_model.py": "855922982d12c52014b3e4fdc97d304f8a8e9d2e3cf7da4dc0f66c2dcc539e40",
+    "smpl_reference.py": "42d132ad71c1611ef5e4c12c05278ffd739d8c8e9cf5d9c58d17b2e0f4d8124c",
+    "phase1_backends.py": "6906161fbf684322f074a5b83a45c8e34b22bff8f8d1a86b72a4c021ac0a9fcc",
+    "tools/check_recovery_reference.py": "b10e2256b84b04e62754691442b67d85087284c7a8e07f0a86ebb36a06b67465"
+  },
+  "timing_integration_assertions": "PASS",
+  "clip_id": 1,
+  "source_start_frame": 79,
+  "source_end_frame": 213,
+  "runtime": {
+    "legacy": {
+      "sample_count": 32,
+      "motion_seconds": 1.108328938484192,
+      "loop_mode": 1,
+      "runtime_dqdt_vs_target_rmse_rad_s": 1.0749984979629517,
+      "runtime_root_derivative_vs_target_rmse_m_s": 0.16068580746650696,
+      "endpoint_joint_gap_max_rad": 0.04921814054250717,
+      "endpoint_joint_velocity_gap_max_rad_s": 1.0099384784698486
+    },
+    "consistent_v1": {
+      "sample_count": 32,
+      "motion_seconds": 1.108328938484192,
+      "loop_mode": 1,
+      "runtime_dqdt_vs_target_rmse_rad_s": 0.10610122233629227,
+      "runtime_root_derivative_vs_target_rmse_m_s": 0.03360539674758911,
+      "endpoint_joint_gap_max_rad": 0.04921814054250717,
+      "endpoint_joint_velocity_gap_max_rad_s": 4.0397539138793945
+    }
+  },
+  "limitations": [
+    "Nodal gradients need not equal the runtime interpolation derivative.",
+    "Loop/contact/actuator feasibility and learned walking are not certified.",
+    "Legacy compatibility covers project-v2, not arbitrary other branches.",
+    "Geometry, reward coefficients, RSI projection and PPO are unchanged."
+  ],
+  "mjx_smoke": {
+    "finite": true,
+    "steps": 1,
+    "done": 0.0,
+    "reward": 2.983609676361084
+  }
+}
