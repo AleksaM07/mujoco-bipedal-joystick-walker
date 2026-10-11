@@ -6,16 +6,23 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "brax>=0.14",
-    "jax>=0.5.0",
+    # CUDA wheels are Linux-only; native Windows evaluation uses CPU JAX.
+    "jax[cuda12]>=0.5.0; sys_platform == 'linux'",
+    "jax>=0.5.0; sys_platform != 'linux'",
     "loguru>=0.7",
     "ipykernel>=6.30",
     "matplotlib>=3.10",
     "ml-collections>=1.1",
-    "mujoco>=3.6.0",
+    "mujoco==3.10.0",
+    "mujoco-mjx[warp]==3.10.0",
+    "warp-lang==1.13.0",
     "nbconvert>=7.16",
     "numpy>=2.0",
     "pandas>=2.3",
     "playground>=0.2.0",
+    "imageio>=2.34",
+    "imageio-ffmpeg>=0.5",
+    "mediapy>=1.2",
 ]
 
 [tool.uv]

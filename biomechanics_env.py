@@ -10,7 +10,9 @@ from ml_collections import config_dict
 from mujoco import mjx
 from mujoco_playground._src import mjx_env
 
-from bvh_reference import load_bvh_references
+from bvh_reference import LoopMode
+from bvh_reference_main import load_bvh_references
+from bvh_retargeting import BvhReferenceRetargeter
 from biomechanics_model import (
     HumanSpec,
     LEG_ACTUATED_JOINTS,
@@ -307,6 +309,10 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self._bvh_reference_frame_times = jp.array([self.dt], dtype=jp.float32)
         self._bvh_reference_frame_counts = jp.array([1], dtype=jp.int32)
         self._bvh_reference_clip_count = 1
+        self._bvh_reference_batch = None
+        self._bvh_reference_loop_modes = jp.array([int(LoopMode.WRAP)])
+        if self._config.reference_pipeline not in {"main", "modern"}:
+            raise ValueError("reference_pipeline must be 'main' or 'modern'.")
         self._configure_bvh_reference()
         self._n_substeps = int(round(self._ctrl_dt / self._sim_dt))
         self._torso_body_id = self._mj_model.body("thorax").id
@@ -388,22 +394,29 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         )
 
     def _configure_bvh_reference(self) -> None:
-        """Ucita BVH referencu ako je trazena u config-u."""
+        """Load either main's original BVH targets or the modern retargeter."""
         if self._config.get("reference_gait", "none") != "bvh":
             return
         reference_gait_files = self._reference_gait_files()
         if not reference_gait_files:
             raise ValueError(
-                "reference_gait='bvh' trazi bar jedan --reference-gait-file."
+                "reference_gait='bvh' requires at least one --reference-gait-file."
             )
-
-        references = load_bvh_references(
-            tuple(resolve_project_path(path) for path in reference_gait_files),
-            self._actuator_joint_names,
-            np.asarray(self._default_ctrl, dtype=np.float32),
-            self._actuator_qpos_lower_limits_np,
-            self._actuator_qpos_upper_limits_np,
-        )
+        if self._config.reference_pipeline == "modern":
+            retargeter = BvhReferenceRetargeter(
+                self._mj_model, np.asarray(self._init_q), self._config
+            )
+            references = retargeter.load(tuple(reference_gait_files))
+            self._bvh_reference_batch = references
+            self._bvh_reference_loop_modes = jp.array(references.loop_modes)
+        else:
+            references = load_bvh_references(
+                tuple(resolve_project_path(path) for path in reference_gait_files),
+                self._actuator_joint_names,
+                np.asarray(self._default_ctrl, dtype=np.float32),
+                self._actuator_qpos_lower_limits_np,
+                self._actuator_qpos_upper_limits_np,
+            )
         self._bvh_reference_qpos_targets = jp.array(references.qpos_targets)
         self._bvh_reference_qvel_targets = jp.array(references.qvel_targets)
         self._bvh_reference_frame_times = jp.array(references.frame_times)
@@ -549,6 +562,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "episode_torque_offset": self.sample_episode_torque_offset(bias_key),
             "use_rfi": jax.random.bernoulli(erfi_key, p=0.5),
             "step": jp.array(0),
+            "motion_step": jp.array(0, dtype=jp.int32),
             "gait_step": jax.random.randint(
                 gait_key,
                 shape=(),
@@ -626,6 +640,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         )
         info["last_action"] = smoothed_action
         info["step"] = jp.where(should_resample, 0, info["step"] + 1)
+        info["motion_step"] = info["motion_step"] + 1
         info["gait_step"] = jp.mod(
             info["gait_step"] + jp.array(1, dtype=info["gait_step"].dtype),
             self.GAIT_PERIOD_STEPS,
@@ -1081,6 +1096,10 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
 
     def _get_bvh_reference_phase_angle(self, info: dict) -> jax.Array:
         """Phase signal izveden iz aktivnog BVH clip-a."""
+        if self._config.reference_pipeline == "modern":
+            clip_id, frame = self._modern_bvh_frame_float(info)
+            period = jp.maximum(self._bvh_reference_frame_counts[clip_id] - 1, 1)
+            return 2.0 * jp.pi * frame / period
         clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
         frame_count = self._bvh_reference_frame_counts[clip_id]
         frame_time = self._bvh_reference_frame_times[clip_id]
@@ -1228,13 +1247,54 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
 
     def _get_bvh_reference_gait_target(self, info: dict) -> jax.Array:
         """Vrati retargetovanu BVH pozu najblizu trenutnom env vremenu."""
+        if self._config.reference_pipeline == "modern":
+            return self._sample_modern_bvh_target(
+                self._bvh_reference_qpos_targets, info
+            )
         clip_id, frame_index = self._get_bvh_reference_frame(info)
         return self._bvh_reference_qpos_targets[clip_id, frame_index]
 
     def _get_bvh_reference_velocity_target(self, info: dict) -> jax.Array:
         """Vrati retargetovanu BVH joint brzinu za trenutni frame."""
+        if self._config.reference_pipeline == "modern":
+            velocity = self._sample_modern_bvh_target(
+                self._bvh_reference_qvel_targets, info
+            )
+            clip_id, frame = self._modern_bvh_frame_float(info)
+            clamped_end = (
+                self._bvh_reference_loop_modes[clip_id] == int(LoopMode.CLAMP)
+            ) & (frame >= self._bvh_reference_frame_counts[clip_id] - 1)
+            return jp.where(clamped_end, jp.zeros_like(velocity), velocity)
         clip_id, frame_index = self._get_bvh_reference_frame(info)
         return self._bvh_reference_qvel_targets[clip_id, frame_index]
+
+    def _modern_bvh_frame_float(self, info: dict) -> tuple[jax.Array, jax.Array]:
+        """Use a monotonic motion clock, independent of joystick resampling."""
+        clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
+        frame = (
+            info["motion_step"].astype(jp.float32)
+            * self.dt / self._bvh_reference_frame_times[clip_id]
+        )
+        last_frame = jp.maximum(self._bvh_reference_frame_counts[clip_id] - 1, 1)
+        frame = jp.where(
+            self._bvh_reference_loop_modes[clip_id] == int(LoopMode.WRAP),
+            jp.mod(frame, last_frame),
+            jp.minimum(frame, last_frame),
+        )
+        return clip_id, frame
+
+    def _sample_modern_bvh_target(self, targets: jax.Array, info: dict) -> jax.Array:
+        """Interpolate valid clip frames without reading the padded tail."""
+        clip_id, frame = self._modern_bvh_frame_float(info)
+        first = jp.floor(frame).astype(jp.int32)
+        last = self._bvh_reference_frame_counts[clip_id] - 1
+        first = jp.minimum(first, last)
+        second = jp.minimum(first + 1, last)
+        fraction = frame - first
+        return (
+            (1.0 - fraction) * targets[clip_id, first]
+            + fraction * targets[clip_id, second]
+        )
 
     def _get_bvh_reference_frame(self, info: dict) -> tuple[jax.Array, jax.Array]:
         """Vrati aktivni BVH clip i frame indeks."""

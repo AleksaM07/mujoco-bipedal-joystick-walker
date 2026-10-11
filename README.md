@@ -3,6 +3,11 @@
 Reinforcement-learning pipeline for joystick-controlled walking on a generated
 MuJoCo human biomechanics model.
 
+The `experiment/main-modern-bvh` branch keeps main's robot, rewards, reset,
+actions and PPO while replacing only the BVH reference pipeline. It supports
+`--reference-pipeline main|modern` for controlled comparison.
+See [experiment status and commands](PROJECT_STATUS_MAIN_MODERN_BVH.txt).
+
 The project trains PPO policies, evaluates the best checkpoints, compares them
 with a Berkeley/MuJoCo Playground humanoid baseline, and exports analysis tables
 and plots.

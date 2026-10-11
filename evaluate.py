@@ -529,6 +529,23 @@ def main():
         default="auto",
     )
     parser.add_argument(
+        "--reference-pipeline",
+        choices=["main", "modern"],
+        default=None,
+        help="Keep main's RL system, select only the BVH preprocessing pipeline.",
+    )
+    parser.add_argument(
+        "--reference-motion-speed-scale",
+        type=float,
+        default=None,
+        help="Consistently change reference duration and joint velocities.",
+    )
+    parser.add_argument(
+        "--reference-loop-mode",
+        choices=["auto", "wrap", "clamp"],
+        default=None,
+    )
+    parser.add_argument(
         "--reference-gait",
         choices=["auto", "none", "sine", "bvh"],
         default="auto",
@@ -675,6 +692,23 @@ def main():
         init_qpos_file=init_qpos_file,
         accurate_physics=accurate_physics,
     )
+    # Restore modern retarget parameters without touching main's control/PPO.
+    for name in vars(env_config):
+        if name.startswith("reference_") and name not in {
+            "reference_gait",
+            "reference_gait_file",
+            "reference_target_observation",
+        }:
+            setattr(
+                env_config, name,
+                run_env_value(run_config, name, getattr(env_config, name)),
+            )
+    for name in (
+        "reference_pipeline", "reference_motion_speed_scale", "reference_loop_mode"
+    ):
+        override = getattr(args, name)
+        if override is not None:
+            setattr(env_config, name, override)
     env = make_environment(env_config)
     validate_action_compatibility(args.checkpoint, env.action_size)
     policy = load_ppo_policy(args.checkpoint, deterministic=not args.stochastic)
@@ -742,8 +776,12 @@ def make_environment(env_config: EnvConfig):
         "impl": env_config.playground_impl,
         "enable_erfi": False,
         "command_profile": env_config.command_profile,
-        "reference_gait": env_config.reference_gait,
-        "reference_target_observation": env_config.reference_target_observation,
+        # Include reference-only settings in both training and replay.
+        **{
+            name: value
+            for name, value in vars(env_config).items()
+            if name.startswith("reference_")
+        },
         "policy_observation_size": env_config.policy_observation_size,
         "policy_observation_dict": env_config.policy_observation_dict,
         "action_smoothing": env_config.action_smoothing,
@@ -751,8 +789,6 @@ def make_environment(env_config: EnvConfig):
     }
     if env_config.xml_path is not None:
         config_overrides["xml_path"] = env_config.xml_path
-    if env_config.reference_gait_file is not None:
-        config_overrides["reference_gait_file"] = env_config.reference_gait_file
     if env_config.init_qpos_file is not None:
         config_overrides["init_qpos_file"] = env_config.init_qpos_file
     if env_config.accurate_physics:

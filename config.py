@@ -552,6 +552,28 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         action_smoothing=0.5,
         command_profile="standard",
         reference_gait="none",
+        reference_pipeline="main",
+        reference_min_motion_length=0.8,
+        reference_loop_mode="auto",
+        reference_motion_speed_scale=1.0,
+        reference_root_xy_scale=0.35,
+        reference_root_x_scale=None,
+        reference_root_y_scale=None,
+        reference_lock_stance_feet=True,
+        reference_foot_lock_height=0.035,
+        reference_stability_sagittal_alpha=1.0,
+        reference_stability_other_alpha=0.35,
+        reference_stability_arm_alpha=0.75,
+        reference_stability_before_ik=False,
+        reference_ik_correction_alpha=1.0,
+        reference_ik_com_weight=0.0,
+        reference_ik_support_height_scale=0.03,
+        reference_ik_pose_regularization=0.2,
+        reference_ik_smooth_regularization=0.08,
+        reference_ik_root_smooth_regularization=None,
+        reference_ik_optimize_root_xy=False,
+        reference_ik_root_regularization=0.2,
+        reference_ik_swing_foot_weight_scale=1.0,
         reference_gait_file=None,
         reference_target_observation=False,
         policy_observation_size=None,
@@ -642,6 +664,30 @@ class EnvConfig:
     reference_gait: str = "none"
     reference_gait_file: str | list[str] | None = None
     reference_target_observation: bool = False
+
+    # Reference-only port from cd6557c; "main" preserves the original loader.
+    reference_pipeline: str = "main"
+    reference_min_motion_length: float = 0.8
+    reference_loop_mode: str = "auto"
+    reference_motion_speed_scale: float = 1.0
+    reference_root_xy_scale: float = 0.35
+    reference_root_x_scale: float | None = None
+    reference_root_y_scale: float | None = None
+    reference_lock_stance_feet: bool = True
+    reference_foot_lock_height: float = 0.035
+    reference_stability_sagittal_alpha: float = 1.0
+    reference_stability_other_alpha: float = 0.35
+    reference_stability_arm_alpha: float = 0.75
+    reference_stability_before_ik: bool = False
+    reference_ik_correction_alpha: float = 1.0
+    reference_ik_com_weight: float = 0.0
+    reference_ik_support_height_scale: float = 0.03
+    reference_ik_pose_regularization: float = 0.2
+    reference_ik_smooth_regularization: float = 0.08
+    reference_ik_root_smooth_regularization: float | None = None
+    reference_ik_optimize_root_xy: bool = False
+    reference_ik_root_regularization: float = 0.2
+    reference_ik_swing_foot_weight_scale: float = 1.0
 
     # Evaluator postavlja ovu vrednost iz checkpoint metadata-e. Env zatim
     # automatski rekonstruiše stari/novi policy observation layout.

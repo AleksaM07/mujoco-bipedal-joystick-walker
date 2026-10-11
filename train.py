@@ -222,6 +222,19 @@ def mark_run_status(
     if status not in {"s", "f"}:
         raise ValueError("status mora biti 's' ili 'f'.")
 
+    # WSL/Windows readers can hold directory handles after PPO has completed.
+    # Record the outcome independently of whether a cosmetic rename succeeds.
+    (run_dir / "run_status.json").write_text(
+        json.dumps(
+            {
+                "status": status,
+                "final_reward": final_reward,
+                "best_reward": best_reward,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     name = run_dir.name
     reward_suffix = ""
     if status == "s" and final_reward is not None:
@@ -239,7 +252,16 @@ def mark_run_status(
     target = run_dir.with_name(new_name)
     if target.exists():
         target = run_dir.with_name(f"{new_name}_{datetime.now().strftime('%H%M%S')}")
-    run_dir.rename(target)
+    try:
+        run_dir.rename(target)
+    except PermissionError:
+        logger.warning(
+            "run status saved | status={} | directory rename blocked by "
+            "Windows/WSL file handles | run_dir={}",
+            status,
+            run_dir,
+        )
+        return run_dir
     return target
 
 
@@ -798,6 +820,14 @@ def log_environment_summary(env, label: str = "env") -> None:
     """Ispise dimenzije modela pre treninga."""
     model = env.mj_model
     logger.info(
+        "{} reference | pipeline={} | gait={} | clips={} | motion_speed={}",
+        label,
+        env._config.reference_pipeline,
+        env._config.reference_gait,
+        env._bvh_reference_clip_count,
+        env._config.reference_motion_speed_scale,
+    )
+    logger.info(
         "{} summary | nq={} | nv={} | nu={} | nbody={} | ngeom={} | "
         "nsite={} | action_size={} | substeps={} | erfi_enabled={} | "
         "command_profile={} | action_smoothing={} | rfi_limit={} | "
@@ -935,15 +965,17 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = True):
         "impl": env_config.playground_impl,
         "enable_erfi": enable_erfi,
         "command_profile": env_config.command_profile,
-        "reference_gait": env_config.reference_gait,
-        "reference_target_observation": env_config.reference_target_observation,
+        # Include reference-only settings in both training and replay.
+        **{
+            name: value
+            for name, value in vars(env_config).items()
+            if name.startswith("reference_")
+        },
         "action_smoothing": env_config.action_smoothing,
         "legacy_action_prior": env_config.legacy_action_prior,
     }
     if env_config.xml_path is not None:
         config_overrides["xml_path"] = env_config.xml_path
-    if env_config.reference_gait_file is not None:
-        config_overrides["reference_gait_file"] = env_config.reference_gait_file
     if env_config.init_qpos_file is not None:
         config_overrides["init_qpos_file"] = env_config.init_qpos_file
     if env_config.accurate_physics:
@@ -994,6 +1026,23 @@ def main() -> None:
         type=float,
         default=0.5,
         help="Filtriranje policy akcije pre servo targeta; 0.5 prati walking repo.",
+    )
+    parser.add_argument(
+        "--reference-pipeline",
+        choices=["main", "modern"],
+        default="main",
+        help="Keep main's RL system, select only the BVH preprocessing pipeline.",
+    )
+    parser.add_argument(
+        "--reference-motion-speed-scale",
+        type=float,
+        default=1.0,
+        help="Consistently change reference duration and joint velocities.",
+    )
+    parser.add_argument(
+        "--reference-loop-mode",
+        choices=["auto", "wrap", "clamp"],
+        default="auto",
     )
     parser.add_argument(
         "--reference-gait",
@@ -1126,6 +1175,9 @@ def main() -> None:
         playground_impl=args.playground_impl,
         command_profile=args.command_profile,
         reference_gait=args.reference_gait,
+        reference_pipeline=args.reference_pipeline,
+        reference_motion_speed_scale=args.reference_motion_speed_scale,
+        reference_loop_mode=args.reference_loop_mode,
         reference_gait_file=expand_reference_gait_files(
             args.reference_gait_file,
             args.reference_gait_list,
