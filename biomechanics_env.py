@@ -25,6 +25,11 @@ from config import (
     resolve_project_path,
 )
 from phase1_backends import make_data_kwargs, put_model_for_backend, select_data
+from reference_interpolation import (
+    interpolate_quaternion_segment,
+    interpolate_segment,
+    prepare_reference_curves,
+)
 from reference_kinematics import (
     differentiate_reference_positions,
     scale_reference_frame_times,
@@ -238,17 +243,25 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             config = default_biomechanics_env_config()
         super().__init__(config, config_overrides)
         physics_version = self._config.get("recovery_physics_version", "legacy")
-        if physics_version not in {"legacy", "consistent_v1"}:
+        if physics_version not in {"legacy", "consistent_v1", "consistent_v2"}:
             raise ValueError(
-                "recovery_physics_version must be 'legacy' or 'consistent_v1'."
+                "recovery_physics_version must be legacy, consistent_v1 or consistent_v2."
             )
-        self._consistent_physics = physics_version == "consistent_v1"
+        self._consistent_physics = physics_version != "legacy"
+        self._continuous_reference = physics_version == "consistent_v2"
+        loop_closure = self._config.get("reference_loop_closure", "strict")
+        if loop_closure not in {"strict", "bounded"}:
+            raise ValueError("reference_loop_closure must be strict or bounded.")
+        if loop_closure != "strict" and not self._continuous_reference:
+            raise ValueError("Bounded loop closure requires consistent_v2.")
         motion_speed = float(self._config.get("reference_motion_speed_scale", 1.0))
         if not np.isfinite(motion_speed) or motion_speed <= 0.0:
-            raise ValueError("reference_motion_speed_scale must be finite and positive.")
+            raise ValueError(
+                "reference_motion_speed_scale must be finite and positive."
+            )
         if not self._consistent_physics and motion_speed != 1.0:
             raise ValueError(
-                "reference_motion_speed_scale requires consistent_v1 physics."
+                "reference_motion_speed_scale requires consistent_v1 or consistent_v2."
             )
         configured_xml_path = self._config.get("xml_path", None)
         if configured_xml_path:
@@ -280,6 +293,13 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             self._physics_backend,
             self._config.get("warp_graph_mode", "warp"),
         )
+        if self._continuous_reference:
+            # Reference FK has no contacts/forward dynamics and stays pure JAX,
+            # also when the simulated robot uses the Warp physics backend.
+            self._reference_kinematics_model = mjx.put_model(self._mj_model, impl="jax")
+            self._reference_kinematics_data = mjx.make_data(
+                self._reference_kinematics_model
+            )
         self._init_q_np = np.asarray(init_q, dtype=np.float64)
         self._init_q = jp.array(init_q)
         self._default_qpos = self._init_q[7:]
@@ -522,6 +542,10 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self._bvh_reference_root_vel_targets_np = self._bvh_reference_sim_root_vel_targets_np
         self._bvh_reference_root_angvel_targets_np = self._bvh_reference_sim_root_angvel_targets_np
         self._bvh_reference_wrap_deltas_np = np.zeros((1, 3), dtype=np.float32)
+        self._reference_joint_tangents = jp.zeros_like(self._bvh_reference_qpos_targets)
+        self._reference_root_tangents = jp.zeros((1, 1, 3))
+        self._reference_quaternion_tangents = jp.zeros((1, 1, 4))
+        self._reference_closure_diagnostics = []
         self._configure_default_deepmimic_reference()
         self._cache_standing_reference()
         self._configure_bvh_reference()
@@ -876,14 +900,72 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             sim_root_vel_targets = differentiate_reference_positions(
                 sim_root_pos_targets, reference_frame_times, references.frame_counts
             )
-            root_angvel_targets = np.asarray(
-                references.root_angvel_targets, dtype=np.float32
-            ) * motion_speed
+            root_angvel_targets = (
+                np.asarray(references.root_angvel_targets, dtype=np.float32)
+                * motion_speed
+            )
+        root_quat_targets = references.root_quat_targets
+        if self._continuous_reference:
+            curves = prepare_reference_curves(
+                qpos_targets,
+                sim_root_pos_targets,
+                root_quat_targets,
+                reference_frame_times,
+                references.frame_counts,
+                references.loop_modes,
+                sim_wrap_deltas,
+                loop_closure=self._config.get("reference_loop_closure", "strict"),
+                joint_lower_limits=np.maximum(
+                    self._actuator_ctrl_lower_limits_np,
+                    self._actuator_qpos_lower_limits_np,
+                ),
+                joint_upper_limits=np.minimum(
+                    self._actuator_ctrl_upper_limits_np,
+                    self._actuator_qpos_upper_limits_np,
+                ),
+            )
+            qpos_targets = curves["joint_positions"]
+            qvel_targets = curves["joint_tangents"]
+            sim_root_pos_targets = curves["root_positions"]
+            sim_root_vel_targets = curves["root_tangents"]
+            root_quat_targets = curves["root_quaternions"]
+            quaternion_tangents = curves["quaternion_tangents"]
+            for clip_id, count in enumerate(references.frame_counts):
+                # Host FK/action bounds also inspect padding; do not retain old,
+                # uncorrected poses after the last valid prepared frame.
+                for positions in (
+                    qpos_targets,
+                    sim_root_pos_targets,
+                    root_quat_targets,
+                ):
+                    positions[clip_id, count:] = positions[clip_id, count - 1]
+            root_angvel_targets = 2.0 * (
+                root_quat_targets[..., :1] * quaternion_tangents[..., 1:]
+                - quaternion_tangents[..., :1] * root_quat_targets[..., 1:]
+                - np.cross(root_quat_targets[..., 1:], quaternion_tangents[..., 1:])
+            )
+            self._reference_joint_tangents = jp.array(qvel_targets)
+            self._reference_root_tangents = jp.array(sim_root_vel_targets)
+            self._reference_quaternion_tangents = jp.array(quaternion_tangents)
+            self._reference_closure_diagnostics = curves["closure_diagnostics"]
+            if np.any(
+                qpos_targets < self._actuator_ctrl_lower_limits_np - 1e-6
+            ) or np.any(qpos_targets > self._actuator_ctrl_upper_limits_np + 1e-6):
+                excess = np.maximum(
+                    self._actuator_ctrl_lower_limits_np - qpos_targets,
+                    qpos_targets - self._actuator_ctrl_upper_limits_np,
+                )
+                clip, frame, joint = np.unravel_index(np.argmax(excess), excess.shape)
+                raise ValueError(
+                    "Loop correction moved joint targets outside control limits: "
+                    f"clip={clip}, frame={frame}, joint={self._actuator_joint_names[joint]}, "
+                    f"excess={excess[clip, frame, joint]:.6g} rad."
+                )
         self._bvh_reference_qpos_targets = jp.array(qpos_targets)
         self._bvh_reference_qvel_targets = jp.array(qvel_targets)
         self._configure_mimickit_action_bounds(qpos_targets)
         self._bvh_reference_sim_root_pos_targets_np = sim_root_pos_targets
-        self._bvh_reference_sim_root_quat_targets_np = references.root_quat_targets
+        self._bvh_reference_sim_root_quat_targets_np = root_quat_targets
         self._bvh_reference_sim_root_vel_targets_np = sim_root_vel_targets
         self._bvh_reference_sim_root_angvel_targets_np = root_angvel_targets
         self._bvh_reference_wrap_deltas_np = sim_wrap_deltas
@@ -891,7 +973,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             sim_root_pos_targets
         )
         self._bvh_reference_reset_root_quat_targets = jp.array(
-            references.root_quat_targets
+            root_quat_targets
         )
         self._bvh_reference_reset_root_vel_targets = jp.array(
             sim_root_vel_targets
@@ -903,7 +985,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             qpos_targets,
             qvel_targets,
             sim_root_pos_targets,
-            references.root_quat_targets,
+            root_quat_targets,
             sim_root_vel_targets,
             root_angvel_targets,
         )
@@ -3376,6 +3458,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
 
     def _reference_anchor_quat(self, data: mjx.Data) -> jax.Array:
         """World quaternion of the locomotion anchor body from its xmat."""
+        if self._continuous_reference:
+            return data.xquat[self._reference_anchor_body_id]
         return self._xmat_to_quat(data.xmat[self._reference_anchor_body_id])
 
     def _reference_key_foot_heights(
@@ -3715,6 +3799,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         motion_time: jax.Array,
     ) -> dict[str, jax.Array]:
         """Interpolate one BVH clip at continuous motion time."""
+        if self._continuous_reference:
+            return self._query_bvh_reference_clip_consistent(clip_id, motion_time)
         motion_length = self._bvh_reference_motion_lengths[clip_id]
         frame_count = self._bvh_reference_frame_counts[clip_id]
         loop_mode = self._bvh_reference_loop_modes[clip_id]
@@ -3846,6 +3932,96 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "key_pos": key_pos,
         }
 
+    def _query_bvh_reference_clip_consistent(
+        self, clip_id: jax.Array, motion_time: jax.Array
+    ) -> dict[str, jax.Array]:
+        """Query a C1 pose curve; derive every reference feature from that pose."""
+        frame_count = self._bvh_reference_frame_counts[clip_id]
+        duration = jp.maximum(self._bvh_reference_motion_lengths[clip_id], 1e-6)
+        interval = self._bvh_reference_frame_times[clip_id]
+        is_wrap = self._bvh_reference_loop_modes[clip_id] == int(LoopMode.WRAP)
+        loop_count = jp.where(
+            is_wrap & (frame_count > 1), jp.floor(motion_time / duration), 0.0
+        )
+        local_time = jp.where(
+            is_wrap,
+            motion_time - loop_count * duration,
+            jp.clip(motion_time, 0.0, duration),
+        )
+        frame_float = local_time / interval
+        frame0 = jp.clip(
+            jp.floor(frame_float).astype(jp.int32), 0, jp.maximum(frame_count - 2, 0)
+        )
+        frame1 = jp.minimum(frame0 + 1, frame_count - 1)
+        alpha = jp.where(frame_count > 1, jp.clip(frame_float - frame0, 0.0, 1.0), 0.0)
+        moving = (frame_count > 1) & (
+            is_wrap | ((motion_time >= 0.0) & (motion_time <= duration))
+        )
+
+        def interpolate(values, tangents):
+            return interpolate_segment(
+                values[clip_id, frame0],
+                values[clip_id, frame1],
+                tangents[clip_id, frame0],
+                tangents[clip_id, frame1],
+                alpha,
+                interval,
+            )
+
+        joints, joint_velocities = interpolate(
+            self._bvh_reference_qpos_targets, self._reference_joint_tangents
+        )
+        root_position, root_velocity = interpolate(
+            self._bvh_reference_sim_root_pos_targets, self._reference_root_tangents
+        )
+        root_quaternion, root_angular_velocity = interpolate_quaternion_segment(
+            self._bvh_reference_sim_root_quat_targets[clip_id, frame0],
+            self._bvh_reference_sim_root_quat_targets[clip_id, frame1],
+            self._reference_quaternion_tangents[clip_id, frame0],
+            self._reference_quaternion_tangents[clip_id, frame1],
+            alpha,
+            interval,
+        )
+        root_position = (
+            root_position + loop_count * self._bvh_reference_wrap_deltas[clip_id]
+        )
+        joint_velocities = jp.where(moving, joint_velocities, 0.0)
+        root_velocity = jp.where(moving, root_velocity, 0.0)
+        root_angular_velocity = jp.where(moving, root_angular_velocity, 0.0)
+        full_qpos = self._init_q.at[:3].set(root_position)
+        full_qpos = full_qpos.at[3:7].set(root_quaternion)
+        full_qpos = full_qpos.at[self._actuator_qpos_indices].set(joints)
+        full_qvel = jp.zeros(self._reference_kinematics_model.nv)
+        full_qvel = full_qvel.at[:3].set(root_velocity)
+        full_qvel = full_qvel.at[3:6].set(root_angular_velocity)
+        full_qvel = full_qvel.at[self._actuator_dof_indices].set(joint_velocities)
+        data = self._reference_kinematics_data.replace(qpos=full_qpos, qvel=full_qvel)
+        data = mjx.kinematics(self._reference_kinematics_model, data)
+        data = mjx.com_pos(self._reference_kinematics_model, data)
+        data = mjx.com_vel(self._reference_kinematics_model, data)
+        return {
+            "clip_id": clip_id,
+            "frame_index0": frame0,
+            "frame_index1": frame1,
+            "alpha": alpha,
+            "loop_count": loop_count,
+            "qpos": joints,
+            "qvel": joint_velocities,
+            "root_pos": self._reference_anchor_pos(data),
+            "root_quat": data.xquat[self._reference_anchor_body_id],
+            "root_vel": self._reference_anchor_linvel(data),
+            "root_angvel": self._reference_anchor_angvel(data),
+            "sim_root_pos": root_position,
+            "sim_root_quat": root_quaternion,
+            "sim_root_vel": root_velocity,
+            "sim_root_angvel": root_angular_velocity,
+            "reset_root_pos": root_position,
+            "reset_root_quat": root_quaternion,
+            "reset_root_vel": root_velocity,
+            "reset_root_angvel": root_angular_velocity,
+            "key_pos": self._key_marker_positions(data),
+        }
+
     def _query_bvh_reference(
         self,
         info: dict,
@@ -3937,7 +4113,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             qvel = qvel.at[:3].set(reference["reset_root_vel"])
             qvel = qvel.at[3:6].set(reference["reset_root_angvel"])
             qvel = qvel.at[self._actuator_dof_indices].set(target_qvel)
-            qpos = self._align_sampled_reference_reset_height(qpos, qvel, target_qpos)
+            if not self._continuous_reference:
+                qpos = self._align_sampled_reference_reset_height(qpos, qvel, target_qpos)
             return qpos, qvel, target_qpos, jp.zeros(self.action_size)
 
         projected_ctrl = self._project_reference_reset_ctrl(

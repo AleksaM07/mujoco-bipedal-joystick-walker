@@ -1,6 +1,19 @@
-PROJECT-V2 RECOVERY - 2026-10-11
+PROJECT-V2 RECOVERY - updated 2026-10-12
 Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
+
+CURRENT CHECKPOINT
+- Phase 1 committed: 6f5d697 (versioned timing/physics and Git recovery).
+- Phase 2 implemented: opt-in consistent_v2 reference curves and explicit
+  strict/bounded loop closure. Legacy and consistent_v1 remain unchanged.
+- Detailed phase-2 changes, measurements and caveats:
+  PROJECT_RECOVERY_PHASE2_2026-10-12.md
+- Evidence: analysis_outputs/recovery_phase2_20261012.json
+- Numerical curve gate passes; physical contact/dynamics is NOT YET VALIDATED.
+  On clip 1, floor penetration reaches 6.03 mm, including the pre-existing
+  intentional 5 mm contact preload (1.03 mm excess). Near-floor material-point
+  horizontal speed median is 0.101 m/s, not force-labeled stance slip.
+- No PPO run, push, checkpoint migration, stash drop or branch deletion.
 
 GIT IS RECOVERED
 - Resolved the one modify/delete conflict by KEEPING the stashed
@@ -9,7 +22,7 @@ GIT IS RECOVERED
 - 4,638 unrelated JAX cache files were hidden with .gitignore, not deleted.
 - stash@{0} (dijagnostika) remains as a backup. Do NOT apply it again.
 - Git recovery did not delete branches, stash or checkpoints. No push was made.
-- Phase 1 is being committed on user request as:
+- Phase 1 was committed on user request as 6f5d697:
   fix: restore project-v2 recovery baseline with versioned physics
 - The original project-v2 branch still points to 8b4d442.
 
@@ -58,7 +71,7 @@ VALIDATION
 EVIDENCE: analysis_outputs/recovery_phase1_20261011.json
 The file records model/source/reference hashes and the diagnostic config.
 
-THE NEXT RED LIGHT - NOT YET FIXED
+HISTORICAL PHASE-1 RED LIGHT - ADDRESSED NUMERICALLY IN PHASE 2
 Same clip, same source geometry, 32 between-frame samples at full speed:
                            legacy       consistent_v1
 joint dq/dt target RMSE     1.074998      0.106101 rad/s
@@ -72,11 +85,10 @@ The endpoint speed gap became larger because its old x0.25 attenuation was
 removed, not because we changed the pose geometry. Loop mode is WRAP here.
 These are sampled reference-path diagnostics, not policy rollout statistics.
 
-NEXT, IN ORDER
-1. Fix/check runtime interpolation and loop continuity (joints + root quaternion),
-   and check reset projections against the SAME phase. Avoid hiding a bad seam
-   by merely increasing tolerances or reducing velocity targets.
-2. Recheck stance/contact/slip, penetration, reachable motor targets and torque
+NEXT, IN ORDER (after phase 2)
+1. Numerical interpolation/loop continuity and exact-reset consistency now pass.
+   Do NOT infer physical tracking success from this. See the phase-2 report.
+2. Fix/audit stance/contact/slip, penetration, reachable motor targets and torque
    saturation with explicit definitions. PD replay is diagnostic, not an
    absolute theoretical prerequisite for RL.
 3. Contrast actual reward on reference vs standing, wrong phase, swapped legs
@@ -100,3 +112,10 @@ Optional slow first CPU compilation, one reset/step and no PPO:
 The timing tool does NOT declare the whole reference valid; read its remaining
 runtime errors and limitations. Earlier cross-branch analysis remains in
 PROJECT_DIAGNOSIS_2026-10-11.md as the historical diagnosis before these fixes.
+
+PHASE-2 REPRODUCTION IN WINDOWS GIT BASH
+./.venv-win/Scripts/python.exe -m unittest discover -s tests -v
+./.venv-win/Scripts/python.exe -m tools.check_reference_curves --output analysis_outputs/recovery_phase2_20261012.json
+
+Add --mjx-smoke for one CPU reset/step; first compilation can take minutes.
+No checkpoint is loaded or trained by either diagnostic command.

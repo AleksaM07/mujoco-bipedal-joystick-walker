@@ -679,6 +679,7 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # Preserve historical checkpoint semantics unless recovery is explicit.
         recovery_physics_version="legacy",
         reference_motion_speed_scale=1.0,
+        reference_loop_closure="strict",
         # REF: MIMICKIT-MOTION-LIBRARY
         # TYPE: REFERENCE_CODE_DERIVED
         reference_gait="bvh",
@@ -881,6 +882,8 @@ class EnvConfig:
     # original observation distribution when evaluated without a migration.
     recovery_physics_version: str = "legacy"
     reference_motion_speed_scale: float = 1.0
+    # v2 only: bounded explicitly permits measured, limited loop pose correction.
+    reference_loop_closure: str = "strict"
 
     # BVH/MimicKit-style imitation is the production default. "none" and
     # "sine" remain accepted only for old checkpoint/debug compatibility.

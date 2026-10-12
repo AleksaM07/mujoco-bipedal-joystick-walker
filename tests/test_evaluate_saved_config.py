@@ -39,6 +39,29 @@ class SavedConfigTests(unittest.TestCase):
                     Path(directory), EnvConfig(recovery_physics_version="consistent_v1")
                 )
 
+    def test_resume_rejects_v1_to_v2_interpolation_migration(self) -> None:
+        with TemporaryDirectory() as directory:
+            run_dir = Path(directory)
+            checkpoint_path = run_dir / "checkpoints" / "000000000001"
+            checkpoint_path.mkdir(parents=True)
+            config_path = run_dir / "config.json"
+            config_path.write_text(
+                json.dumps({"env": {"recovery_physics_version": "consistent_v1"}}),
+                encoding="utf-8",
+            )
+            continuous = EnvConfig(
+                recovery_physics_version="consistent_v2",
+                reference_loop_closure="bounded",
+            )
+            with self.assertRaisesRegex(
+                ValueError, "consistent_v1.*differs.*consistent_v2"
+            ):
+                train.validate_resume_physics_version(checkpoint_path, continuous)
+            config_path.write_text(
+                json.dumps({"env": asdict(continuous)}), encoding="utf-8"
+            )
+            train.validate_resume_physics_version(checkpoint_path, continuous)
+
     def test_saved_action_reset_and_recovery_settings_are_restored(self) -> None:
         original = EnvConfig(
             reference_residual_scale=0.1,
@@ -56,12 +79,29 @@ class SavedConfigTests(unittest.TestCase):
         restored = evaluate.restore_saved_env_config({"env": saved})
         self.assertEqual(restored, original)
 
+    def test_saved_v2_bounded_closure_survives_evaluator_round_trip(self) -> None:
+        original = EnvConfig(
+            recovery_physics_version="consistent_v2",
+            reference_loop_closure="bounded",
+            reference_motion_speed_scale=0.25,
+        )
+        saved = json.loads(json.dumps({"env": asdict(original)}))
+        restored = evaluate.restore_saved_env_config(saved)
+        self.assertEqual(restored, original)
+        with patch.object(evaluate, "BiomechanicsJoystickEnv") as constructor:
+            evaluate.make_environment(restored)
+        forwarded = constructor.call_args.kwargs["config_overrides"]
+        self.assertEqual(forwarded["recovery_physics_version"], "consistent_v2")
+        self.assertEqual(forwarded["reference_loop_closure"], "bounded")
+        self.assertEqual(forwarded["reference_motion_speed_scale"], 0.25)
+
     def test_missing_version_preserves_project_v2_legacy(self) -> None:
         config = evaluate.restore_saved_env_config(
             {"env": {"reference_residual_scale": 0.4}}
         )
         self.assertEqual(config.recovery_physics_version, "legacy")
         self.assertEqual(config.reference_motion_speed_scale, 1.0)
+        self.assertEqual(config.reference_loop_closure, "strict")
         self.assertEqual(config.reference_residual_scale, 0.4)
         self.assertEqual(
             default_biomechanics_env_config().recovery_physics_version, "legacy"
@@ -123,6 +163,34 @@ class SavedConfigTests(unittest.TestCase):
         forwarded = constructor.call_args.kwargs["config_overrides"]
         self.assertEqual(forwarded["recovery_physics_version"], "consistent_v1")
         self.assertEqual(forwarded["reference_motion_speed_scale"], 0.5)
+
+    def test_trainer_forwards_v2_bounded_loop_closure(self) -> None:
+        config = EnvConfig(
+            recovery_physics_version="consistent_v2",
+            reference_loop_closure="bounded",
+        )
+        with patch.object(train, "BiomechanicsJoystickEnv") as constructor:
+            train.make_environment(config)
+        forwarded = constructor.call_args.kwargs["config_overrides"]
+        self.assertEqual(forwarded["recovery_physics_version"], "consistent_v2")
+        self.assertEqual(forwarded["reference_loop_closure"], "bounded")
+
+    def test_bounded_closure_requires_v2_before_model_loading(self) -> None:
+        for version in ("legacy", "consistent_v1"):
+            with (
+                self.subTest(version=version),
+                patch("biomechanics_env.build_trainable_scene_xml") as build_xml,
+                patch("biomechanics_env.mujoco.MjModel") as model,
+            ):
+                with self.assertRaisesRegex(ValueError, "requires consistent_v2"):
+                    evaluate.BiomechanicsJoystickEnv(
+                        config_overrides={
+                            "recovery_physics_version": version,
+                            "reference_loop_closure": "bounded",
+                        }
+                    )
+                build_xml.assert_not_called()
+                model.from_xml_path.assert_not_called()
 
     def test_bad_versions_and_legacy_speed_changes_fail_before_model_loading(
         self,

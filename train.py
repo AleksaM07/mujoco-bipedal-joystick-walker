@@ -1231,6 +1231,7 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         "command_profile": env_config.command_profile,
         "recovery_physics_version": env_config.recovery_physics_version,
         "reference_motion_speed_scale": env_config.reference_motion_speed_scale,
+        "reference_loop_closure": env_config.reference_loop_closure,
         "reference_gait": env_config.reference_gait,
         "arm_actuators": env_config.arm_actuators,
         "reference_forced_clip_id": env_config.reference_forced_clip_id,
@@ -2373,7 +2374,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--recovery-physics-version",
-        choices=["legacy", "consistent_v1"],
+        choices=["legacy", "consistent_v1", "consistent_v2"],
         default=EnvConfig.recovery_physics_version,
         help="Opt into corrected measurements and reference timing for new runs.",
     )
@@ -2381,7 +2382,13 @@ def main() -> None:
         "--reference-motion-speed-scale",
         type=float,
         default=EnvConfig.reference_motion_speed_scale,
-        help="Positive playback speed multiplier; requires consistent_v1.",
+        help="Positive playback speed multiplier; requires consistent_v1 or consistent_v2.",
+    )
+    parser.add_argument(
+        "--reference-loop-closure",
+        choices=["strict", "bounded"],
+        default=EnvConfig.reference_loop_closure,
+        help="v2 loop preparation: reject mismatched endpoints, or explicitly repair small gaps.",
     )
     parser.add_argument(
         "--reference-loop-mode",
@@ -2721,6 +2728,7 @@ def main() -> None:
         command_profile=args.command_profile,
         recovery_physics_version=args.recovery_physics_version,
         reference_motion_speed_scale=args.reference_motion_speed_scale,
+        reference_loop_closure=args.reference_loop_closure,
         reference_gait=args.reference_gait,
         arm_actuators=args.arm_actuators,
         reference_gait_file=reference_gait_file,
