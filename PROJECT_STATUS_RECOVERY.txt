@@ -3,6 +3,13 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- Phase 6A observes the actual support labels and root-lock recurrence.
+  The final frame-1 spike is NOT a support switch: it transmits IK startup
+  pose motion while the right foot remains planted. The pre-IK frame-108
+  spike is instead a transition to height-classified flight.
+  No production behavior changed; v4 reference digest remains identical.
+  Five diagnostic tests added (152 total). See PROJECT_RECOVERY_PHASE6A_2026-10-12.md.
+  Next: isolated opt-in cyclic IK warmup, then measured physical comparison.
 - Phase 5A committed separately: d2e90b7 (source-cycle selection and tests).
   Phase 5B records separate diagnostics/evidence, not additional controller fixes.
   Explicit reference_clip_ids=[1] selects the accepted original loader
