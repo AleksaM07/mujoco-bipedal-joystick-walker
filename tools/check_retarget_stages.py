@@ -327,7 +327,7 @@ def main() -> None:
     parser.add_argument(
         "--version",
         default="consistent_v3",
-        choices=["consistent_v2", "consistent_v3", "consistent_v4"],
+        choices=["consistent_v2", "consistent_v3", "consistent_v4", "consistent_v5"],
     )
     parser.add_argument(
         "--loop-mode",
@@ -425,6 +425,7 @@ def main() -> None:
         "curve_preparation_error": metadata.get("curve_preparation_error"),
         "per_clip_curve_gates": metadata["per_clip_curve_gates"],
         "root_lock_passes": metadata.get("root_lock_passes", []),
+        "ik_warmstart": getattr(env, "_reference_ik_warmstart_diagnostics", []),
         "bvh_ik_mapping": {
             "source_file_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
             "model_file_sha256": hashlib.sha256(
@@ -446,6 +447,7 @@ def main() -> None:
                 "biomechanics_env.py",
                 "bvh_reference.py",
                 "reference_interpolation.py",
+                "reference_ik.py",
                 "tools/check_retarget_stages.py",
             )
         },

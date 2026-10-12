@@ -13,6 +13,83 @@ from config import EnvConfig, default_biomechanics_env_config
 
 
 class SavedConfigTests(unittest.TestCase):
+    def test_training_cli_forwards_v5_without_changing_clip_selection(self) -> None:
+        arguments = [
+            "train.py",
+            "--recovery-physics-version",
+            "consistent_v5",
+            "--reference-loop-closure",
+            "bounded",
+            "--reference-clip-ids",
+            "1",
+            "--reference-force-clip-id",
+            "0",
+            "--reference-playback-audit",
+        ]
+        with (
+            patch("sys.argv", arguments),
+            patch.object(train, "choose_device"),
+            patch.object(train.jax.config, "update"),
+            patch.object(train, "expand_reference_gait_files", return_value=["unused"]),
+            patch.object(train, "run_reference_playback_audit") as run_audit,
+            patch("builtins.print"),
+        ):
+            train.main()
+        requested = run_audit.call_args.args[0]
+        self.assertEqual(requested.recovery_physics_version, "consistent_v5")
+        self.assertEqual(requested.reference_loop_closure, "bounded")
+        self.assertEqual(requested.reference_clip_ids, [1])
+        self.assertEqual(requested.reference_forced_clip_id, 0)
+
+    def test_v5_periodic_ik_version_round_trip_and_forwarding(self) -> None:
+        original = EnvConfig(
+            recovery_physics_version="consistent_v5",
+            reference_loop_closure="bounded",
+            reference_clip_ids=[1],
+            reference_forced_clip_id=0,
+        )
+        saved = json.loads(json.dumps({"env": asdict(original)}))
+        restored = evaluate.restore_saved_env_config(saved)
+        self.assertEqual(restored, original)
+        for factory in (evaluate, train):
+            with self.subTest(factory=factory.__name__):
+                with patch.object(factory, "BiomechanicsJoystickEnv") as constructor:
+                    factory.make_environment(restored)
+                forwarded = constructor.call_args.kwargs["config_overrides"]
+                self.assertEqual(forwarded["recovery_physics_version"], "consistent_v5")
+                self.assertEqual(forwarded["reference_loop_closure"], "bounded")
+                self.assertEqual(forwarded["reference_clip_ids"], [1])
+                self.assertEqual(forwarded["reference_forced_clip_id"], 0)
+
+    def test_resume_refuses_v4_to_v5_periodic_ik_change(self) -> None:
+        with TemporaryDirectory() as directory:
+            run_dir = Path(directory)
+            checkpoint = run_dir / "checkpoints" / "000000000001"
+            checkpoint.mkdir(parents=True)
+            config_path = run_dir / "config.json"
+            config_path.write_text(
+                json.dumps({"env": {"recovery_physics_version": "consistent_v4"}}),
+                encoding="utf-8",
+            )
+            train.validate_resume_physics_version(
+                checkpoint, EnvConfig(recovery_physics_version="consistent_v4")
+            )
+            with self.assertRaisesRegex(ValueError, "consistent_v4.*consistent_v5"):
+                train.validate_resume_physics_version(
+                    checkpoint, EnvConfig(recovery_physics_version="consistent_v5")
+                )
+            config_path.write_text(
+                json.dumps({"env": {"recovery_physics_version": "consistent_v5"}}),
+                encoding="utf-8",
+            )
+            train.validate_resume_physics_version(
+                checkpoint, EnvConfig(recovery_physics_version="consistent_v5")
+            )
+            with self.assertRaisesRegex(ValueError, "consistent_v5.*consistent_v4"):
+                train.validate_resume_physics_version(
+                    checkpoint, EnvConfig(recovery_physics_version="consistent_v4")
+                )
+
     def test_training_cli_builds_ordered_loader_selection(self) -> None:
         arguments = [
             "train.py",

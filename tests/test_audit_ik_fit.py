@@ -63,6 +63,16 @@ def make_fixture(target_angle: float = 0.3) -> tuple:
 
 
 class AuditIKFitTests(unittest.TestCase):
+    def test_warm_start_uses_recorded_predecessor_at_frame_zero(self) -> None:
+        env, metadata, stages = make_fixture()
+        env._reference_ik_warmstart_diagnostics = [{"initial_previous_pose_rad": [0.2]}]
+        result = inspect_ik_fit(env, metadata, stages, frame_ids=[0, 1])
+        self.assertEqual(result["frames"][0]["previous_pose_rad"], [0.2])
+        self.assertEqual(result["frames"][1]["previous_pose_rad"], [0.0])
+        env._reference_ik_warmstart_diagnostics = [{"initial_previous_pose_rad": None}]
+        result = inspect_ik_fit(env, metadata, stages, frame_ids=[0])
+        self.assertIsNone(result["frames"][0]["previous_pose_rad"])
+
     def test_native_jacobian_matches_finite_difference(self) -> None:
         env, metadata, stages = make_fixture()
         objective = _FrameObjective(

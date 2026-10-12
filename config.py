@@ -883,7 +883,8 @@ class EnvConfig:
     # original observation distribution when evaluated without a migration.
     recovery_physics_version: str = "legacy"
     reference_motion_speed_scale: float = 1.0
-    # v2/v3/v4: bounded permits measured, limited loop pose correction.
+    # v2+: bounded permits measured, limited loop pose correction.
+    # v5 additionally warms cyclic IK; all versions remain explicit opt-ins.
     reference_loop_closure: str = "strict"
 
     # BVH/MimicKit-style imitation is the production default. "none" and

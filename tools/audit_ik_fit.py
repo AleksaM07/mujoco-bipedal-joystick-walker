@@ -206,11 +206,16 @@ def inspect_ik_fit(
         captured[name]
         for name in ("normalized_ik_input", "ik_solution", "stability_prior")
     )
+    warmstart = getattr(env, "_reference_ik_warmstart_diagnostics", [])
     rows = []
     for frame in frame_ids:
         seed = np.asarray(source["joints"][clip_id, frame], dtype=float)
         baseline = np.asarray(fitted["joints"][clip_id, frame], dtype=float)
         previous = None if frame == 0 else fitted["joints"][clip_id, frame - 1]
+        if frame == 0 and warmstart:
+            initial_previous = warmstart[clip_id]["initial_previous_pose_rad"]
+            if initial_previous is not None:
+                previous = np.asarray(initial_previous, dtype=float)
         full_pose = np.asarray(env._init_q_np, dtype=float).copy()
         full_pose[:3] = source["roots"][clip_id, frame]
         full_pose[3:7] = source["quaternions"][clip_id, frame]
@@ -223,6 +228,7 @@ def inspect_ik_fit(
         unregularized = _FrameObjective(*arguments, pose_reg=0.0, smooth_reg=0.0)
         row = {
             "frame_id": int(frame),
+            "previous_pose_rad": None if previous is None else previous.tolist(),
             "source_frame_id": int(metadata["source_start_frames"][clip_id])
             + int(frame),
             "root_xyz_m": full_pose[:3].tolist(),

@@ -84,7 +84,9 @@ def sample_reference_states(
     if not np.isfinite(times).all() or np.asarray(times).ndim != 1:
         raise ValueError("Sample times must be a finite one-dimensional array.")
     if not env._continuous_reference:
-        raise ValueError("Analytic acceleration requires consistent_v2/v3/v4 curves.")
+        raise ValueError(
+            "Analytic acceleration requires consistent_v2 or later curves."
+        )
 
     def state(time):
         reference = env._query_bvh_reference_clip(jp.array(clip_id), time)
@@ -262,7 +264,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--recovery-physics-version",
-        choices=("consistent_v2", "consistent_v3", "consistent_v4"),
+        choices=("consistent_v2", "consistent_v3", "consistent_v4", "consistent_v5"),
         default="consistent_v2",
     )
     parser.add_argument(
@@ -315,6 +317,7 @@ def main() -> None:
                 "biomechanics_env.py",
                 "bvh_reference.py",
                 "reference_interpolation.py",
+                "reference_ik.py",
                 "tools/check_reference_contacts.py",
                 "tools/check_reference_curves.py",
             )
@@ -372,6 +375,7 @@ def main() -> None:
             "contacts": contact_summary,
             "processed_reference_sha256": reference_digest(env),
             "closure": env._reference_closure_diagnostics,
+            "ik_warmstart": getattr(env, "_reference_ik_warmstart_diagnostics", []),
             "source_clip_ids": env._bvh_reference_source_clip_ids_np.tolist(),
             "source_frame_range": [
                 int(env._bvh_reference_source_start_frames[args.clip_id]),

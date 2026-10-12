@@ -3,6 +3,12 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- Phase 6B adds opt-in consistent_v5 cyclic IK startup warmup. Same kernel,
+  targets, weights, limits and locking; old versions and default preserved.
+  Four unique-node cycles precede the retained solve, with a 1e-6 rad
+  convergence guard. CLAMP/singleton clips are not warmed. No PPO started.
+  170 regression tests pass; selected v4 reference digest is unchanged.
+  See PROJECT_RECOVERY_PHASE6B_2026-10-12.md. Physical comparison is phase 6C.
 - Phase 6A observes the actual support labels and root-lock recurrence.
   The final frame-1 spike is NOT a support switch: it transmits IK startup
   pose motion while the right foot remains planted. The pre-IK frame-108

@@ -25,6 +25,7 @@ from config import (
     resolve_project_path,
 )
 from phase1_backends import make_data_kwargs, put_model_for_backend, select_data
+from reference_ik import fit_periodic_ik
 from reference_interpolation import (
     interpolate_quaternion_segment,
     interpolate_segment,
@@ -249,29 +250,37 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "consistent_v2",
             "consistent_v3",
             "consistent_v4",
+            "consistent_v5",
         }:
             raise ValueError(
                 "recovery_physics_version must be legacy, consistent_v1, "
-                "consistent_v2, consistent_v3 or consistent_v4."
+                "consistent_v2, consistent_v3, consistent_v4 or consistent_v5."
             )
         self._consistent_physics = physics_version != "legacy"
         self._continuous_reference = physics_version in {
             "consistent_v2",
             "consistent_v3",
             "consistent_v4",
+            "consistent_v5",
         }
         self._framewise_foot_heights = physics_version in {
             "consistent_v3",
             "consistent_v4",
+            "consistent_v5",
         }
-        self._strict_bvh_ik_targets = physics_version == "consistent_v4"
+        self._strict_bvh_ik_targets = physics_version in {
+            "consistent_v4",
+            "consistent_v5",
+        }
+        self._periodic_ik_warmstart = physics_version == "consistent_v5"
+        self._reference_ik_warmstart_diagnostics = []
         loop_closure = self._config.get("reference_loop_closure", "strict")
         if loop_closure not in {"strict", "bounded"}:
             raise ValueError("reference_loop_closure must be strict or bounded.")
         if loop_closure != "strict" and not self._continuous_reference:
             raise ValueError(
                 "Bounded loop closure requires consistent_v2, "
-                "consistent_v3 or consistent_v4."
+                "consistent_v3, consistent_v4 or consistent_v5."
             )
         motion_speed = float(self._config.get("reference_motion_speed_scale", 1.0))
         if not np.isfinite(motion_speed) or motion_speed <= 0.0:
@@ -281,7 +290,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         if not self._consistent_physics and motion_speed != 1.0:
             raise ValueError(
                 "reference_motion_speed_scale requires consistent_v1, "
-                "consistent_v2, consistent_v3 or consistent_v4."
+                "consistent_v2, consistent_v3, consistent_v4 or consistent_v5."
             )
         configured_xml_path = self._config.get("xml_path", None)
         if configured_xml_path:
@@ -1224,6 +1233,39 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self._standing_reference_wrap_deltas = jp.zeros((1, 3), dtype=jp.float32)
 
     def _retarget_reference_qpos_to_ik_targets(
+        self,
+        qpos_targets: np.ndarray,
+        ik_target_positions: np.ndarray,
+        ik_target_names: tuple[str, ...],
+        root_pos_targets: np.ndarray,
+        root_quat_targets: np.ndarray,
+        frame_counts: np.ndarray,
+    ) -> np.ndarray:
+        """Fit poses, with an explicitly versioned cyclic-startup correction.
+
+        V5 warms the unchanged causal IK solver on preceding unique WRAP frames.
+        This removes the no-predecessor startup asymmetry, not contact errors or
+        endpoint mismatch. Finite clips and all older versions keep a single fit.
+        """
+        arguments = (
+            qpos_targets,
+            ik_target_positions,
+            ik_target_names,
+            root_pos_targets,
+            root_quat_targets,
+            frame_counts,
+        )
+        if not getattr(self, "_periodic_ik_warmstart", False):
+            return self._fit_reference_ik_once(*arguments)
+        fitted, diagnostics = fit_periodic_ik(
+            self._fit_reference_ik_once,
+            *arguments,
+            np.asarray(self._bvh_reference_loop_modes),
+        )
+        self._reference_ik_warmstart_diagnostics = diagnostics
+        return fitted
+
+    def _fit_reference_ik_once(
         self,
         qpos_targets: np.ndarray,
         ik_target_positions: np.ndarray,
