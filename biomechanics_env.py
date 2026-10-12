@@ -248,23 +248,30 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "consistent_v1",
             "consistent_v2",
             "consistent_v3",
+            "consistent_v4",
         }:
             raise ValueError(
                 "recovery_physics_version must be legacy, consistent_v1, "
-                "consistent_v2 or consistent_v3."
+                "consistent_v2, consistent_v3 or consistent_v4."
             )
         self._consistent_physics = physics_version != "legacy"
         self._continuous_reference = physics_version in {
             "consistent_v2",
             "consistent_v3",
+            "consistent_v4",
         }
-        self._framewise_foot_heights = physics_version == "consistent_v3"
+        self._framewise_foot_heights = physics_version in {
+            "consistent_v3",
+            "consistent_v4",
+        }
+        self._strict_bvh_ik_targets = physics_version == "consistent_v4"
         loop_closure = self._config.get("reference_loop_closure", "strict")
         if loop_closure not in {"strict", "bounded"}:
             raise ValueError("reference_loop_closure must be strict or bounded.")
         if loop_closure != "strict" and not self._continuous_reference:
             raise ValueError(
-                "Bounded loop closure requires consistent_v2 or consistent_v3."
+                "Bounded loop closure requires consistent_v2, "
+                "consistent_v3 or consistent_v4."
             )
         motion_speed = float(self._config.get("reference_motion_speed_scale", 1.0))
         if not np.isfinite(motion_speed) or motion_speed <= 0.0:
@@ -274,7 +281,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         if not self._consistent_physics and motion_speed != 1.0:
             raise ValueError(
                 "reference_motion_speed_scale requires consistent_v1, "
-                "consistent_v2 or consistent_v3."
+                "consistent_v2, consistent_v3 or consistent_v4."
             )
         configured_xml_path = self._config.get("xml_path", None)
         if configured_xml_path:
@@ -766,6 +773,11 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         reference_gait_files = self._reference_gait_files()
 
         loader = load_smpl_references if reference_gait == "smpl" else load_bvh_references
+        loader_options = (
+            {"strict_ik_targets": True}
+            if reference_gait == "bvh" and self._strict_bvh_ik_targets
+            else {}
+        )
         references = loader(
             tuple(resolve_project_path(path) for path in reference_gait_files),
             self._actuator_joint_names,
@@ -774,6 +786,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             self._actuator_ctrl_upper_limits_np,
             initial_root_pos=np.asarray(self._init_q_np[:3], dtype=np.float32),
             initial_root_quat=np.asarray(self._init_q_np[3:7], dtype=np.float32),
+            **loader_options,
         )
         references = self._filter_reference_clips(references)
         references = self._apply_reference_loop_mode_override(references)
@@ -1190,6 +1203,14 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         to be valid controls for a different XML.
         """
         marker_specs = self._resolve_host_ik_markers(ik_target_names)
+        if getattr(self, "_strict_bvh_ik_targets", False) and tuple(
+            marker["name"] for marker in marker_specs
+        ) != tuple(ik_target_names):
+            raise ValueError(
+                "Unresolved or reordered simulator IK markers: "
+                f"requested {ik_target_names}, resolved "
+                f"{tuple(marker['name'] for marker in marker_specs)}."
+            )
         if not marker_specs:
             return np.asarray(qpos_targets, dtype=np.float32)
 
@@ -1296,7 +1317,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
     ) -> np.ndarray:
         """Normalize foot-target heights, preserving pre-v3 indexing semantics.
 
-        V3 applies one common vertical shift to both feet in each valid frame.
+        V3 and later apply one common vertical shift to both feet in each frame.
         Historical versions instead shift each foot by its whole-clip minimum;
         retaining that behavior keeps their processed references reproducible.
         """

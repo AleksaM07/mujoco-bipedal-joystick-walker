@@ -3,13 +3,30 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- Phase 4: confirmed both BVH foot targets silently fell back to Hips because
+  CMU names LeftToe/RightToe did not match the expected *ToeBase names.
+  Opt-in consistent_v4 uses strict aliases and rejects missing source/XML markers.
+  This removes measured sole overlap: 401/401 -> 0/401 pre-curve nodes;
+  a separate finite CLAMP audit also has 0/1592 off-knot sole collisions.
+  V3's processed reference hash is unchanged. 123 regression tests pass.
+  CURRENT RED LIGHT: the v4/auto batch rejects clip 0 at bounded WRAP closure
+  (0.209577 rad > 0.2); clips 1 and 2 pass their individual numerical gate.
+  Remaining IK errors are centimeters; no corrected-reference dynamics/tracker
+  success or learned walking is claimed. CLAMP is NOT a repeating-gait fix.
+  Next: select one accepted cycle explicitly before preprocessing, inspect IK
+  residuals/stability blending, then rerun contact/dynamics/tracking checks.
+  See PROJECT_RECOVERY_PHASE4_2026-10-12.md and its reproduction commands.
+- User-requested local cleanup: experiment/main-modern-bvh,
+  experiment/v21-stable-baseline, backup/with-7f1294e-before-test deleted after
+  verified bundle archive. Remote branches/stash/checkpoints remain untouched.
+  Recovery instructions: BRANCH_ARCHIVE_2026-10-12.md.
 - Phase 1 committed: 6f5d697 (versioned timing/physics and Git recovery).
 - Phase 2 committed: 142d93c, opt-in consistent_v2 reference curves and explicit
   strict/bounded loop closure. Legacy and consistent_v1 remain unchanged.
-- Phase 3: opt-in consistent_v3 fixes the confirmed NumPy frame/foot axis bug.
+- Phase 3 committed: 18515c7; consistent_v3 fixes the NumPy frame/foot axis bug.
   Contact, inverse-dynamics and 24 native replay trials are measured; no PPO.
   See PROJECT_RECOVERY_PHASE3_2026-10-12.md for the detailed current diagnosis.
-  The major RED LIGHT is sole-sole overlap in ALL 532 measured reference samples:
+  Historical phase-3 RED LIGHT: sole-sole overlap in ALL 532 reference samples:
   max 99.55 mm in v2, 93.85 mm in v3. Neutral standing has no sole-sole collision.
   This is separate from intentional floor preload. Fixing height normalization
   helps these open-loop replays but does not repair the reference's self-collision.
@@ -22,7 +39,8 @@ CURRENT CHECKPOINT
   On clip 1, floor penetration reaches 6.03 mm, including the pre-existing
   intentional 5 mm contact preload (1.03 mm excess). Near-floor material-point
   horizontal speed median is 0.101 m/s, not force-labeled stance slip.
-- No PPO run, push, checkpoint migration, stash drop or branch deletion.
+- No PPO run, push, checkpoint migration or stash drop. Local branch cleanup
+  occurred in phase 4 as explicitly requested and archived above.
 
 GIT IS RECOVERED
 - Resolved the one modify/delete conflict by KEEPING the stashed
@@ -94,10 +112,11 @@ The endpoint speed gap became larger because its old x0.25 attenuation was
 removed, not because we changed the pose geometry. Loop mode is WRAP here.
 These are sampled reference-path diagnostics, not policy rollout statistics.
 
-NEXT, IN ORDER (phase 3 updates contact diagnosis)
+NEXT, IN ORDER (phase 4 updates source mapping/contact diagnosis)
 1. Numerical interpolation/loop continuity and exact-reset consistency now pass.
    Do NOT infer physical tracking success from this. See the phase-2 report.
-2. Fix self-colliding foot geometry/retargeting and audit stance/contact/slip,
+2. V4 removes measured source-mapping overlap; select a valid loop, resolve IK
+   residuals and audit stance/contact/slip,
    root accelerations, reachable motor targets and torque
    saturation with explicit definitions. PD replay is diagnostic, not an
    absolute theoretical prerequisite for RL.

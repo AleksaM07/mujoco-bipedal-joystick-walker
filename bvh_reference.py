@@ -48,6 +48,13 @@ BVH_IK_TARGET_MAP = (
     ("metatarsal_midpoint_left", "LeftToeBase"),
 )
 
+# CMU cmuconvert-max uses *Toe; other supported BVH exports use *ToeBase.
+# Preserve the historical map above for checkpoint-compatible preprocessing.
+BVH_IK_SOURCE_ALIASES = (
+    ("RightToeBase", "RightToe"),
+    ("LeftToeBase", "LeftToe"),
+)
+
 # Marina/CMU ``cmuconvert-max`` BVH files use small skeleton units, not
 # centimeters. The neutral source height is about 25 units, so 0.07 maps it to
 # a 1.75 m human and keeps root travel in normal walking-speed range.
@@ -166,6 +173,8 @@ class BvhMotionLibrary:
         upper_limits: np.ndarray,
         initial_root_pos: np.ndarray,
         initial_root_quat: np.ndarray,
+        *,
+        strict_ik_targets: bool = False,
     ) -> "BvhMotionLibrary":
         clips: list[MotionClip] = []
         for source_path in expand_motion_paths(paths):
@@ -182,6 +191,7 @@ class BvhMotionLibrary:
                     upper_limits=upper_limits,
                     initial_root_pos=initial_root_pos,
                     initial_root_quat=initial_root_quat,
+                    strict_ik_targets=strict_ik_targets,
                 )
                 for segment in segments
             ]
@@ -273,8 +283,14 @@ def load_bvh_references(
     upper_limits: np.ndarray,
     initial_root_pos: np.ndarray | None = None,
     initial_root_quat: np.ndarray | None = None,
+    *,
+    strict_ik_targets: bool = False,
 ) -> BvhReferenceBatch:
-    """Load BVH/list paths into one MimicKit-style padded reference batch."""
+    """Load BVH/list paths into a padded reference batch.
+
+    Strict IK resolution uses supported toe aliases and rejects missing feet.
+    The default retains historical preprocessing for existing checkpoints.
+    """
     initial_root_pos = (
         np.asarray(initial_root_pos, dtype=np.float32)
         if initial_root_pos is not None
@@ -293,6 +309,7 @@ def load_bvh_references(
         upper_limits=np.asarray(upper_limits, dtype=np.float32),
         initial_root_pos=initial_root_pos,
         initial_root_quat=initial_root_quat,
+        strict_ik_targets=strict_ik_targets,
     )
     return library.to_reference_batch()
 
@@ -323,6 +340,8 @@ def _retarget_segment(
     upper_limits: np.ndarray,
     initial_root_pos: np.ndarray,
     initial_root_quat: np.ndarray,
+    *,
+    strict_ik_targets: bool = False,
 ) -> MotionClip:
     segment_bvh = bvh.slice(segment)
     targets = np.tile(default_ctrl, (segment_bvh.frames, 1)).astype(np.float32)
@@ -446,6 +465,7 @@ def _retarget_segment(
         alignment_rot,
         raw_root_origin,
         initial_root_pos,
+        strict_ik_targets=strict_ik_targets,
     )
     qvel_targets = _target_velocities(targets, segment_bvh.frame_time)
     root_vel_targets = _target_velocities(root_pos, segment_bvh.frame_time)
@@ -1237,21 +1257,47 @@ def _root_motion_targets(
     )
 
 
+def _resolve_bvh_ik_joint_names(bvh: ParsedBvh) -> tuple[str, ...]:
+    """Resolve each named foot to its source toe; never substitute the root.
+
+    Prefer the canonical ToeBase spelling if both supported spellings exist.
+    An absent foot is a data error, not a target at the pelvis or ankle.
+    """
+    resolved = []
+    for (marker_name, _), aliases in zip(
+        BVH_IK_TARGET_MAP, BVH_IK_SOURCE_ALIASES, strict=True
+    ):
+        name = _first_existing_joint(bvh, aliases)
+        if name is None:
+            raise ValueError(
+                f"Missing BVH IK source for {marker_name}; expected one of "
+                f"{aliases}. Available joints: {tuple(bvh.joints)}"
+            )
+        resolved.append(name)
+    return tuple(resolved)
+
+
 def _bvh_ik_target_positions(
     bvh: ParsedBvh,
     alignment_rot: np.ndarray,
     raw_root_origin: np.ndarray,
     initial_root_pos: np.ndarray,
+    *,
+    strict_ik_targets: bool = False,
 ) -> np.ndarray:
-    """Transform raw BVH end-effectors into the MuJoCo reference world frame."""
+    """Transform toes to simulator space with opt-in strict source resolution."""
     global_positions = _global_joint_positions(bvh)
-    selected = np.stack(
-        [
-            global_positions.get(joint_name, global_positions[bvh.root_name])
-            for _, joint_name in BVH_IK_TARGET_MAP
-        ],
-        axis=1,
-    )
+    if strict_ik_targets:
+        joint_names = _resolve_bvh_ik_joint_names(bvh)
+        selected = np.stack([global_positions[name] for name in joint_names], axis=1)
+    else:
+        selected = np.stack(
+            [
+                global_positions.get(joint_name, global_positions[bvh.root_name])
+                for _, joint_name in BVH_IK_TARGET_MAP
+            ],
+            axis=1,
+        )
     mujoco_positions = _bvh_positions_to_mujoco(selected)
     mujoco_positions -= raw_root_origin[None, None, :]
     mujoco_positions = (

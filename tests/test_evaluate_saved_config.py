@@ -13,6 +13,37 @@ from config import EnvConfig, default_biomechanics_env_config
 
 
 class SavedConfigTests(unittest.TestCase):
+    def test_v4_strict_mapping_version_round_trip_and_forwarding(self) -> None:
+        original = EnvConfig(
+            recovery_physics_version="consistent_v4", reference_loop_closure="bounded"
+        )
+        saved = json.loads(json.dumps({"env": asdict(original)}))
+        restored = evaluate.restore_saved_env_config(saved)
+        self.assertEqual(restored, original)
+        for factory in (evaluate, train):
+            with patch.object(factory, "BiomechanicsJoystickEnv") as constructor:
+                factory.make_environment(restored)
+            forwarded = constructor.call_args.kwargs["config_overrides"]
+            self.assertEqual(forwarded["recovery_physics_version"], "consistent_v4")
+            self.assertEqual(forwarded["reference_loop_closure"], "bounded")
+
+    def test_resume_refuses_v3_to_v4_source_mapping_change(self) -> None:
+        with TemporaryDirectory() as directory:
+            run_dir = Path(directory)
+            checkpoint = run_dir / "checkpoints" / "000000000001"
+            checkpoint.mkdir(parents=True)
+            (run_dir / "config.json").write_text(
+                json.dumps({"env": {"recovery_physics_version": "consistent_v3"}}),
+                encoding="utf-8",
+            )
+            train.validate_resume_physics_version(
+                checkpoint, EnvConfig(recovery_physics_version="consistent_v3")
+            )
+            with self.assertRaisesRegex(ValueError, "consistent_v3.*consistent_v4"):
+                train.validate_resume_physics_version(
+                    checkpoint, EnvConfig(recovery_physics_version="consistent_v4")
+                )
+
     def test_v3_normalization_version_round_trip_and_forwarding(self) -> None:
         original = EnvConfig(
             recovery_physics_version="consistent_v3", reference_loop_closure="bounded"
