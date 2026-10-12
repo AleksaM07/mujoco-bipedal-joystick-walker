@@ -4,8 +4,17 @@ Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
 - Phase 1 committed: 6f5d697 (versioned timing/physics and Git recovery).
-- Phase 2 implemented: opt-in consistent_v2 reference curves and explicit
+- Phase 2 committed: 142d93c, opt-in consistent_v2 reference curves and explicit
   strict/bounded loop closure. Legacy and consistent_v1 remain unchanged.
+- Phase 3: opt-in consistent_v3 fixes the confirmed NumPy frame/foot axis bug.
+  Contact, inverse-dynamics and 24 native replay trials are measured; no PPO.
+  See PROJECT_RECOVERY_PHASE3_2026-10-12.md for the detailed current diagnosis.
+  The major RED LIGHT is sole-sole overlap in ALL 532 measured reference samples:
+  max 99.55 mm in v2, 93.85 mm in v3. Neutral standing has no sole-sole collision.
+  This is separate from intentional floor preload. Fixing height normalization
+  helps these open-loop replays but does not repair the reference's self-collision.
+  Next: identify where lateral foot spacing collapses in retargeting, preserve
+  left/right mapping and enforce non-intersecting feet before more training.
 - Detailed phase-2 changes, measurements and caveats:
   PROJECT_RECOVERY_PHASE2_2026-10-12.md
 - Evidence: analysis_outputs/recovery_phase2_20261012.json
@@ -85,10 +94,11 @@ The endpoint speed gap became larger because its old x0.25 attenuation was
 removed, not because we changed the pose geometry. Loop mode is WRAP here.
 These are sampled reference-path diagnostics, not policy rollout statistics.
 
-NEXT, IN ORDER (after phase 2)
+NEXT, IN ORDER (phase 3 updates contact diagnosis)
 1. Numerical interpolation/loop continuity and exact-reset consistency now pass.
    Do NOT infer physical tracking success from this. See the phase-2 report.
-2. Fix/audit stance/contact/slip, penetration, reachable motor targets and torque
+2. Fix self-colliding foot geometry/retargeting and audit stance/contact/slip,
+   root accelerations, reachable motor targets and torque
    saturation with explicit definitions. PD replay is diagnostic, not an
    absolute theoretical prerequisite for RL.
 3. Contrast actual reward on reference vs standing, wrong phase, swapped legs
@@ -119,3 +129,11 @@ PHASE-2 REPRODUCTION IN WINDOWS GIT BASH
 
 Add --mjx-smoke for one CPU reset/step; first compilation can take minutes.
 No checkpoint is loaded or trained by either diagnostic command.
+
+PHASE-3 REPRODUCTION IN WINDOWS GIT BASH
+./.venv-win/Scripts/python.exe -m tools.check_reference_contacts --output-dir analysis_outputs/recovery_phase3_20261012/baseline
+./.venv-win/Scripts/python.exe -m tools.check_reference_contacts --baseline-only --recovery-physics-version consistent_v3 --output-dir analysis_outputs/recovery_phase3_20261012/corrected
+./.venv-win/Scripts/python.exe -m tools.check_reference_collisions
+
+These are native CPU diagnostics, not policy evaluation. The collision-ablation
+tool changes masks on a diagnostic model COPY only; production masks are intact.

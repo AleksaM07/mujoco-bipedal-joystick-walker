@@ -1,0 +1,4246 @@
+{
+  "scope": "Contact/dynamics diagnosis, no model edits, policy or training.",
+  "completed": true,
+  "git_head": "142d93cec735633d4750db39c1d4c03f83472376",
+  "base_config": {
+    "env_version": "standard",
+    "playground_impl": "jax",
+    "physics_backend": "mjx_jax",
+    "warp_num_worlds": 1,
+    "warp_naconmax": null,
+    "warp_njmax": null,
+    "warp_graph_mode": "warp",
+    "command_profile": "standard",
+    "recovery_physics_version": "consistent_v3",
+    "reference_motion_speed_scale": 1.0,
+    "reference_loop_closure": "bounded",
+    "reference_gait": "bvh",
+    "arm_actuators": false,
+    "reference_gait_file": [
+      "C:\\Users\\aleks\\Desktop\\Aleksie kerefeke\\master\\RS projekat - RL politika ucenja joystick\\mujoco-bipedal-joystick-walker\\BVH_walking_animation\\cmuconvert-max-01-09\\02\\02_01.bvh"
+    ],
+    "reference_forced_clip_id": 1,
+    "reference_target_observation": true,
+    "reference_action_mode": "residual",
+    "reference_action_center": "default",
+    "reference_action_range": "reference_targets",
+    "reference_action_range_scale": 1.1,
+    "reference_residual_scale": 1.0,
+    "bvh_target_observation_steps": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "reference_replay_target_step": 0,
+    "deepmimic_root_velocity_weight_scale": 1.0,
+    "reference_reset_min_steps_remaining": 25,
+    "reference_min_motion_length": 0.8,
+    "reference_loop_mode": "auto",
+    "reference_root_xy_scale": 0.35,
+    "reference_lock_stance_feet": true,
+    "reference_foot_lock_height": 0.035,
+    "reference_stability_sagittal_alpha": 1.0,
+    "reference_stability_other_alpha": 0.35,
+    "reference_stability_arm_alpha": 0.75,
+    "deepmimic_reward_mode": "pure",
+    "deepmimic_key_bodies": [
+      "metatarsal_midpoint_right",
+      "metatarsal_midpoint_left"
+    ],
+    "pose_termination": false,
+    "pose_termination_dist": 1.0,
+    "reset_sample_attempts": 2,
+    "reset_projection_levels": [
+      1.0,
+      0.7,
+      0.45
+    ],
+    "policy_observation_size": null,
+    "policy_observation_dict": true,
+    "xml_path": "C:\\Users\\aleks\\Desktop\\Aleksie kerefeke\\master\\RS projekat - RL politika ucenja joystick\\mujoco-bipedal-joystick-walker\\generated_models\\human_male_180cm_75kg_standard_trainfast_v21_noarms.xml",
+    "legacy_action_prior": false,
+    "action_smoothing": 0.2,
+    "init_qpos_file": null,
+    "accurate_physics": true
+  },
+  "clip_id": 1,
+  "xml_sha256": "125b4b1285e44ea7ddd53f2b8713dcab2300079e95c825c4139c639589de4c87",
+  "bvh_sha256": "6c958f1fe020b2d3c6380daa2fea24f58ca01959bc218454adc9220d54157ccd",
+  "source_sha256": {
+    "biomechanics_env.py": "3a236eb70f967ea786a627295ea4217575f3cac34edb6a27f02ab59ac457e31d",
+    "reference_interpolation.py": "25e50354e2df00ae5a570558a3a9f4010cfcf21264ef86e0b984ac0cf2764d2c",
+    "tools/check_reference_contacts.py": "d50e67c5cb34919cf87f6654dc1b3f244ce02e9ac107eb54374dd5461c75b5f9",
+    "tools/check_reference_curves.py": "488e0752654d2bb8d900bd5a52f5f18df957eecfd5820eb16053727b31f4b0f1",
+    "tools/recovery_dynamics.py": "60825606fe9f0a3e9bd615191896bc74e00e48fc2c52e3127ebfbd682c44f49b",
+    "tools/recovery_replay.py": "e6ea885274d05684998cac1d83e8510cc0e2dc1788cd8d1cca556d4917e66e1e"
+  },
+  "variants": {
+    "xy0.35_lock1": {
+      "config": {
+        "env_version": "standard",
+        "playground_impl": "jax",
+        "physics_backend": "mjx_jax",
+        "warp_num_worlds": 1,
+        "warp_naconmax": null,
+        "warp_njmax": null,
+        "warp_graph_mode": "warp",
+        "command_profile": "standard",
+        "recovery_physics_version": "consistent_v3",
+        "reference_motion_speed_scale": 1.0,
+        "reference_loop_closure": "bounded",
+        "reference_gait": "bvh",
+        "arm_actuators": false,
+        "reference_gait_file": [
+          "C:\\Users\\aleks\\Desktop\\Aleksie kerefeke\\master\\RS projekat - RL politika ucenja joystick\\mujoco-bipedal-joystick-walker\\BVH_walking_animation\\cmuconvert-max-01-09\\02\\02_01.bvh"
+        ],
+        "reference_forced_clip_id": 1,
+        "reference_target_observation": true,
+        "reference_action_mode": "residual",
+        "reference_action_center": "default",
+        "reference_action_range": "reference_targets",
+        "reference_action_range_scale": 1.1,
+        "reference_residual_scale": 1.0,
+        "bvh_target_observation_steps": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "reference_replay_target_step": 0,
+        "deepmimic_root_velocity_weight_scale": 1.0,
+        "reference_reset_min_steps_remaining": 25,
+        "reference_min_motion_length": 0.8,
+        "reference_loop_mode": "auto",
+        "reference_root_xy_scale": 0.35,
+        "reference_lock_stance_feet": true,
+        "reference_foot_lock_height": 0.035,
+        "reference_stability_sagittal_alpha": 1.0,
+        "reference_stability_other_alpha": 0.35,
+        "reference_stability_arm_alpha": 0.75,
+        "deepmimic_reward_mode": "pure",
+        "deepmimic_key_bodies": [
+          "metatarsal_midpoint_right",
+          "metatarsal_midpoint_left"
+        ],
+        "pose_termination": false,
+        "pose_termination_dist": 1.0,
+        "reset_sample_attempts": 2,
+        "reset_projection_levels": [
+          1.0,
+          0.7,
+          0.45
+        ],
+        "policy_observation_size": null,
+        "policy_observation_dict": true,
+        "xml_path": "C:\\Users\\aleks\\Desktop\\Aleksie kerefeke\\master\\RS projekat - RL politika ucenja joystick\\mujoco-bipedal-joystick-walker\\generated_models\\human_male_180cm_75kg_standard_trainfast_v21_noarms.xml",
+        "legacy_action_prior": false,
+        "action_smoothing": 0.2,
+        "init_qpos_file": null,
+        "accurate_physics": true
+      },
+      "ik_target_normalization": [
+        {
+          "clip_id": 0,
+          "frame_count": 136,
+          "standing_foot_marker_height_m": 0.046948162944246294,
+          "per_frame_lowest_target_height_min_m": 0.04694819450378418,
+          "per_frame_lowest_target_height_max_m": 0.04694819450378418,
+          "per_frame_lowest_target_height_error_rmse_m": 2.9802322387695312e-08,
+          "per_frame_lowest_target_height_error_max_m": 2.9802322387695312e-08,
+          "frames_exceeding_1micrometer_error": 0
+        },
+        {
+          "clip_id": 1,
+          "frame_count": 134,
+          "standing_foot_marker_height_m": 0.046948162944246294,
+          "per_frame_lowest_target_height_min_m": 0.04694819450378418,
+          "per_frame_lowest_target_height_max_m": 0.04694819450378418,
+          "per_frame_lowest_target_height_error_rmse_m": 2.9802322387695312e-08,
+          "per_frame_lowest_target_height_error_max_m": 2.9802322387695312e-08,
+          "frames_exceeding_1micrometer_error": 0
+        },
+        {
+          "clip_id": 2,
+          "frame_count": 131,
+          "standing_foot_marker_height_m": 0.046948162944246294,
+          "per_frame_lowest_target_height_min_m": 0.04694819450378418,
+          "per_frame_lowest_target_height_max_m": 0.04694819450378418,
+          "per_frame_lowest_target_height_error_rmse_m": 2.9802322387695312e-08,
+          "per_frame_lowest_target_height_error_max_m": 2.9802322387695312e-08,
+          "frames_exceeding_1micrometer_error": 0
+        }
+      ],
+      "contacts": {
+        "samples": 533,
+        "subdivisions": 4,
+        "intentional_preload_m": 0.005,
+        "maximum_penetration_m": 0.005805175194224417,
+        "maximum_penetration_beyond_preload_m": 0.0008051751942244169,
+        "net_free_root_translation_m": [
+          -0.004427693784236908,
+          -0.0029282346367836,
+          0.0
+        ],
+        "root_xy_mean_speed_m_s": 0.004789546008640182,
+        "node_maximum_penetration_m": 0.005784384181336401,
+        "feet": {
+          "left_foot_sole": {
+            "height_threshold_0.01m": {
+              "near_floor_fraction": 0.7091932457786116,
+              "center_speed_m_s": {
+                "count": 378,
+                "median": 0.18470591052014995,
+                "p95": 0.3669764530412205,
+                "max": 0.49253795680000995
+              },
+              "material_point_speed_m_s": {
+                "count": 378,
+                "median": 0.2022253039512502,
+                "p95": 0.36548563206259166,
+                "max": 0.44930759172177187
+              },
+              "consecutive_near_floor_node_center_displacement_m": {
+                "count": 93,
+                "median": 0.0015106604835438216,
+                "p95": 0.002917980176232839,
+                "max": 0.003281453462533352
+              },
+              "threshold_crossings": 2
+            },
+            "height_threshold_0.035m": {
+              "near_floor_fraction": 0.8030018761726079,
+              "center_speed_m_s": {
+                "count": 428,
+                "median": 0.16272362457580208,
+                "p95": 0.35346655722727854,
+                "max": 0.49253795680000995
+              },
+              "material_point_speed_m_s": {
+                "count": 428,
+                "median": 0.20125185444596136,
+                "p95": 0.36619520611622397,
+                "max": 0.46524660049633754
+              },
+              "consecutive_near_floor_node_center_displacement_m": {
+                "count": 106,
+                "median": 0.0013681550270015015,
+                "p95": 0.0028567506784608065,
+                "max": 0.003281453462533352
+              },
+              "threshold_crossings": 2
+            }
+          },
+          "right_foot_sole": {
+            "height_threshold_0.01m": {
+              "near_floor_fraction": 0.8123827392120075,
+              "center_speed_m_s": {
+                "count": 433,
+                "median": 0.014319040436218006,
+                "p95": 0.06597223102822933,
+                "max": 0.20574451015776066
+              },
+              "material_point_speed_m_s": {
+                "count": 433,
+                "median": 0.08695648867980843,
+                "p95": 0.3296816929835331,
+                "max": 0.4243707284576444
+              },
+              "consecutive_near_floor_node_center_displacement_m": {
+                "count": 107,
+                "median": 4.158751897262321e-05,
+                "p95": 8.953342886381929e-05,
+                "max": 0.00044146143929278404
+              },
+              "threshold_crossings": 2
+            },
+            "height_threshold_0.035m": {
+              "near_floor_fraction": 1.0,
+              "center_speed_m_s": {
+                "count": 533,
+                "median": 0.014843468490983494,
+                "p95": 0.0702357680156876,
+                "max": 0.20574451015776066
+              },
+              "material_point_speed_m_s": {
+                "count": 533,
+                "median": 0.09897738033491522,
+                "p95": 0.3273443531172398,
+                "max": 0.4243707284576444
+              },
+              "consecutive_near_floor_node_center_displacement_m": {
+                "count": 133,
+                "median": 4.1144360859943826e-05,
+                "p95": 8.91201481922887e-05,
+                "max": 0.0005046509154802837
+              },
+              "threshold_crossings": 0
+            }
+          }
+        },
+        "between_node_maximum_penetration_m": 0.005805175194224417,
+        "both_feet_below_0.01m_fraction": 0.5215759849906192,
+        "no_feet_below_0.01m_fraction": 0.0,
+        "both_feet_below_0.035m_fraction": 0.8030018761726079,
+        "no_feet_below_0.035m_fraction": 0.0
+      },
+      "processed_reference_sha256": "0fd0f0099cbf9f69fd35a1ef985e20122c8eecf3e095f06e29a25ecc9f9653d9",
+      "closure": [
+        {
+          "clip_id": 0,
+          "frame_count": 136,
+          "loop_mode": "wrap",
+          "loop_closure": "bounded",
+          "source_joint_limit_violation_rad": 0.0,
+          "joint_limit_projected_coordinates": 10,
+          "max_joint_limit_projection_rad": 0.03299343744504607,
+          "original_joint_gap_rad": 0.11116273701190948,
+          "original_root_gap_m": 0.00029456615447998047,
+          "original_root_z_gap_m": 0.00029456615447998047,
+          "original_orientation_gap_rad": 0.03505774117184402,
+          "original_joint_velocity_gap_rad_s": 3.8786934863301235,
+          "max_joint_correction_rad": 0.05558136850595474,
+          "max_root_correction_m": 0.00014728307723999023,
+          "max_orientation_correction_rad": 0.01752887058592201,
+          "closure_applied": true
+        },
+        {
+          "clip_id": 1,
+          "frame_count": 134,
+          "loop_mode": "wrap",
+          "loop_closure": "bounded",
+          "source_joint_limit_violation_rad": 0.0,
+          "joint_limit_projected_coordinates": 8,
+          "max_joint_limit_projection_rad": 0.00737244289354283,
+          "original_joint_gap_rad": 0.04909600876271725,
+          "original_root_gap_m": 0.0006005764007568359,
+          "original_root_z_gap_m": 0.0006005764007568359,
+          "original_orientation_gap_rad": 0.032606494767798574,
+          "original_joint_velocity_gap_rad_s": 3.5387275080514087,
+          "max_joint_correction_rad": 0.024548004381358624,
+          "max_root_correction_m": 0.00030028820037841797,
+          "max_orientation_correction_rad": 0.01630324738389929,
+          "closure_applied": true
+        },
+        {
+          "clip_id": 2,
+          "frame_count": 131,
+          "loop_mode": "wrap",
+          "loop_closure": "bounded",
+          "source_joint_limit_violation_rad": 0.0,
+          "joint_limit_projected_coordinates": 0,
+          "max_joint_limit_projection_rad": 0.0,
+          "original_joint_gap_rad": 0.06844419613480568,
+          "original_root_gap_m": 0.0015478134155273438,
+          "original_root_z_gap_m": 0.0015478134155273438,
+          "original_orientation_gap_rad": 0.024498083942485097,
+          "original_joint_velocity_gap_rad_s": 2.6685010068940866,
+          "max_joint_correction_rad": 0.03422209806740284,
+          "max_root_correction_m": 0.0007739067077636719,
+          "max_orientation_correction_rad": 0.01224904197124255,
+          "closure_applied": true
+        }
+      ],
+      "source_frame_range": [
+        79,
+        213
+      ],
+      "dynamics": {
+        "samples": 532,
+        "interpretation": "Exact prescribed qpos/qvel/qacc under current MuJoCo soft-contact law; not a proof that nearby reference tracking or walking is impossible. Passive and constraint forces are already subtracted from qfrc_inverse. Unactuated generalized residual requires external force or changed motion.",
+        "any_actuator_force_limit_exceeded_fraction": 1.0,
+        "any_actuator_ctrl_limit_exceeded_fraction": 1.0,
+        "actuators": [
+          {
+            "name": "abdomen_x_position",
+            "joint": "abdomen_x",
+            "dof": 9,
+            "gear": 1.0,
+            "generalized_force_unit": "Nm",
+            "required_generalized_force": {
+              "min": -2162.9307377142413,
+              "max": 3431.14575989097,
+              "mean": -32.33080935476875,
+              "rms": 596.1120601027815,
+              "abs_max": 3431.14575989097,
+              "abs_p95": 1231.185663532291
+            },
+            "required_scalar_force": {
+              "min": -2162.9307377142413,
+              "max": 3431.14575989097,
+              "mean": -32.33080935476875,
+              "rms": 596.1120601027815,
+              "abs_max": 3431.14575989097,
+              "abs_p95": 1231.185663532291
+            },
+            "required_ctrl": {
+              "min": -9.044930538701806,
+              "max": 14.290339748977358,
+              "mean": -0.15106760565255192,
+              "rms": 2.4861122055319615,
+              "abs_max": 14.290339748977358,
+              "abs_p95": 5.127592118769826
+            },
+            "reference_velocity": {
+              "min": -0.544148862361908,
+              "max": 0.412533164024353,
+              "mean": -8.778628209694219e-05,
+              "rms": 0.16703876457706612,
+              "abs_max": 0.544148862361908,
+              "abs_p95": 0.3330365628004074
+            },
+            "reference_acceleration": {
+              "min": -104.4926986694336,
+              "max": 127.27806091308594,
+              "mean": -1.1566312129336192e-05,
+              "rms": 26.55140576294442,
+              "abs_max": 127.27806091308594,
+              "abs_p95": 58.466540908813464
+            },
+            "force_limit": {
+              "enabled": true,
+              "range": [
+                -180.0,
+                180.0
+              ],
+              "exceedance": {
+                "sample_count": 374,
+                "sample_fraction": 0.7030075187969925,
+                "max": 3251.14575989097
+              }
+            },
+            "ctrl_limit": {
+              "enabled": true,
+              "range": [
+                -0.18,
+                0.18
+              ],
+              "exceedance": {
+                "sample_count": 489,
+                "sample_fraction": 0.9191729323308271,
+                "max": 14.110339748977358
+              }
+            },
+            "joint_actuator_force_limit": {
+              "enabled": false,
+              "range": null,
+              "exceedance": null
+            },
+            "generalized_force_shortfall_after_native_clamps": {
+              "min": -2127.5833292884336,
+              "max": 3386.4815397545663,
+              "mean": -30.237783777521198,
+              "rms": 566.7721878366924,
+              "abs_max": 3386.4815397545663,
+              "abs_p95": 1187.4221085047582
+            }
+          },
+          {
+            "name": "abdomen_y_position",
+            "joint": "abdomen_y",
+            "dof": 10,
+            "gear": 1.0,
+            "generalized_force_unit": "Nm",
+            "required_generalized_force": {
+              "min": -139.0592424538879,
+              "max": 101.91514285401666,
+              "mean": -1.1789184159239454,
+              "rms": 25.452878528137827,
+              "abs_max": 139.0592424538879,
+              "abs_p95": 47.91767518784819
+            },
+            "required_scalar_force": {
+              "min": -139.0592424538879,
+              "max": 101.91514285401666,
+              "mean": -1.1789184159239454,
+              "rms": 25.452878528137827,
+              "abs_max": 139.0592424538879,
+              "abs_p95": 47.91767518784819
+            },
+            "required_ctrl": {
+              "min": -0.5814723782881467,
+              "max": 0.42610444257071717,
+              "mean": -0.007296952122331461,
+              "rms": 0.10679959784647834,
+              "abs_max": 0.5814723782881467,
+              "abs_p95": 0.20558299936603455
+            },
+            "reference_velocity": {
+              "min": -0.2699245512485504,
+              "max": 0.21009498834609985,
+              "mean": -3.5614587698758516e-05,
+              "rms": 0.07877656181322672,
+              "abs_max": 0.2699245512485504,
+              "abs_p95": 0.16589168161153792
+            },
+            "reference_acceleration": {
+              "min": -60.16986083984375,
+              "max": 46.67890167236328,
+              "mean": -6.53113413574104e-06,
+              "rms": 11.548504263271623,
+              "abs_max": 60.16986083984375,
+              "abs_p95": 26.458791828155515
+            },
+            "force_limit": {
+              "enabled": true,
+              "range": [
+                -180.0,
+                180.0
+              ],
+              "exceedance": {
+                "sample_count": 0,
+                "sample_fraction": 0.0,
+                "max": 0.0
+              }
+            },
+            "ctrl_limit": {
+              "enabled": true,
+              "range": [
+                -0.14,
+                0.14
+              ],
+              "exceedance": {
+                "sample_count": 80,
+                "sample_fraction": 0.15037593984962405,
+                "max": 0.44147237828814667
+              }
+            },
+            "joint_actuator_force_limit": {
+              "enabled": false,
+              "range": null,
+              "exceedance": null
+            },
+            "generalized_force_shortfall_after_native_clamps": {
+              "min": -105.9533707891552,
+              "max": 68.66506621697212,
+              "mean": -0.04542849322955217,
+              "rms": 9.353462387976617,
+              "abs_max": 105.9533707891552,
+              "abs_p95": 15.739919847848295
+            }
+          },
+          {
+            "name": "abdomen_z_position",
+            "joint": "abdomen_z",
+            "dof": 11,
+            "gear": 1.0,
+            "generalized_force_unit": "Nm",
+            "required_generalized_force": {
+              "min": -2638.2577982153884,
+              "max": 2625.674367514436,
+              "mean": 97.96533423397918,
+              "rms": 604.6071770541845,
+              "abs_max": 2638.2577982153884,
+              "abs_p95": 1213.1044326986987
+            },
+            "required_scalar_force": {
+              "min": -2638.2577982153884,
+              "max": 2625.674367514436,
+              "mean": 97.96533423397918,
+              "rms": 604.6071770541845,
+              "abs_max": 2638.2577982153884,
+              "abs_p95": 1213.1044326986987
+            },
+            "required_ctrl": {
+              "min": -11.005530360302325,
+              "max": 10.93525420379591,
+              "mean": 0.3932810180310272,
+              "rms": 2.5172730321865484,
+              "abs_max": 11.005530360302325,
+              "abs_p95": 5.038722530509446
+            },
+            "reference_velocity": {
+              "min": -0.14675544202327728,
+              "max": 0.1487245261669159,
+              "mean": 4.0179495550902157e-07,
+              "rms": 0.06877310220161785,
+              "abs_max": 0.1487245261669159,
+              "abs_p95": 0.12746106684207917
+            },
+            "reference_acceleration": {
+              "min": -27.689573287963867,
+              "max": 20.6640625,
+              "mean": -5.704851442933979e-06,
+              "rms": 5.014650642653119,
+              "abs_max": 27.689573287963867,
+              "abs_p95": 10.533702850341793
+            },
+            "force_limit": {
+              "enabled": true,
+              "range": [
+                -180.0,
+                180.0
+              ],
+              "exceedance": {
+                "sample_count": 365,
+                "sample_fraction": 0.6860902255639098,
+                "max": 2458.2577982153884
+              }
+            },
+            "ctrl_limit": {
+              "enabled": true,
+              "range": [
+                -0.18,
+                0.18
+              ],
+              "exceedance": {
+                "sample_count": 479,
+                "sample_fraction": 0.900375939849624,
+                "max": 10.825530360302325
+              }
+            },
+            "joint_actuator_force_limit": {
+              "enabled": false,
+              "range": null,
+              "exceedance": null
+            },
+            "generalized_force_shortfall_after_native_clamps": {
+              "min": -2598.1272864725584,
+              "max": 2581.2610089110185,
+              "mean": 86.90148974007971,
+              "rms": 573.447037182568,
+              "abs_max": 2598.1272864725584,
+              "abs_p95": 1166.093407322267
+            }
+          },
+          {
+            "name": "pelvis_x_position",
+            "joint": "pelvis_x",
+            "dof": 12,
+            "gear": 1.0,
+            "generalized_force_unit": "Nm",
+            "required_generalized_force": {
+              "min": -1577.4446523861823,
+              "max": 2735.0635626226763,
+              "mean": -27.87396556055794,
+              "rms": 485.7846297883812,
+              "abs_max": 2735.0635626226763,
+              "abs_p95": 992.0188359646197
+            },
+            "required_scalar_force": {
+              "min": -1577.4446523861823,
+              "max": 2735.0635626226763,
+              "mean": -27.87396556055794,
+              "rms": 485.7846297883812,
+              "abs_max": 2735.0635626226763,
+              "abs_p95": 992.0188359646197
+            },
+            "required_ctrl": {
+              "min": -5.220418136294264,
+              "max": 9.119632143019421,
+              "mean": -0.0745970376651232,
+              "rms": 1.616547244456751,
+              "abs_max": 9.119632143019421,
+              "abs_p95": 3.2916182343285905
+            },
+            "reference_velocity": {
+              "min": -0.5034550428390503,
+              "max": 0.6317981481552124,
+              "mean": 2.50470979003318e-05,
+              "rms": 0.2017759144832494,
+              "abs_max": 0.6317981481552124,
+              "abs_p95": 0.41592240631580346
+            },
+            "reference_acceleration": {
+              "min": -137.87034606933594,
+              "max": 118.82658386230469,
+              "mean": 9.34706846798273e-06,
+              "rms": 32.481191878732886,
+              "abs_max": 137.87034606933594,
+              "abs_p95": 71.89893684387206
+            },
+            "force_limit": {
+              "enabled": true,
+              "range": [
+                -240.0,
+                240.0
+              ],
+              "exceedance": {
+                "sample_count": 288,
+                "sample_fraction": 0.5413533834586466,
+                "max": 2495.0635626226763
+              }
+            },
+            "ctrl_limit": {
+              "enabled": true,
+              "range": [
+                -0.12,
+                0.12
+              ],
+              "exceedance": {
+                "sample_count": 488,
+                "sample_fraction": 0.9172932330827067,
+                "max": 8.999632143019422
+              }
+            },
+            "joint_actuator_force_limit": {
+              "enabled": false,
+              "range": null,
+              "exceedance": null
+            },
+            "generalized_force_shortfall_after_native_clamps": {
+              "min": -1530.1254408882794,
+              "max": 2699.8896429058263,
+              "mean": -17.39794465082112,
+              "rms": 459.78233463097376,
+              "abs_max": 2699.8896429058263,
+              "abs_p95": 951.4854702985771
+            }
+          },
+          {
+            "name": "pelvis_y_position",
+            "joint": "pelvis_y",
+            "dof": 13,
+            "gear": 1.0,
+            "generalized_force_unit": "Nm",
+            "required_generalized_force": {
+              "min": -65.07392449867439,
+              "max": 88.31626498124035,
+              "mean": 0.4273497372237449,
+              "rms": 21.74734155546056,
+              "abs_max": 88.31626498124035,
+              "abs_p95": 46.09138598084096
+            },
+            "required_scalar_force": {
+              "min": -65.07392449867439,
+              "max": 88.31626498124035,
+              "mean": 0.4273497372237449,
+              "rms": 21.74734155546056,
+              "abs_max": 88.31626498124035,
+              "abs_p95": 46.09138598084096
+            },
+            "required_ctrl": {
+              "min": -0.21528139391772735,
+              "max": 0.29252851806365504,
+              "mean": 0.0012533332676620556,
+              "rms": 0.07251189577348371,
+              "abs_max": 0.29252851806365504,
+              "abs_p95": 0.15628212467836672
+            },
+            "reference_velocity": {
+              "min": -0.27334064245224,
+              "max": 0.21196749806404114,
+              "mean": 4.664376500383005e-05,
+              "rms": 0.08241240489613846,
+              "abs_max": 0.27334064245224,
+              "abs_p95": 0.1643156252801418
+            },
+            "reference_acceleration": {
+              "min": -64.76834869384766,
+              "max": 82.53816986083984,
+              "mean": 4.727556851615471e-06,
+              "rms": 13.895679009733227,
+              "abs_max": 82.53816986083984,
+              "abs_p95": 30.060574436187743
+            },
+            "force_limit": {
+              "enabled": true,
+              "range": [
+                -240.0,
+                240.0
+              ],
+              "exceedance": {
+                "sample_count": 0,
+                "sample_fraction": 0.0,
+                "max": 0.0
+              }
+            },
+            "ctrl_limit": {
+              "enabled": true,
+              "range": [
+                -0.1,
+                0.1
+              ],
+              "exceedance": {
+                "sample_count": 68,
+                "sample_fraction": 0.12781954887218044,
+                "max": 0.19252851806365504
+              }
+            },
+            "joint_actuator_force_limit": {
+              "enabled": false,
+              "range": null,
+              "exceedance": null
+            },
+            "generalized_force_shortfall_after_native_clamps": {
+              "min": -34.584418175318206,
+              "max": 57.75855541909651,
+              "mean": 0.7823663486316019,
+              "rms": 7.354687091110016,
+              "abs_max": 57.75855541909651,
+              "abs_p95": 16.884637403510013
+            }
+          },
+          {
+            "name": "pelvis_z_position",
+            "joint": "pelvis_z",
+            "dof": 14,
+            "gear": 1.0,
+            "generalized_force_unit": "Nm",
+            "required_generalized_force": {
+              "min": -1907.85108112817,
+              "max": 2195.9620001040366,
+              "mean": 87.69436013339528,
+              "rms": 501.4667887690699,
+              "abs_max": 2195.9620001040366,
+              "abs_p95": 981.7952705435171
+            },
+            "required_scalar_force": {
+              "min": -1907.85108112817,
+              "max": 2195.9620001040366,
+              "mean": 87.69436013339528,
+              "rms": 501.4667887690699,
+              "abs_max": 2195.9620001040366,
+              "abs_p95": 981.7952705435171
+            },
+            "required_ctrl": {
+              "min": -6.319746821407643,
+              "max": 7.361873333113878,
+              "mean": 0.32206498383240617,
+              "rms": 1.6775099453549613,
+              "abs_max": 7.361873333113878,
+              "abs_p95": 3.2626881510122994
+            },
+            "reference_velocity": {
+              "min": -0.2909538447856903,
+              "max": 0.378324031829834,
+              "mean": -1.2250639102583085e-06,
+              "rms": 0.12898158401558957,
+              "abs_max": 0.378324031829834,
+              "abs_p95": 0.27426891475915904
+            },
+            "reference_acceleration": {
+              "min": -73.66795349121094,
+              "max": 31.75604248046875,
+              "mean": 2.0153648274845865e-06,
+              "rms": 7.716128651022652,
+              "abs_max": 73.66795349121094,
+              "abs_p95": 16.145077323913572
+            },
+            "force_limit": {
+              "enabled": true,
+              "range": [
+                -240.0,
+                240.0
+              ],
+              "exceedance": {
+                "sample_count": 304,
+                "sample_fraction": 0.5714285714285714,
+                "max": 1955.9620001040366
+              }
+            },
+            "ctrl_limit": {
+              "enabled": true,
+              "range": [
+                -0.12,
+                0.12
+              ],
+              "exceedance": {
+                "sample_count": 484,
+                "sample_fraction": 0.9097744360902256,
+                "max": 7.241873333113878
+              }
+            },
+            "joint_actuator_force_limit": {
+              "enabled": false,
+              "range": null,
+              "exceedance": null
+            },
+            "generalized_force_shortfall_after_native_clamps": {
+              "min": -1859.9240464222928,
+              "max": 2172.5619999341634,
+              "mean": 89.53051036454472,
+              "rms": 477.3034029781555,
+              "abs_max": 2172.5619999341634,
+              "abs_p95": 942.8064453036899
+            }
+          },
+          {
+            "name": "left_hip_x_position",
+            "joint": "left_hip_x",
+            "dof": 15,
+            "gear": 1.0,
+            "generalized_force_unit": "Nm",
+            "required_generalized_force": {
+              "min": -6050.408711260785,
+              "max": 3621.475972996315,
+              "mean": -1732.3023297078544,
+              "rms": 2802.73766657321,
+              "abs_max": 6050.408711260785,
+              "abs_p95": 4586.594535014964
+            },
+            "required_scalar_force": {
+              "min": -6050.408711260785,
+              "max": 3621.475972996315,
+              "mean": -1732.3023297078544,
+              "rms": 2802.73766657321,
+              "abs_max": 6050.408711260785,
+              "abs_p95": 4586.594535014964
+            },
+            "required_ctrl": {
+              "min": -27.607316298810954,
+              "max": 16.331505497143848,
+              "mean": -7.991494459873988,
+              "rms": 12.801787921859416,
+              "abs_max": 27.607316298810954,
+              "abs_p95": 20.954037194222376
+            },
+            "reference_velocity": {
+              "min": -0.5648561120033264,
+              "max": 1.1082305908203125,
+              "mean": -0.00014909427212349917,
+              "rms": 0.27140503363348173,
+              "abs_max": 1.1082305908203125,
+              "abs_p95": 0.5290459901094436
+            },
+            "reference_acceleration": {
+              "min": -132.31398010253906,
+              "max": 165.4167022705078,
+              "mean": -3.002906092127463e-05,
+              "rms": 29.717562452653656,
+              "abs_max": 165.4167022705078,
+              "abs_p95": 66.38824501037597
+            },
+            "force_limit": {
+              "enabled": true,
+              "range": [
+                -360.0,
+                360.0
+              ],
+              "exceedance": {
+                "sample_count": 473,
+                "sample_fraction": 0.8890977443609023,
+                "max": 5690.408711260785
+              }
+            },
+            "ctrl_limit": {
+              "enabled": true,
+              "range": [
+                -0.349066,
+                0.698132
+              ],
+              "exceedance": {
+                "sample_count": 510,
+                "sample_fraction": 0.9586466165413534,
+                "max": 27.258250298810953
+              }
+            },
+            "joint_actuator_force_limit": {
+              "enabled": false,
+              "range": null,
+              "exceedance": null
+            },
+            "generalized_force_shortfall_after_native_clamps": {
+              "min": -5996.815065738409,
+              "max": 3439.342169371647,
+              "mean": -1742.9809569265883,
+              "rms": 2743.418901183324,
+              "abs_max": 5996.815065738409,
+              "abs_p95": 4533.093662728923
+            }
+          },
+          {
+            "name": "left_hip_y_position",
+            "joint": "left_hip_y",
+            "dof": 16,
+            "gear": 1.0,
+            "generalized_force_unit": "Nm",
+            "required_generalized_force": {
+              "min": -227.4612758503022,
+              "max": 584.0126526728642,
+              "mean": 154.50186693857498,
+              "rms": 233.67288167955954,
+              "abs_max": 584.0126526728642,
+              "abs_p95": 453.49057240306314
+            },
+            "required_scalar_force": {
+              "min": -227.4612758503022,
+              "max": 584.0126526728642,
+              "mean": 154.50186693857498,
+              "rms": 233.67288167955954,
+              "abs_max": 584.0126526728642,
+              "abs_p95": 453.49057240306314
+            },
+            "required_ctrl": {
+              "min": -1.234612668248052,
+              "max": 3.2487358742188643,
+              "mean": 0.8947469420509337,
+              "rms": 1.3168722943775575,
+              "abs_max": 3.2487358742188643,
+              "abs_p95": 2.547841217907722
+            },
+            "reference_velocity": {
+              "min": -0.7086249589920044,
+              "max": 0.7570337057113647,
+              "mean": 7.155228634207349e-05,
+              "rms": 0.27408500141684483,
+              "abs_max": 0.7570337057113647,
+              "abs_p95": 0.5873642802238465
+            },
+            "reference_acceleration": {
+              "min": -60.27893829345703,
+              "max": 91.1371841430664,
+              "mean": 9.888264917789546e-07,
+              "rms": 17.65276952332651,
+              "abs_max": 91.1371841430664,
+              "abs_p95": 35.76249752044677
+            },
+            "force_limit": {
+              "enabled": true,
+              "range": [
+                -300.0,
+                300.0
+              ],
+              "exceedance": {
+                "sample_count": 144,
+                "sample_fraction": 0.2706766917293233,
+                "max": 284.0126526728642
+              }
+            },
+            "ctrl_limit": {
+              "enabled": true,
+              "range": [
+                -0.383972,
+                0.383972
+              ],
+              "exceedance": {
+                "sample_count": 337,
+                "sample_fraction": 0.6334586466165414,
+                "max": 2.8647638742188644
+              }
+            },
+            "joint_actuator_force_limit": {
+              "enabled": false,
+              "range": null,
+              "exceedance": null
+            },
+            "generalized_force_shortfall_after_native_clamps": {
+              "min": -153.11532028464936,
+              "max": 515.6574973593956,
+              "mean": 121.81951915450958,
+              "rms": 187.54108766758418,
+              "abs_max": 515.6574973593956,
+              "abs_p95": 389.49645922339005
+            }
+          },
+          {
+            "name": "left_hip_z_position",
+            "joint": "left_hip_z",
+            "dof": 17,
+            "gear": 1.0,
+            "generalized_force_unit": "Nm",
+            "required_generalized_force": {
+              "min": -3756.748236101888,
+              "max": 2512.360728847625,
+              "mean": -256.49269203427326,
+              "rms": 876.4226771803172,
+              "abs_max": 3756.748236101888,
+              "abs_p95": 1488.7971731857951
+            },
+            "required_scalar_force": {
+              "min": -3756.748236101888,
+              "max": 2512.360728847625,
+              "mean": -256.49269203427326,
+              "rms": 876.4226771803172,
+              "abs_max": 3756.748236101888,
+              "abs_p95": 1488.7971731857951
+            },
+            "required_ctrl": {
+              "min": -16.963743810545417,
+              "max": 11.459436298851001,
+              "mean": -1.032121991395734,
+              "rms": 3.878165196323087,
+              "abs_max": 16.963743810545417,
+              "abs_p95": 6.659233412810108
+            },
+            "reference_velocity": {
+              "min": -2.388061285018921,
+              "max": 3.4559061527252197,
+              "mean": 0.0006762758563482727,
+              "rms": 1.0721110140522734,
+              "abs_max": 3.4559061527252197,
+              "abs_p95": 2.3191233992576596
+            },
+            "reference_acceleration": {
+              "min": -418.0928955078125,
+              "max": 372.7691650390625,
+              "mean": 0.00012927804723438015,
+              "rms": 52.30384060902124,
+              "abs_max": 418.0928955078125,
+              "abs_p95": 98.22418708801264
+            },
+            "force_limit": {
+              "enabled": true,
+              "range": [
+                -360.0,
+                360.0
+              ],
+              "exceedance": {
+                "sample_count": 419,
+                "sample_fraction": 0.7875939849624061,
+                "max": 3396.748236101888
+              }
+            },
+            "ctrl_limit": {
+              "enabled": true,
+              "range": [
+                -0.523599,
+                1.047198
+              ],
+              "exceedance": {
+                "sample_count": 495,
+                "sample_fraction": 0.9304511278195489,
+                "max": 16.440144810545416
+              }
+            },
+            "joint_actuator_force_limit": {
+              "enabled": false,
+              "range": null,
+              "exceedance": null
+            },
+            "generalized_force_shortfall_after_native_clamps": {
+              "min": -3616.831858319991,
+              "max": 2290.69242574722,
+              "mean": -218.196760867311,
+              "rms": 727.521268875,
+              "abs_max": 3616.831858319991,
+              "abs_p95": 1309.8868761591689
+            }
+          },
+          {
+            "name": "left_knee_z_position",
+            "joint": "left_knee_z",
+            "dof": 18,
+            "gear": 1.0,
+            "generalized_force_unit": "Nm",
+            "required_generalized_force": {
+              "min": -1704.5118942758015,
+              "max": 1214.8818662014417,
+              "mean": 21.99870387115353,
+              "rms": 348.3034793873779,
+              "abs_max": 1704.5118942758015,
+              "abs_p95": 679.184548043165
+            },
+            "required_scalar_force": {
+              "min": -1704.5118942758015,
+              "max": 1214.8818662014417,
+              "mean": 21.99870387115353,
+              "rms": 348.3034793873779,
+              "abs_max": 1704.5118942758015,
+              "abs_p95": 679.184548043165
+            },
+            "required_ctrl": {
+              "min": -7.005195316175838,
+              "max": 4.22357958641068,
+              "mean": -0.46200897947819336,
+              "rms": 1.5200508875489946,
+              "abs_max": 7.005195316175838,
+              "abs_p95": 2.6347002319647963
+            },
+            "reference_velocity": {
+              "min": -7.230493068695068,
+              "max": 5.722269535064697,
+              "mean": -0.00048084662399163706,
+              "rms": 2.353489055214705,
+              "abs_max": 7.230493068695068,
+              "abs_p95": 5.244343543052673
+            },
+            "reference_acceleration": {
+              "min": -778.5999145507812,
+              "max": 851.1170043945312,
+              "mean": -0.00013237197260211286,
+              "rms": 100.92349944643081,
+              "abs_max": 851.1170043945312,
+              "abs_p95": 166.20596694946283
+            },
+            "force_limit": {
+              "enabled": true,
+              "range": [
+                -420.0,
+                420.0
+              ],
+              "exceedance": {
+                "sample_count": 102,
+                "sample_fraction": 0.19172932330827067,
+                "max": 1284.5118942758015
+              }
+            },
+            "ctrl_limit": {
+              "enabled": true,
+              "range": [
+                -2.356194,
+                0.0
+              ],
+              "exceedance": {
+                "sample_count": 203,
+                "sample_fraction": 0.3815789473684211,
+                "max": 4.649001316175838
+              }
+            },
+            "joint_actuator_force_limit": {
+              "enabled": false,
+              "range": null,
+              "exceedance": null
+            },
+            "generalized_force_shortfall_after_native_clamps": {
+              "min": -1284.5118942758015,
+              "max": 1098.1306924667767,
+              "mean": 87.13947444530481,
+              "rms": 238.77479501156785,
+              "abs_max": 1284.5118942758015,
+              "abs_p95": 540.8017631566847
+            }
+          },
+          {
+            "name": "left_ankle_y_position",
+            "joint": "left_ankle_y",
+            "dof": 19,
+            "gear": 1.0,
+            "generalized_force_unit": "Nm",
+            "required_generalized_force": {
+              "min": -646.7749465414273,
+              "max": 270.0457994974271,
+              "mean": -128.3879084463595,
+              "rms": 226.9998776370851,
+              "abs_max": 646.7749465414273,
+              "abs_p95": 452.55440066054234
+            },
+            "required_scalar_force": {
+              "min": -646.7749465414273,
+              "max": 270.0457994974271,
+              "mean": -128.3879084463595,
+              "rms": 226.9998776370851,
+              "abs_max": 646.7749465414273,
+              "abs_p95": 452.55440066054234
+            },
+            "required_ctrl": {
+              "min": -3.4668531025495724,
+              "max": 1.5070408802888544,
+              "mean": -0.6198289906055846,
+              "rms": 1.258846194394259,
+              "abs_max": 3.4668531025495724,
+              "abs_p95": 2.475756052773225
+            },
+            "reference_velocity": {
+              "min": -5.90118932723999,
+              "max": 6.957510948181152,
+              "mean": 2.313322909316398e-05,
+              "rms": 1.7325533274397507,
+              "abs_max": 6.957510948181152,
+              "abs_p95": 4.511621451377868
+            },
+            "reference_acceleration": {
+              "min": -1575.9857177734375,
+              "max": 567.8470458984375,
+              "mean": -3.890715595474817e-06,
+              "rms": 122.99319076334862,
+              "abs_max": 1575.9857177734375,
+              "abs_p95": 182.06519165039063
+            },
+            "force_limit": {
+              "enabled": true,
+              "range": [
+                -300.0,
+                300.0
+              ],
+              "exceedance": {
+                "sample_count": 103,
+                "sample_fraction": 0.19360902255639098,
+                "max": 346.7749465414273
+              }
+            },
+            "ctrl_limit": {
+              "enabled": true,
+              "range": [
+                -0.436332,
+                0.436332
+              ],
+              "exceedance": {
+                "sample_count": 410,
+                "sample_fraction": 0.7706766917293233,
+                "max": 3.030521102549572
+              }
+            },
+            "joint_actuator_force_limit": {
+              "enabled": false,
+              "range": null,
+              "exceedance": null
+            },
+            "generalized_force_shortfall_after_native_clamps": {
+              "min": -545.493798458923,
+              "max": 192.7275984519938,
+              "mean": -84.59990261906503,
+              "rms": 167.75456228393864,
+              "abs_max": 545.493798458923,
+              "abs_p95": 367.0963294991805
+            }
+          },
+          {
+            "name": "left_ankle_z_position",
+            "joint": "left_ankle_z",
+            "dof": 20,
+            "gear": 1.0,
+            "generalized_force_unit": "Nm",
+            "required_generalized_force": {
+              "min": -424.3359438640583,
+              "max": 66.18029650139694,
+              "mean": -138.02299029175884,
+              "rms": 177.3264518385591,
+              "abs_max": 424.3359438640583,
+              "abs_p95": 353.3667724461544
+            },
+            "required_scalar_force": {
+              "min": -424.3359438640583,
+              "max": 66.18029650139694,
+              "mean": -138.02299029175884,
+              "rms": 177.3264518385591,
+              "abs_max": 424.3359438640583,
+              "abs_p95": 353.3667724461544
+            },
+            "required_ctrl": {
+              "min": -2.5707310239863324,
+              "max": 0.4478508119836378,
+              "mean": -0.8063605534110766,
+              "rms": 1.06078948335824,
+              "abs_max": 2.5707310239863324,
+              "abs_p95": 2.166608052720122
+            },
+            "reference_velocity": {
+              "min": -1.3779515027999878,
+              "max": 1.397560954093933,
+              "mean": 0.0001939785616926208,
+              "rms": 0.41330631910288296,
+              "abs_max": 1.397560954093933,
+              "abs_p95": 0.7768947750329971
+            },
+            "reference_acceleration": {
+              "min": -270.1101989746094,
+              "max": 411.4466247558594,
+              "mean": 2.012386413893305e-05,
+              "rms": 42.06604698734258,
+              "abs_max": 411.4466247558594,
+              "abs_p95": 75.75407409667969
+            },
+            "force_limit": {
+              "enabled": true,
+              "range": [
+                -260.0,
+                260.0
+              ],
+              "exceedance": {
+                "sample_count": 83,
+                "sample_fraction": 0.15601503759398497,
+                "max": 164.33594386405832
+              }
+            },
+            "ctrl_limit": {
+              "enabled": true,
+              "range": [
+                -0.20944,
+                0.20944
+              ],
+              "exceedance": {
+                "sample_count": 471,
+                "sample_fraction": 0.8853383458646616,
+                "max": 2.3612910239863325
+              }
+            },
+            "joint_actuator_force_limit": {
+              "enabled": false,
+              "range": null,
+              "exceedance": null
+            },
+            "generalized_force_shortfall_after_native_clamps": {
+              "min": -377.8065638378132,
+              "max": 38.14572991738205,
+              "mean": -104.81393523242279,
+              "rms": 143.548437535027,
+              "abs_max": 377.8065638378132,
+              "abs_p95": 313.1468884352196
+            }
+          },
+          {
+            "name": "right_hip_x_position",
+            "joint": "right_hip_x",
+            "dof": 21,
+            "gear": 1.0,
+            "generalized_force_unit": "Nm",
+            "required_generalized_force": {
+              "min": -2506.8979237499234,
+              "max": 5318.067116231415,
+              "mean": 1912.2373591948933,
+              "rms": 2749.0875626462466,
+              "abs_max": 5318.067116231415,
+              "abs_p95": 4295.283663739137
+            },
+            "required_scalar_force": {
+              "min": -2506.8979237499234,
+              "max": 5318.067116231415,
+              "mean": 1912.2373591948933,
+              "rms": 2749.0875626462466,
+              "abs_max": 5318.067116231415,
+              "abs_p95": 4295.283663739137
+            },
+            "required_ctrl": {
+              "min": -11.265733002723346,
+              "max": 24.289459760625675,
+              "mean": 8.80032091076673,
+              "rms": 12.559638121417692,
+              "abs_max": 24.289459760625675,
+              "abs_p95": 19.627325658486072
+            },
+            "reference_velocity": {
+              "min": -0.9463822841644287,
+              "max": 0.7674133777618408,
+              "mean": 0.00013696707704601656,
+              "rms": 0.3195937987205835,
+              "abs_max": 0.9463822841644287,
+              "abs_p95": 0.7103250831365585
+            },
+            "reference_acceleration": {
+              "min": -168.68264770507812,
+              "max": 167.96444702148438,
+              "mean": 1.879480839847006e-05,
+              "rms": 31.922455100219874,
+              "abs_max": 168.68264770507812,
+              "abs_p95": 70.22233467102049
+            },
+            "force_limit": {
+              "enabled": true,
+              "range": [
+                -360.0,
+                360.0
+              ],
+              "exceedance": {
+                "sample_count": 468,
+                "sample_fraction": 0.8796992481203008,
+                "max": 4958.067116231415
+              }
+            },
+            "ctrl_limit": {
+              "enabled": true,
+              "range": [
+                -0.698132,
+                0.349066
+              ],
+              "exceedance": {
+                "sample_count": 508,
+                "sample_fraction": 0.9548872180451128,
+                "max": 23.940393760625675
+              }
+            },
+            "joint_actuator_force_limit": {
+              "enabled": false,
+              "range": null,
+              "exceedance": null
+            },
+            "generalized_force_shortfall_after_native_clamps": {
+              "min": -2324.872220599136,
+              "max": 5266.886627337648,
+              "mean": 1914.3570825444529,
+              "rms": 2693.5579604310724,
+              "abs_max": 5266.886627337648,
+              "abs_p95": 4241.217124866936
+            }
+          },
+          {
+            "name": "right_hip_y_position",
+            "joint": "right_hip_y",
+            "dof": 22,
+            "gear": 1.0,
+            "generalized_force_unit": "Nm",
+            "required_generalized_force": {
+              "min": -614.3413118204762,
+              "max": 198.17630923199937,
+              "mean": -145.34931603220664,
+              "rms": 229.48420043994187,
+              "abs_max": 614.3413118204762,
+              "abs_p95": 461.0179106856411
+            },
+            "required_scalar_force": {
+              "min": -614.3413118204762,
+              "max": 198.17630923199937,
+              "mean": -145.34931603220664,
+              "rms": 229.48420043994187,
+              "abs_max": 614.3413118204762,
+              "abs_p95": 461.0179106856411
+            },
+            "required_ctrl": {
+              "min": -3.415298413136927,
+              "max": 1.1640950627022477,
+              "mean": -0.7932805014926649,
+              "rms": 1.2726994288280669,
+              "abs_max": 3.415298413136927,
+              "abs_p95": 2.546375174781113
+            },
+            "reference_velocity": {
+              "min": -1.447260856628418,
+              "max": 0.6712369918823242,
+              "mean": -0.00019456829663008955,
+              "rms": 0.33428740080339187,
+              "abs_max": 1.447260856628418,
+              "abs_p95": 0.6249548345804214
+            },
+            "reference_acceleration": {
+              "min": -136.3542022705078,
+              "max": 188.9932098388672,
+              "mean": -8.564512420417672e-06,
+              "rms": 28.897130669334114,
+              "abs_max": 188.9932098388672,
+              "abs_p95": 55.38893642425537
+            },
+            "force_limit": {
+              "enabled": true,
+              "range": [
+                -300.0,
+                300.0
+              ],
+              "exceedance": {
+                "sample_count": 131,
+                "sample_fraction": 0.2462406015037594,
+                "max": 314.3413118204762
+              }
+            },
+            "ctrl_limit": {
+              "enabled": true,
+              "range": [
+                -0.383972,
+                0.383972
+              ],
+              "exceedance": {
+                "sample_count": 331,
+                "sample_fraction": 0.6221804511278195,
+                "max": 3.031326413136927
+              }
+            },
+            "joint_actuator_force_limit": {
+              "enabled": false,
+              "range": null,
+              "exceedance": null
+            },
+            "generalized_force_shortfall_after_native_clamps": {
+              "min": -545.6387543646468,
+              "max": 140.42215128640458,
+              "mean": -113.1401880302088,
+              "rms": 180.85384632182146,
+              "abs_max": 545.6387543646468,
+              "abs_p95": 389.2325714606004
+            }
+          },
+          {
+            "name": "right_hip_z_position",
+            "joint": "right_hip_z",
+            "dof": 23,
+            "gear": 1.0,
+            "generalized_force_unit": "Nm",
+            "required_generalized_force": {
+              "min": -1779.526520775037,
+              "max": 3410.6531892987473,
+              "mean": 330.42134670702075,
+              "rms": 868.4250884226121,
+              "abs_max": 3410.6531892987473,
+              "abs_p95": 1443.5064302342237
+            },
+            "required_scalar_force": {
+              "min": -1779.526520775037,
+              "max": 3410.6531892987473,
+              "mean": 330.42134670702075,
+              "rms": 868.4250884226121,
+              "abs_max": 3410.6531892987473,
+              "abs_p95": 1443.5064302342237
+            },
+            "required_ctrl": {
+              "min": -8.155543440247472,
+              "max": 15.499476597280555,
+              "mean": 1.501240267796232,
+              "rms": 3.8891033335621987,
+              "abs_max": 15.499476597280555,
+              "abs_p95": 6.630624318303947
+            },
+            "reference_velocity": {
+              "min": -3.6003339290618896,
+              "max": 2.4715662002563477,
+              "mean": 0.00013504683213392483,
+              "rms": 1.2038100650816537,
+              "abs_max": 3.6003339290618896,
+              "abs_p95": 2.920975160598754
+            },
+            "reference_acceleration": {
+              "min": -586.5921020507812,
+              "max": 270.63616943359375,
+              "mean": -3.716187145476951e-08,
+              "rms": 47.577023934993356,
+              "abs_max": 586.5921020507812,
+              "abs_p95": 86.53169021606445
+            },
+            "force_limit": {
+              "enabled": true,
+              "range": [
+                -360.0,
+                360.0
+              ],
+              "exceedance": {
+                "sample_count": 443,
+                "sample_fraction": 0.8327067669172933,
+                "max": 3050.6531892987473
+              }
+            },
+            "ctrl_limit": {
+              "enabled": true,
+              "range": [
+                -0.523599,
+                1.047198
+              ],
+              "exceedance": {
+                "sample_count": 490,
+                "sample_fraction": 0.9210526315789473,
+                "max": 14.452278597280555
+              }
+            },
+            "joint_actuator_force_limit": {
+              "enabled": false,
+              "range": null,
+              "exceedance": null
+            },
+            "generalized_force_shortfall_after_native_clamps": {
+              "min": -1679.0277768544436,
+              "max": 3179.501291401722,
+              "mean": 218.68508284318315,
+              "rms": 691.1249850616323,
+              "abs_max": 3179.501291401722,
+              "abs_p95": 1236.8393610847859
+            }
+          },
+          {
+            "name": "right_knee_z_position",
+            "joint": "right_knee_z",
+            "dof": 24,
+            "gear": 1.0,
+            "generalized_force_unit": "Nm",
+            "required_generalized_force": {
+              "min": -1024.954848431511,
+              "max": 1675.4069126336985,
+              "mean": 212.43329186022999,
+              "rms": 432.70671173158513,
+              "abs_max": 1675.4069126336985,
+              "abs_p95": 702.5753825147198
+            },
+            "required_scalar_force": {
+              "min": -1024.954848431511,
+              "max": 1675.4069126336985,
+              "mean": 212.43329186022999,
+              "rms": 432.70671173158513,
+              "abs_max": 1675.4069126336985,
+              "abs_p95": 702.5753825147198
+            },
+            "required_ctrl": {
+              "min": -4.0571044110065975,
+              "max": 6.074075749550574,
+              "mean": 0.45477621437627264,
+              "rms": 1.6016068806385853,
+              "abs_max": 6.074075749550574,
+              "abs_p95": 2.6628189804148357
+            },
+            "reference_velocity": {
+              "min": -5.240192413330078,
+              "max": 8.2289400100708,
+              "mean": -0.00037038250549703387,
+              "rms": 2.7403810640666064,
+              "abs_max": 8.2289400100708,
+              "abs_p95": 6.4391175508499146
+            },
+            "reference_acceleration": {
+              "min": -601.4749755859375,
+              "max": 1245.5809326171875,
+              "mean": -2.2158530869878324e-05,
+              "rms": 96.43820040694543,
+              "abs_max": 1245.5809326171875,
+              "abs_p95": 163.4730781555175
+            },
+            "force_limit": {
+              "enabled": true,
+              "range": [
+                -420.0,
+                420.0
+              ],
+              "exceedance": {
+                "sample_count": 188,
+                "sample_fraction": 0.3533834586466165,
+                "max": 1255.4069126336985
+              }
+            },
+            "ctrl_limit": {
+              "enabled": true,
+              "range": [
+                -2.356194,
+                0.0
+              ],
+              "exceedance": {
+                "sample_count": 374,
+                "sample_fraction": 0.7030075187969925,
+                "max": 6.074075749550574
+              }
+            },
+            "joint_actuator_force_limit": {
+              "enabled": false,
+              "range": null,
+              "exceedance": null
+            },
+            "generalized_force_shortfall_after_native_clamps": {
+              "min": -604.954848431511,
+              "max": 1579.2596948831492,
+              "mean": 227.80706948840285,
+              "rms": 344.813341570866,
+              "abs_max": 1579.2596948831492,
+              "abs_p95": 624.0982493119685
+            }
+          },
+          {
+            "name": "right_ankle_y_position",
+            "joint": "right_ankle_y",
+            "dof": 25,
+            "gear": 1.0,
+            "generalized_force_unit": "Nm",
+            "required_generalized_force": {
+              "min": -323.0092517299975,
+              "max": 710.7291403379447,
+              "mean": 191.83150783663962,
+              "rms": 307.5874765508093,
+              "abs_max": 710.7291403379447,
+              "abs_p95": 554.8896558223295
+            },
+            "required_scalar_force": {
+              "min": -323.0092517299975,
+              "max": 710.7291403379447,
+              "mean": 191.83150783663962,
+              "rms": 307.5874765508093,
+              "abs_max": 710.7291403379447,
+              "abs_p95": 554.8896558223295
+            },
+            "required_ctrl": {
+              "min": -1.8933081473815911,
+              "max": 4.1691852023220255,
+              "mean": 1.0584090403995032,
+              "rms": 1.7690669748508043,
+              "abs_max": 4.1691852023220255,
+              "abs_p95": 3.301006814347577
+            },
+            "reference_velocity": {
+              "min": -5.561923980712891,
+              "max": 5.9834418296813965,
+              "mean": -0.00025327336979693823,
+              "rms": 1.9368225783911044,
+              "abs_max": 5.9834418296813965,
+              "abs_p95": 4.995567083358764
+            },
+            "reference_acceleration": {
+              "min": -1563.5184326171875,
+              "max": 581.9195556640625,
+              "mean": -3.1220049184179844e-05,
+              "rms": 125.07279640118834,
+              "abs_max": 1563.5184326171875,
+              "abs_p95": 196.35700454711915
+            },
+            "force_limit": {
+              "enabled": true,
+              "range": [
+                -300.0,
+                300.0
+              ],
+              "exceedance": {
+                "sample_count": 202,
+                "sample_fraction": 0.37969924812030076,
+                "max": 410.7291403379447
+              }
+            },
+            "ctrl_limit": {
+              "enabled": true,
+              "range": [
+                -0.436332,
+                0.436332
+              ],
+              "exceedance": {
+                "sample_count": 420,
+                "sample_fraction": 0.7894736842105263,
+                "max": 3.7328532023220253
+              }
+            },
+            "joint_actuator_force_limit": {
+              "enabled": false,
+              "range": null,
+              "exceedance": null
+            },
+            "generalized_force_shortfall_after_native_clamps": {
+              "min": -262.2557065286864,
+              "max": 671.9135764179646,
+              "mean": 154.61513938664226,
+              "rms": 260.16689344992983,
+              "abs_max": 671.9135764179646,
+              "abs_p95": 515.6414665825638
+            }
+          },
+          {
+            "name": "right_ankle_z_position",
+            "joint": "right_ankle_z",
+            "dof": 26,
+            "gear": 1.0,
+            "generalized_force_unit": "Nm",
+            "required_generalized_force": {
+              "min": -386.2857708368743,
+              "max": 457.4867138554444,
+              "mean": 35.123260962496,
+              "rms": 210.74258407619047,
+              "abs_max": 457.4867138554444,
+              "abs_p95": 387.88219150723677
+            },
+            "required_scalar_force": {
+              "min": -386.2857708368743,
+              "max": 457.4867138554444,
+              "mean": 35.123260962496,
+              "rms": 210.74258407619047,
+              "abs_max": 457.4867138554444,
+              "abs_p95": 387.88219150723677
+            },
+            "required_ctrl": {
+              "min": -2.3509530704679866,
+              "max": 2.950384503410378,
+              "mean": 0.27123213874986174,
+              "rms": 1.3520697472199608,
+              "abs_max": 2.950384503410378,
+              "abs_p95": 2.5116816973309444
+            },
+            "reference_velocity": {
+              "min": -0.9235057830810547,
+              "max": 0.9730186462402344,
+              "mean": -8.780588929828508e-05,
+              "rms": 0.36473498595243375,
+              "abs_max": 0.9730186462402344,
+              "abs_p95": 0.6931057006120681
+            },
+            "reference_acceleration": {
+              "min": -151.7259979248047,
+              "max": 250.83880615234375,
+              "mean": 2.0034219089307283e-06,
+              "rms": 30.520947750992285,
+              "abs_max": 250.83880615234375,
+              "abs_p95": 62.00765590667723
+            },
+            "force_limit": {
+              "enabled": true,
+              "range": [
+                -260.0,
+                260.0
+              ],
+              "exceedance": {
+                "sample_count": 132,
+                "sample_fraction": 0.24812030075187969,
+                "max": 197.4867138554444
+              }
+            },
+            "ctrl_limit": {
+              "enabled": true,
+              "range": [
+                -0.20944,
+                0.20944
+              ],
+              "exceedance": {
+                "sample_count": 491,
+                "sample_fraction": 0.9229323308270677,
+                "max": 2.740944503410378
+              }
+            },
+            "joint_actuator_force_limit": {
+              "enabled": false,
+              "range": null,
+              "exceedance": null
+            },
+            "generalized_force_shortfall_after_native_clamps": {
+              "min": -342.6420912748778,
+              "max": 438.55112054566047,
+              "mean": 40.78252114264028,
+              "rms": 188.63820632989496,
+              "abs_max": 438.55112054566047,
+              "abs_p95": 368.35867157295115
+            }
+          }
+        ],
+        "unactuated_dofs": [
+          {
+            "dof": 0,
+            "joint": "joint_0",
+            "component": 0,
+            "unit": "N",
+            "required_force": {
+              "min": -8356.760602526248,
+              "max": 7247.094143289429,
+              "mean": 76.86553576670131,
+              "rms": 1214.4536871801422,
+              "abs_max": 8356.760602526248,
+              "abs_p95": 2419.108930740565
+            }
+          },
+          {
+            "dof": 1,
+            "joint": "joint_0",
+            "component": 1,
+            "unit": "N",
+            "required_force": {
+              "min": -7336.5464401219015,
+              "max": 6827.9805287910285,
+              "mean": -35.79266449660741,
+              "rms": 1337.7218816104562,
+              "abs_max": 7336.5464401219015,
+              "abs_p95": 2798.047405021506
+            }
+          },
+          {
+            "dof": 2,
+            "joint": "joint_0",
+            "component": 2,
+            "unit": "N",
+            "required_force": {
+              "min": -5569.436520039738,
+              "max": 6927.246543663857,
+              "mean": -234.07173739512479,
+              "rms": 857.7919634721999,
+              "abs_max": 6927.246543663857,
+              "abs_p95": 1547.7785008217188
+            }
+          },
+          {
+            "dof": 3,
+            "joint": "joint_0",
+            "component": 3,
+            "unit": "Nm",
+            "required_force": {
+              "min": -4056.6187518283177,
+              "max": 5388.697490025611,
+              "mean": -39.71829478705198,
+              "rms": 917.6743881597642,
+              "abs_max": 5388.697490025611,
+              "abs_p95": 1855.2528839627876
+            }
+          },
+          {
+            "dof": 4,
+            "joint": "joint_0",
+            "component": 4,
+            "unit": "Nm",
+            "required_force": {
+              "min": -191.6264004480031,
+              "max": 370.99073554136106,
+              "mean": 1.6351828081747706,
+              "rms": 69.87765467449785,
+              "abs_max": 370.99073554136106,
+              "abs_p95": 140.0249399523505
+            }
+          },
+          {
+            "dof": 5,
+            "joint": "joint_0",
+            "component": 5,
+            "unit": "Nm",
+            "required_force": {
+              "min": -4891.798544417142,
+              "max": 4489.292785887906,
+              "mean": 126.21762518556639,
+              "rms": 895.9900869997882,
+              "abs_max": 4891.798544417142,
+              "abs_p95": 1783.341773585633
+            }
+          },
+          {
+            "dof": 6,
+            "joint": "head_x",
+            "component": 0,
+            "unit": "Nm",
+            "required_force": {
+              "min": -65.7976919267483,
+              "max": 73.23052310020044,
+              "mean": -0.036719371847920144,
+              "rms": 13.542805718153831,
+              "abs_max": 73.23052310020044,
+              "abs_p95": 27.236604137512206
+            }
+          },
+          {
+            "dof": 7,
+            "joint": "head_y",
+            "component": 0,
+            "unit": "Nm",
+            "required_force": {
+              "min": -3.3797473180061655,
+              "max": 3.274223313779839,
+              "mean": 0.000849288150799488,
+              "rms": 0.8982088195237151,
+              "abs_max": 3.3797473180061655,
+              "abs_p95": 1.841634654446033
+            }
+          },
+          {
+            "dof": 8,
+            "joint": "head_z",
+            "component": 0,
+            "unit": "Nm",
+            "required_force": {
+              "min": -58.4130119230129,
+              "max": 80.94284211693878,
+              "mean": 0.28436913491799626,
+              "rms": 10.982722798401975,
+              "abs_max": 80.94284211693878,
+              "abs_p95": 22.23191418621713
+            }
+          },
+          {
+            "dof": 27,
+            "joint": "left_shoulder_x",
+            "component": 0,
+            "unit": "Nm",
+            "required_force": {
+              "min": -45.312306176536964,
+              "max": 98.30968115760652,
+              "mean": 25.545228992565402,
+              "rms": 29.518640208811554,
+              "abs_max": 98.30968115760652,
+              "abs_p95": 48.6046795276052
+            }
+          },
+          {
+            "dof": 28,
+            "joint": "left_shoulder_y",
+            "component": 0,
+            "unit": "Nm",
+            "required_force": {
+              "min": -0.7420581414594384,
+              "max": 0.944894612955907,
+              "mean": 0.04835000958911402,
+              "rms": 0.16826133310160432,
+              "abs_max": 0.944894612955907,
+              "abs_p95": 0.33531956488146414
+            }
+          },
+          {
+            "dof": 29,
+            "joint": "left_shoulder_z",
+            "component": 0,
+            "unit": "Nm",
+            "required_force": {
+              "min": -115.95666309214636,
+              "max": 79.23803298530794,
+              "mean": 0.04045299638293265,
+              "rms": 23.24175196147111,
+              "abs_max": 115.95666309214636,
+              "abs_p95": 48.74337135985964
+            }
+          },
+          {
+            "dof": 30,
+            "joint": "left_elbow_z",
+            "component": 0,
+            "unit": "Nm",
+            "required_force": {
+              "min": -37.923610286970366,
+              "max": 25.982169179841733,
+              "mean": -0.01673430211146696,
+              "rms": 7.7223436567968955,
+              "abs_max": 37.923610286970366,
+              "abs_p95": 16.713144176023704
+            }
+          },
+          {
+            "dof": 31,
+            "joint": "left_wrist_y",
+            "component": 0,
+            "unit": "Nm",
+            "required_force": {
+              "min": -0.3506310282909972,
+              "max": 0.4786350611109892,
+              "mean": 0.019608887749179446,
+              "rms": 0.10401220757871994,
+              "abs_max": 0.4786350611109892,
+              "abs_p95": 0.21727543623871115
+            }
+          },
+          {
+            "dof": 32,
+            "joint": "left_wrist_z",
+            "component": 0,
+            "unit": "Nm",
+            "required_force": {
+              "min": -4.018302670105063,
+              "max": 2.9374497183023083,
+              "mean": 0.02150863824134862,
+              "rms": 0.8358316475530274,
+              "abs_max": 4.018302670105063,
+              "abs_p95": 1.764949805834361
+            }
+          },
+          {
+            "dof": 33,
+            "joint": "right_shoulder_x",
+            "component": 0,
+            "unit": "Nm",
+            "required_force": {
+              "min": -104.07754751791084,
+              "max": 57.018062073393715,
+              "mean": -25.498888495545042,
+              "rms": 29.493185164507857,
+              "abs_max": 104.07754751791084,
+              "abs_p95": 49.15894280466359
+            }
+          },
+          {
+            "dof": 34,
+            "joint": "right_shoulder_y",
+            "component": 0,
+            "unit": "Nm",
+            "required_force": {
+              "min": -0.7717473954455393,
+              "max": 0.9477470197903841,
+              "mean": -0.04802581674197901,
+              "rms": 0.17724986321667097,
+              "abs_max": 0.9477470197903841,
+              "abs_p95": 0.3581666772545169
+            }
+          },
+          {
+            "dof": 35,
+            "joint": "right_shoulder_z",
+            "component": 0,
+            "unit": "Nm",
+            "required_force": {
+              "min": -117.32670215633806,
+              "max": 100.3748101323119,
+              "mean": 0.040762726253454194,
+              "rms": 23.30135540646187,
+              "abs_max": 117.32670215633806,
+              "abs_p95": 47.327107457388635
+            }
+          },
+          {
+            "dof": 36,
+            "joint": "right_elbow_z",
+            "component": 0,
+            "unit": "Nm",
+            "required_force": {
+              "min": -35.713518571758485,
+              "max": 31.080371082360223,
+              "mean": -0.016804134319990095,
+              "rms": 7.742708486755322,
+              "abs_max": 35.713518571758485,
+              "abs_p95": 15.797430637675546
+            }
+          },
+          {
+            "dof": 37,
+            "joint": "right_wrist_y",
+            "component": 0,
+            "unit": "Nm",
+            "required_force": {
+              "min": -0.3279214724356547,
+              "max": 0.39782220581848915,
+              "mean": -0.019476604122765525,
+              "rms": 0.10046486662760555,
+              "abs_max": 0.39782220581848915,
+              "abs_p95": 0.1975048242747793
+            }
+          },
+          {
+            "dof": 38,
+            "joint": "right_wrist_z",
+            "component": 0,
+            "unit": "Nm",
+            "required_force": {
+              "min": -3.4410200813742136,
+              "max": 3.3079939036266404,
+              "mean": 0.02163214909227119,
+              "rms": 0.8374905226819069,
+              "abs_max": 3.4410200813742136,
+              "abs_p95": 1.656898836670786
+            }
+          }
+        ],
+        "free_joint_residuals": [
+          {
+            "joint": "joint_0",
+            "force_norm_N": {
+              "min": 79.83602551541532,
+              "max": 8662.583372625382,
+              "mean": 1525.4522049700292,
+              "rms": 2000.0511602062468,
+              "abs_max": 8662.583372625382,
+              "abs_p95": 4095.5788159637186
+            },
+            "torque_norm_Nm": {
+              "min": 37.76339036096049,
+              "max": 5458.1711409113095,
+              "mean": 1017.0119501865631,
+              "rms": 1284.4482882970003,
+              "abs_max": 5458.1711409113095,
+              "abs_p95": 2501.463177839067
+            },
+            "linear_acceleration_norm_m_s2": {
+              "min": 0.38768864926792035,
+              "max": 108.44319083683271,
+              "mean": 18.342380906795007,
+              "rms": 24.061666047792524,
+              "abs_max": 108.44319083683271,
+              "abs_p95": 48.1296900253537
+            },
+            "angular_acceleration_norm_rad_s2": {
+              "min": 0.07393665611743927,
+              "max": 165.3162384033203,
+              "mean": 26.66379748545307,
+              "rms": 34.03218465394081,
+              "abs_max": 165.3162384033203,
+              "abs_p95": 67.18654479980468
+            }
+          }
+        ],
+        "extreme_sample_force_decomposition": {
+          "largest_absolute_actuator_scalar_force": {
+            "sample_index": 408,
+            "qacc": [
+              5.541628360748291,
+              -2.2576751708984375,
+              -0.8395572900772095,
+              1.30385160446167e-08,
+              9.961238861083984,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              3.804084300994873,
+              40.246341705322266,
+              4.348877906799316,
+              5.679022312164307,
+              -31.737499237060547,
+              -0.0010161354439333081,
+              -63.53879928588867,
+              -32.52006149291992,
+              11.877434730529785,
+              -40.556541442871094,
+              115.61993408203125,
+              5.307363033294678,
+              -7.152597427368164,
+              -17.953344345092773,
+              -22.23202896118164,
+              15.352813720703125,
+              13.605001449584961,
+              7.402831554412842,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "mass_times_qacc": [
+              396.2749437317053,
+              -352.35959396945634,
+              -39.42593712594833,
+              -285.06257954322206,
+              20.21773403421996,
+              186.70644877640981,
+              1.3745911358842822,
+              0.13232759939075706,
+              -4.3288193934676125,
+              -185.44047320911713,
+              3.117183448815633,
+              79.78465683406188,
+              -145.44229528447246,
+              -1.5872517833082254,
+              47.53680105958072,
+              -131.0880090828417,
+              6.2703859057564815,
+              29.657137427060388,
+              0.6511909222342798,
+              -1.104869227298318,
+              0.23380176807623668,
+              1.2581018201348362,
+              0.24958049655982267,
+              -1.072893667650476,
+              -0.16775533014351737,
+              0.3045241020746384,
+              -0.15085751811949877,
+              -1.8808235594023734,
+              0.04208258649644621,
+              0.7439562240706472,
+              -0.06055353236944572,
+              -0.0008255579349044032,
+              -0.02808275863910617,
+              -0.6973956094280573,
+              -0.050954281616728755,
+              11.094968981191077,
+              3.6190503241753174,
+              0.033784165424165985,
+              0.37312480478349064
+            ],
+            "bias": [
+              -1.3986363354334257,
+              -3.3353611964498238,
+              746.6714367399695,
+              -3.438276321904867,
+              -0.38579955236501734,
+              -1.3636298007889907,
+              -0.01382743527458681,
+              -2.4126364320101623e-14,
+              0.2833634427931789,
+              -2.571815446536764,
+              -0.3077319452110781,
+              -2.773230198528857,
+              -0.45784186905982804,
+              -0.4082828174044534,
+              -2.015693418470227,
+              -1.6204991798831365,
+              0.13169590353162872,
+              -1.242012194252583,
+              -4.016837013950346,
+              -0.038920348707308206,
+              0.5249923668622217,
+              1.8339585468673203,
+              -0.3179780620345736,
+              -1.270042517231221,
+              -6.745686803088427,
+              0.06554496037616006,
+              0.44798686339845517,
+              6.632113310802596,
+              0.0472607955274702,
+              0.03760370954153852,
+              -0.01807684912542812,
+              0.01899503041082349,
+              0.02185819373196593,
+              -6.6321133108025965,
+              -0.04726079552747031,
+              0.03760370954153858,
+              -0.018076849125428035,
+              -0.01899503041082347,
+              0.02185819373196598
+            ],
+            "passive": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              -0.0,
+              -0.0,
+              -0.0,
+              2.0592419300228357,
+              -1.097044619731605,
+              1.1883991807699203,
+              -3.523028716444969,
+              1.8158209940884262,
+              -2.940123345611937,
+              0.14436787366867065,
+              0.07348097860813141,
+              -1.539892315864563,
+              2.0648837089538574,
+              -0.20115244388580322,
+              -0.3248535320162773,
+              -0.623147189617157,
+              -0.6300107836723328,
+              2.3275532722473145,
+              -6.537953019142151,
+              1.516139030456543,
+              -0.7870103716850281,
+              -18.75,
+              -0.0,
+              -0.0,
+              -0.0,
+              0.0,
+              0.0,
+              18.75,
+              -0.0,
+              -0.0,
+              -0.0,
+              0.0,
+              0.0
+            ],
+            "constraint": [
+              -266.045608090876,
+              642.6233274371907,
+              955.6108187963105,
+              942.8319469505567,
+              -2.528827633041407,
+              -468.1648793964789,
+              0.0,
+              0.0,
+              0.0,
+              731.8955425615045,
+              6.735924335879961,
+              -363.37749071138035,
+              637.6912559359855,
+              13.21673306542947,
+              -315.82381799936684,
+              5917.555835124392,
+              -539.3825608972425,
+              -147.35625655527065,
+              -65.58365120919461,
+              387.87378744791795,
+              45.76126741296781,
+              -5132.580215467555,
+              496.193083975497,
+              -195.60121676509698,
+              -356.09715128894265,
+              -696.7264003660134,
+              207.58303301438286,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "inverse": [
+              660.9219154871479,
+              -998.3182826030969,
+              -248.36531918228923,
+              -1231.3328028156836,
+              22.360762114896346,
+              653.5076983720998,
+              1.3607637006096953,
+              0.13232759939073294,
+              -4.045455950674434,
+              -921.9670731471813,
+              -2.8294282125438017,
+              439.20051816614347,
+              -780.0683643730729,
+              -17.028088660230576,
+              364.2850489860893,
+              -6050.408711260785,
+              545.7111617279224,
+              177.311274103943,
+              60.15312140852469,
+              -388.8164245800378,
+              -44.67761974601308,
+              5136.295423024174,
+              -495.63147075729944,
+              190.93072730796797,
+              355.7216621748529,
+              695.5803303980077,
+              -206.49889329741887,
+              23.501289751400222,
+              0.08934338202391641,
+              0.7815599336121857,
+              -0.07863038149487384,
+              0.018169472475919088,
+              -0.00622456490714024,
+              -26.07950892023065,
+              -0.09821507714419907,
+              11.132572690732616,
+              3.6009734750498894,
+              0.014789135013342516,
+              0.3949829985154566
+            ],
+            "equation_error_abs_max": 1.1368683772161603e-13,
+            "contact_count": 2,
+            "largest_contact_normal_forces": [
+              {
+                "geoms": [
+                  "left_foot_sole",
+                  "right_foot_sole"
+                ],
+                "distance_m": -0.08714364334682409,
+                "normal_force_n": 6352.547955038033,
+                "tangential_force_norm_n": 409.82681663373245
+              },
+              {
+                "geoms": [
+                  "floor",
+                  "left_foot_sole"
+                ],
+                "distance_m": -0.004954236714294458,
+                "normal_force_n": 955.6108187963105,
+                "tangential_force_norm_n": 695.5177974364788
+              }
+            ]
+          },
+          "free_joint_0_force_peak": {
+            "sample_index": 375,
+            "qacc": [
+              -102.42395782470703,
+              33.90264129638672,
+              10.94848918914795,
+              0.0,
+              -13.433996200561523,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              -44.21540451049805,
+              -11.972548484802246,
+              -4.601192951202393,
+              53.643287658691406,
+              -7.345444679260254,
+              -45.78211975097656,
+              -12.310676574707031,
+              -6.201938629150391,
+              54.020965576171875,
+              97.8127670288086,
+              -52.27827835083008,
+              -30.65473747253418,
+              -54.22600173950195,
+              -3.6495602130889893,
+              92.55878448486328,
+              211.89010620117188,
+              331.77081298828125,
+              -6.545680522918701,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "mass_times_qacc": [
+              -7440.417959268626,
+              2105.5989287814555,
+              636.9735899409364,
+              420.4073738454791,
+              -40.883447298028926,
+              -3504.2978276258664,
+              -15.515053193597998,
+              0.19308378923733827,
+              80.65811765183444,
+              158.7504494029797,
+              13.833417021142006,
+              -1562.586229381103,
+              98.75848582470894,
+              -15.579548817553745,
+              -979.1290805632781,
+              64.41055854883822,
+              5.521427560119222,
+              -430.0028978702034,
+              -73.0458950502693,
+              0.2567384315632584,
+              -2.7334350966076615,
+              -11.034893005550193,
+              -16.24671316586929,
+              -266.2758807245607,
+              12.49383490741051,
+              4.952539866820996,
+              0.07369740115980239,
+              23.300821361531646,
+              -0.7887476694163668,
+              -103.58065614990008,
+              -30.688082617645957,
+              0.33051360020588566,
+              -2.995514874293593,
+              7.8679875697629456,
+              0.9944365477473124,
+              -117.35983912659478,
+              -35.69386095468741,
+              -0.29593149711039757,
+              -3.462969273486598
+            ],
+            "bias": [
+              -5.068944157833816,
+              -3.1070284136919155,
+              739.5821249938608,
+              -6.569099042517918,
+              0.0362868465529832,
+              -4.907965318007783,
+              -0.013795462611511863,
+              1.5576112160465378e-13,
+              0.2847244651043283,
+              -5.5988721050434656,
+              0.1679205285418254,
+              -5.130014687570608,
+              -3.6442998320679885,
+              -0.02103674242837492,
+              -4.271748841820393,
+              -4.464671030710132,
+              0.5627994744304542,
+              -3.338683688139438,
+              -3.9270980948620196,
+              -0.10021376339559637,
+              0.5333790479701468,
+              0.9542757932434824,
+              0.15338050161991346,
+              -1.4341205602260592,
+              -6.890931657755036,
+              -0.007653658338888758,
+              0.34497309011450095,
+              6.5493598480901545,
+              0.04668952795692838,
+              0.033136970256715415,
+              -0.019657617071075495,
+              0.018678230155915757,
+              0.021949192112384303,
+              -6.549359848090159,
+              -0.04668952795692827,
+              0.03313697025671558,
+              -0.01965761707107566,
+              -0.018678230155915673,
+              0.02194919211238435
+            ],
+            "passive": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              -0.0,
+              -0.0,
+              -0.0,
+              0.7407611310482025,
+              -0.01879262551665306,
+              1.1876770947128534,
+              -1.396701943129301,
+              -1.0699204329866916,
+              -6.140744253993034,
+              -0.1733291894197464,
+              0.2614326775074005,
+              0.12997758388519287,
+              2.8262314200401306,
+              1.0435988903045654,
+              -0.05169728770852089,
+              -0.8278660774230957,
+              -0.37435680627822876,
+              0.9001932740211487,
+              0.6055336445569992,
+              3.6444969177246094,
+              -0.2593733221292496,
+              -18.75,
+              -0.0,
+              -0.0,
+              -0.0,
+              0.0,
+              0.0,
+              18.75,
+              -0.0,
+              -0.0,
+              -0.0,
+              0.0,
+              0.0
+            ],
+            "constraint": [
+              911.2736990997878,
+              -160.3193073988154,
+              1085.7149376067023,
+              -61.60888285070118,
+              -1.8092057851364558,
+              1382.592751473267,
+              0.0,
+              0.0,
+              0.0,
+              -46.136835766708884,
+              -28.152122666275144,
+              1069.3538770520022,
+              -35.40598551012518,
+              -2.812565455672883,
+              930.5909959770645,
+              3227.7838556981483,
+              -376.2122006634552,
+              1349.7011446588192,
+              803.2441027133358,
+              191.22412345694983,
+              89.53667710096308,
+              -2842.5052301840697,
+              338.8065233742776,
+              -459.7926130275729,
+              -627.00908241242,
+              -367.61489581688545,
+              235.21890623390848,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "inverse": [
+              -8356.760602526248,
+              2262.811207766579,
+              290.840777328095,
+              475.44715765366243,
+              -39.03795466633949,
+              -4891.798544417142,
+              -15.52884865620951,
+              0.19308378923749403,
+              80.94284211693878,
+              198.54765193359694,
+              42.17225284147563,
+              -2638.2577982153884,
+              131.91687344589542,
+              -11.718099671322545,
+              -1907.85108112817,
+              -3167.6646389906005,
+              382.03499502049743,
+              -1783.1727038010472,
+              -883.0433272785073,
+              -192.11119767908673,
+              -91.68503586189208,
+              2833.252479049186,
+              -354.52549923224876,
+              191.18241846876498,
+              632.0064520175184,
+              368.91528510764294,
+              -234.54086242050494,
+              48.6001812096218,
+              -0.7420581414594384,
+              -103.54751917964336,
+              -30.707740234717033,
+              0.3491918303618014,
+              -2.9735656821812086,
+              -17.431372278327213,
+              0.9477470197903841,
+              -117.32670215633806,
+              -35.713518571758485,
+              -0.31460972726631325,
+              -3.4410200813742136
+            ],
+            "equation_error_abs_max": 9.094947017729282e-13,
+            "contact_count": 2,
+            "largest_contact_normal_forces": [
+              {
+                "geoms": [
+                  "left_foot_sole",
+                  "right_foot_sole"
+                ],
+                "distance_m": -0.07346659270161976,
+                "normal_force_n": 4331.231410226599,
+                "tangential_force_norm_n": 1007.9093426686833
+              },
+              {
+                "geoms": [
+                  "floor",
+                  "left_foot_sole"
+                ],
+                "distance_m": -0.004914476913153186,
+                "normal_force_n": 1085.7149376067023,
+                "tangential_force_norm_n": 925.2686285592126
+              }
+            ]
+          },
+          "free_joint_0_torque_peak": {
+            "sample_index": 271,
+            "qacc": [
+              28.952346801757812,
+              63.3735466003418,
+              -0.3500683009624481,
+              0.0,
+              73.87921142578125,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              -14.849976539611816,
+              4.0573296546936035,
+              -1.9741337299346924,
+              71.89893341064453,
+              -18.98813247680664,
+              14.827208518981934,
+              -60.15718460083008,
+              -22.66181755065918,
+              -55.909236907958984,
+              -9.642176628112793,
+              -322.8992004394531,
+              75.60753631591797,
+              -43.859130859375,
+              -46.48808670043945,
+              -48.6484260559082,
+              -8.65885066986084,
+              52.636878967285156,
+              1.4076300859451294,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "mass_times_qacc": [
+              1844.837361141466,
+              4937.522601704708,
+              22.270980224006465,
+              2661.592048977621,
+              101.07611136371882,
+              156.14015624031688,
+              -52.05353688375941,
+              3.274223313779866,
+              -11.488561220377083,
+              1314.217399346919,
+              -30.364007959140267,
+              -23.31847751432899,
+              896.7711982044573,
+              -33.580438327090576,
+              -56.83780220621499,
+              297.08941111976236,
+              -27.239522109983337,
+              -52.161585417110494,
+              -23.540232831398463,
+              -1.484565979851825,
+              1.2832988179870408,
+              369.6318889742539,
+              -28.848237070802277,
+              -8.036625763199718,
+              -11.302955283072913,
+              6.389141736965502,
+              -1.3968943790167676,
+              53.33809443331579,
+              0.5424415604288765,
+              -22.99335898856537,
+              -8.801759497418377,
+              0.2601346467032294,
+              -1.1912653792244194,
+              53.83154570418842,
+              0.27526193193783266,
+              54.599743667947706,
+              18.290873090683448,
+              0.34473831811375394,
+              2.120133520608169
+            ],
+            "bias": [
+              1.1634360676025968,
+              1.5342412658709952,
+              753.0431184569203,
+              0.05390388952007319,
+              0.13396530206356055,
+              -5.234586051645671,
+              -0.013922802613726134,
+              -2.7030079190811396e-14,
+              0.27930381654408415,
+              -0.8285520572888562,
+              0.17835933776634866,
+              -7.27094837697571,
+              -0.8780131701245721,
+              0.15305009097172825,
+              -7.828598262590542,
+              -3.397583395919515,
+              0.4453602100347084,
+              -4.276617601929814,
+              -3.1411353964376088,
+              -0.04578704698397573,
+              0.5754420774026985,
+              3.5428383867499917,
+              -0.3942779197643371,
+              -3.796105265379017,
+              -3.498786909417807,
+              0.041140797467273865,
+              0.7313791599018968,
+              6.878948476641852,
+              0.048964759582578066,
+              0.05092700042934539,
+              -0.013361769530330136,
+              0.019939975075454544,
+              0.021586765874042832,
+              -6.878948476641851,
+              -0.048964759582579176,
+              0.050927000429346725,
+              -0.013361769530329803,
+              -0.019939975075454364,
+              0.021586765874042776
+            ],
+            "passive": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              -0.0,
+              -0.0,
+              -0.0,
+              0.130167068913579,
+              1.487557366490364,
+              0.3728928866330534,
+              0.8118379530496895,
+              -1.2028670728905126,
+              -2.0468511916697025,
+              -0.5635814070701599,
+              -0.5690786838531494,
+              -0.8604881167411804,
+              3.550453782081604,
+              -0.5607093125581741,
+              0.7419843971729279,
+              -0.10660163313150406,
+              -0.11193408071994781,
+              -2.8209116458892822,
+              9.370915293693542,
+              -3.4565502405166626,
+              0.5596445649862289,
+              -18.75,
+              -0.0,
+              -0.0,
+              -0.0,
+              0.0,
+              0.0,
+              18.75,
+              -0.0,
+              -0.0,
+              -0.0,
+              0.0,
+              0.0
+            ],
+            "constraint": [
+              274.9205922943155,
+              -1888.9236858204495,
+              2318.3228285944056,
+              -2727.0515371584697,
+              -2.79211359511505,
+              1012.7379836483204,
+              0.0,
+              0.0,
+              0.0,
+              -2117.887079670254,
+              -6.599674757411886,
+              801.8495153910736,
+              -1839.0420063630963,
+              -8.854731500305336,
+              699.1324809930187,
+              3284.9284586043827,
+              -397.027297537465,
+              -335.17414433971237,
+              -196.9933710537037,
+              42.83050372502446,
+              74.85241479026315,
+              -4863.9965549209,
+              383.87923291441655,
+              964.0146587434751,
+              466.6336116904711,
+              -263.3223459431557,
+              258.409170248758,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "inverse": [
+              1571.0802049147533,
+              6827.9805287910285,
+              -1543.0087299134789,
+              5388.697490025611,
+              104.00219026089744,
+              -861.8324134596493,
+              -52.06745968637314,
+              3.274223313779839,
+              -11.209257403832998,
+              3431.14575989097,
+              -25.073531230452396,
+              -832.8118341690114,
+              2734.1233534443795,
+              -23.369789662923,
+              -761.7520302701545,
+              -2990.6730494734697,
+              370.80221432136955,
+              279.59642943741324,
+              166.761549043786,
+              -43.80014743930208,
+              -73.73565829204634,
+              5237.277883915036,
+              -413.00981382426323,
+              -973.0264781261645,
+              -490.80626917665535,
+              273.20917871810514,
+              -259.6343300328591,
+              78.96704290995764,
+              0.5914063200114545,
+              -22.942431988136022,
+              -8.815121266948708,
+              0.2800746217786839,
+              -1.1696786133503767,
+              28.20259722754657,
+              0.22629717235525348,
+              54.65067066837705,
+              18.277511321153117,
+              0.3247983430382996,
+              2.141720286482212
+            ],
+            "equation_error_abs_max": 9.094947017729282e-13,
+            "contact_count": 3,
+            "largest_contact_normal_forces": [
+              {
+                "geoms": [
+                  "left_foot_sole",
+                  "right_foot_sole"
+                ],
+                "distance_m": -0.07493929378562948,
+                "normal_force_n": 4428.581310051843,
+                "tangential_force_norm_n": 121.1112197406629
+              },
+              {
+                "geoms": [
+                  "floor",
+                  "right_foot_sole"
+                ],
+                "distance_m": -0.00464276926657245,
+                "normal_force_n": 1756.7113576226864,
+                "tangential_force_norm_n": 1412.2209497316114
+              },
+              {
+                "geoms": [
+                  "floor",
+                  "left_foot_sole"
+                ],
+                "distance_m": -0.004968591343583212,
+                "normal_force_n": 561.6114709717192,
+                "tangential_force_norm_n": 499.97911393279486
+              }
+            ]
+          }
+        },
+        "sampling": "Off-knot midpoints; analytic qacc, not averaged knot discontinuities."
+      },
+      "replays": {
+        "physics_rate": {
+          "scope": "Idealized native reference-position replay; not policy evaluation or an RL feasibility certificate.",
+          "root_assistance": "None after exact reference qpos/qvel initialization.",
+          "clip_id": 1,
+          "reference_duration_seconds": 1.108328938484192,
+          "physics_timestep_seconds": 0.005,
+          "control_hold_seconds": 0.005,
+          "target_lookahead_seconds": 0.0,
+          "control_semantics": "Direct reference joint positions; existing native kp/kv/force limits; no action scaling, residual, smoothing, or gain changes.",
+          "termination": {
+            "minimum_root_qpos_z_m": 0.4556441009044647,
+            "minimum_torso_anatomical_up": 0.25,
+            "other_conditions": "Any nonfinite state/force or MuJoCo bad-qpos/qvel/qacc warning; no optional pose termination."
+          },
+          "force_sampling": "actuator_force and solved contacts from each mj_step, before post-step kinematic refresh; saturation counts only for actuator_forcelimited=True.",
+          "actuator_names": [
+            "abdomen_x_position",
+            "abdomen_y_position",
+            "abdomen_z_position",
+            "pelvis_x_position",
+            "pelvis_y_position",
+            "pelvis_z_position",
+            "left_hip_x_position",
+            "left_hip_y_position",
+            "left_hip_z_position",
+            "left_knee_z_position",
+            "left_ankle_y_position",
+            "left_ankle_z_position",
+            "right_hip_x_position",
+            "right_hip_y_position",
+            "right_hip_z_position",
+            "right_knee_z_position",
+            "right_ankle_y_position",
+            "right_ankle_z_position"
+          ],
+          "actuator_force_limited": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "actuator_force_ranges": [
+            [
+              -180.0,
+              180.0
+            ],
+            [
+              -180.0,
+              180.0
+            ],
+            [
+              -180.0,
+              180.0
+            ],
+            [
+              -240.0,
+              240.0
+            ],
+            [
+              -240.0,
+              240.0
+            ],
+            [
+              -240.0,
+              240.0
+            ],
+            [
+              -360.0,
+              360.0
+            ],
+            [
+              -300.0,
+              300.0
+            ],
+            [
+              -360.0,
+              360.0
+            ],
+            [
+              -420.0,
+              420.0
+            ],
+            [
+              -300.0,
+              300.0
+            ],
+            [
+              -260.0,
+              260.0
+            ],
+            [
+              -360.0,
+              360.0
+            ],
+            [
+              -300.0,
+              300.0
+            ],
+            [
+              -360.0,
+              360.0
+            ],
+            [
+              -420.0,
+              420.0
+            ],
+            [
+              -300.0,
+              300.0
+            ],
+            [
+              -260.0,
+              260.0
+            ]
+          ],
+          "all_phases_completed": false,
+          "runs": [
+            {
+              "start_phase": 0.0,
+              "requested_seconds": 3.3249868154525757,
+              "simulated_seconds": 1.605,
+              "survived_cycles": 1.4481260429733804,
+              "completed_requested_horizon": false,
+              "stop_reasons": [
+                "torso_anatomical_up_below_0.25"
+              ],
+              "simulated_steps": 321,
+              "finite_metric_samples": 321,
+              "joint_position_rmse_rad": 0.1171529331707246,
+              "joint_position_max_error_rad": 0.6164773936446439,
+              "root_position_rmse_m": 0.36684753594970076,
+              "final_free_root_position_error_xyz_m": [
+                1.5859391020678604,
+                -0.18451946120289345,
+                -0.9150612313298092
+              ],
+              "minimum_root_height_m": 0.601777796074976,
+              "minimum_torso_anatomical_up": 0.23272359329855544,
+              "actuator_peak_absolute_force": [
+                54.628462829074444,
+                14.3592422890765,
+                53.50354300760435,
+                65.94575499167368,
+                17.038282187919183,
+                62.97926588152166,
+                68.37734013775912,
+                14.523829651712536,
+                59.61829935615748,
+                160.28412234760742,
+                22.453791234598526,
+                38.57541524973009,
+                61.3400265541745,
+                13.475996989090575,
+                65.25957798371103,
+                138.6108622324271,
+                22.0275604934846,
+                35.10799361078036
+              ],
+              "actuator_force_limit_sample_fraction": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "initial_geometric_contact_count": 2,
+              "active_floor_contact_sample_fraction": 0.9595015576323987,
+              "peak_total_foot_floor_normal_force_n": 1256.1940698452274,
+              "peak_total_nonfoot_floor_normal_force_n": 0.0
+            },
+            {
+              "start_phase": 0.25,
+              "requested_seconds": 3.3249868154525757,
+              "simulated_seconds": 1.445,
+              "survived_cycles": 1.3037645682844454,
+              "completed_requested_horizon": false,
+              "stop_reasons": [
+                "root_height_below_environment_threshold"
+              ],
+              "simulated_steps": 289,
+              "finite_metric_samples": 289,
+              "joint_position_rmse_rad": 0.08667036351158858,
+              "joint_position_max_error_rad": 0.47900869504460664,
+              "root_position_rmse_m": 0.37092978420456474,
+              "final_free_root_position_error_xyz_m": [
+                -1.1536613594456038,
+                -0.9478473396826509,
+                -1.0748388693703663
+              ],
+              "minimum_root_height_m": 0.44574094554052235,
+              "minimum_torso_anatomical_up": 0.33048078997148883,
+              "actuator_peak_absolute_force": [
+                38.32312894671817,
+                7.995566635540696,
+                38.25713943774002,
+                47.99290867106703,
+                6.813740682563575,
+                42.23195913991054,
+                59.49935445244581,
+                19.87106508871476,
+                56.20435764223595,
+                100.1755360476647,
+                13.84363685879164,
+                36.9656047386094,
+                33.88660379466711,
+                11.504062312272247,
+                28.26615110816473,
+                124.54226071159772,
+                16.659081380760583,
+                35.13858845223591
+              ],
+              "actuator_force_limit_sample_fraction": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "initial_geometric_contact_count": 2,
+              "active_floor_contact_sample_fraction": 0.9896193771626297,
+              "peak_total_foot_floor_normal_force_n": 1496.302018317335,
+              "peak_total_nonfoot_floor_normal_force_n": 0.0
+            },
+            {
+              "start_phase": 0.5,
+              "requested_seconds": 3.3249868154525757,
+              "simulated_seconds": 1.065,
+              "survived_cycles": 0.9609060658982244,
+              "completed_requested_horizon": false,
+              "stop_reasons": [
+                "root_height_below_environment_threshold"
+              ],
+              "simulated_steps": 213,
+              "finite_metric_samples": 213,
+              "joint_position_rmse_rad": 0.08717302373882342,
+              "joint_position_max_error_rad": 0.4505631717922537,
+              "root_position_rmse_m": 0.4228483919872959,
+              "final_free_root_position_error_xyz_m": [
+                1.506581323497747,
+                -0.301804643446283,
+                -1.0690056209617338
+              ],
+              "minimum_root_height_m": 0.4479192371315278,
+              "minimum_torso_anatomical_up": 0.3524460440305722,
+              "actuator_peak_absolute_force": [
+                28.43675939215929,
+                5.4510501758925,
+                57.965331001460214,
+                34.51706115373662,
+                6.705155305925751,
+                69.57766929901027,
+                44.33701513046746,
+                16.163551543883052,
+                60.919640543715744,
+                68.84913393254891,
+                14.95428413578188,
+                36.686085803504476,
+                30.282400970011714,
+                7.568517717450439,
+                55.37124777942414,
+                117.14642466598596,
+                21.57366563841633,
+                32.23666878905802
+              ],
+              "actuator_force_limit_sample_fraction": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "initial_geometric_contact_count": 3,
+              "active_floor_contact_sample_fraction": 0.9389671361502347,
+              "peak_total_foot_floor_normal_force_n": 1142.3460908928585,
+              "peak_total_nonfoot_floor_normal_force_n": 0.0
+            },
+            {
+              "start_phase": 0.75,
+              "requested_seconds": 3.3249868154525757,
+              "simulated_seconds": 2.195,
+              "survived_cycles": 1.9804589808888287,
+              "completed_requested_horizon": false,
+              "stop_reasons": [
+                "torso_anatomical_up_below_0.25"
+              ],
+              "simulated_steps": 439,
+              "finite_metric_samples": 439,
+              "joint_position_rmse_rad": 0.10440573185016964,
+              "joint_position_max_error_rad": 0.5962348018060373,
+              "root_position_rmse_m": 0.27175696797229587,
+              "final_free_root_position_error_xyz_m": [
+                0.41124165568682425,
+                1.250012821071888,
+                -0.9286185594595695
+              ],
+              "minimum_root_height_m": 0.5845917371712899,
+              "minimum_torso_anatomical_up": 0.24124455096768938,
+              "actuator_peak_absolute_force": [
+                55.38659588709336,
+                12.315088651128129,
+                75.0312337561525,
+                55.64530783934628,
+                12.5568599074509,
+                81.88428842265311,
+                54.003142018027944,
+                14.674474119611466,
+                96.83386125830253,
+                147.68861065679556,
+                24.87940679193728,
+                37.4097153235209,
+                69.12276927107214,
+                12.634754563452239,
+                59.109135702735585,
+                155.02104846956968,
+                20.948577468832625,
+                40.39599180933132
+              ],
+              "actuator_force_limit_sample_fraction": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "initial_geometric_contact_count": 2,
+              "active_floor_contact_sample_fraction": 0.9635535307517085,
+              "peak_total_foot_floor_normal_force_n": 2218.206941571648,
+              "peak_total_nonfoot_floor_normal_force_n": 0.0
+            }
+          ],
+          "limitations": [
+            "Native CPU physics, not MJX/Warp backend equivalence.",
+            "Open-loop position replay lacks learned feedback, velocity feed-forward, and balance corrections.",
+            "Actuator saturation does not include joint aggregate actuatorfrcrange or unmodeled hardware limits.",
+            "Failure is evidence against this controller/reference pairing, not proof no policy can walk."
+          ]
+        },
+        "control_rate_current": {
+          "scope": "Idealized native reference-position replay; not policy evaluation or an RL feasibility certificate.",
+          "root_assistance": "None after exact reference qpos/qvel initialization.",
+          "clip_id": 1,
+          "reference_duration_seconds": 1.108328938484192,
+          "physics_timestep_seconds": 0.005,
+          "control_hold_seconds": 0.02,
+          "target_lookahead_seconds": 0.0,
+          "control_semantics": "Direct reference joint positions; existing native kp/kv/force limits; no action scaling, residual, smoothing, or gain changes.",
+          "termination": {
+            "minimum_root_qpos_z_m": 0.4556441009044647,
+            "minimum_torso_anatomical_up": 0.25,
+            "other_conditions": "Any nonfinite state/force or MuJoCo bad-qpos/qvel/qacc warning; no optional pose termination."
+          },
+          "force_sampling": "actuator_force and solved contacts from each mj_step, before post-step kinematic refresh; saturation counts only for actuator_forcelimited=True.",
+          "actuator_names": [
+            "abdomen_x_position",
+            "abdomen_y_position",
+            "abdomen_z_position",
+            "pelvis_x_position",
+            "pelvis_y_position",
+            "pelvis_z_position",
+            "left_hip_x_position",
+            "left_hip_y_position",
+            "left_hip_z_position",
+            "left_knee_z_position",
+            "left_ankle_y_position",
+            "left_ankle_z_position",
+            "right_hip_x_position",
+            "right_hip_y_position",
+            "right_hip_z_position",
+            "right_knee_z_position",
+            "right_ankle_y_position",
+            "right_ankle_z_position"
+          ],
+          "actuator_force_limited": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "actuator_force_ranges": [
+            [
+              -180.0,
+              180.0
+            ],
+            [
+              -180.0,
+              180.0
+            ],
+            [
+              -180.0,
+              180.0
+            ],
+            [
+              -240.0,
+              240.0
+            ],
+            [
+              -240.0,
+              240.0
+            ],
+            [
+              -240.0,
+              240.0
+            ],
+            [
+              -360.0,
+              360.0
+            ],
+            [
+              -300.0,
+              300.0
+            ],
+            [
+              -360.0,
+              360.0
+            ],
+            [
+              -420.0,
+              420.0
+            ],
+            [
+              -300.0,
+              300.0
+            ],
+            [
+              -260.0,
+              260.0
+            ],
+            [
+              -360.0,
+              360.0
+            ],
+            [
+              -300.0,
+              300.0
+            ],
+            [
+              -360.0,
+              360.0
+            ],
+            [
+              -420.0,
+              420.0
+            ],
+            [
+              -300.0,
+              300.0
+            ],
+            [
+              -260.0,
+              260.0
+            ]
+          ],
+          "all_phases_completed": false,
+          "runs": [
+            {
+              "start_phase": 0.0,
+              "requested_seconds": 3.3249868154525757,
+              "simulated_seconds": 1.595,
+              "survived_cycles": 1.439103450805322,
+              "completed_requested_horizon": false,
+              "stop_reasons": [
+                "torso_anatomical_up_below_0.25"
+              ],
+              "simulated_steps": 319,
+              "finite_metric_samples": 319,
+              "joint_position_rmse_rad": 0.11852469331331228,
+              "joint_position_max_error_rad": 0.6160531154235196,
+              "root_position_rmse_m": 0.37831303124074267,
+              "final_free_root_position_error_xyz_m": [
+                1.5892821313837773,
+                -0.193305652051035,
+                -0.9892483307424441
+              ],
+              "minimum_root_height_m": 0.5274067567285642,
+              "minimum_torso_anatomical_up": 0.23083986323340808,
+              "actuator_peak_absolute_force": [
+                55.40570916234988,
+                14.642699257692753,
+                53.88106222696294,
+                65.40240540482876,
+                17.2457459261655,
+                63.49181110238236,
+                69.36122811796056,
+                14.700758333125147,
+                61.282684929946356,
+                159.36689384309278,
+                28.033416031641494,
+                35.811178545730556,
+                61.969216962436235,
+                13.737473494385938,
+                65.62303242779227,
+                149.6085189916669,
+                24.08261680154031,
+                35.54662371292668
+              ],
+              "actuator_force_limit_sample_fraction": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "initial_geometric_contact_count": 2,
+              "active_floor_contact_sample_fraction": 0.9498432601880877,
+              "peak_total_foot_floor_normal_force_n": 1280.1140749207148,
+              "peak_total_nonfoot_floor_normal_force_n": 0.0
+            },
+            {
+              "start_phase": 0.25,
+              "requested_seconds": 3.3249868154525757,
+              "simulated_seconds": 1.455,
+              "survived_cycles": 1.3127871604525039,
+              "completed_requested_horizon": false,
+              "stop_reasons": [
+                "root_height_below_environment_threshold"
+              ],
+              "simulated_steps": 291,
+              "finite_metric_samples": 291,
+              "joint_position_rmse_rad": 0.08941324410991958,
+              "joint_position_max_error_rad": 0.5318067014417764,
+              "root_position_rmse_m": 0.37216829672021534,
+              "final_free_root_position_error_xyz_m": [
+                -1.1621332668321664,
+                -0.9529534110130353,
+                -1.0793040230600877
+              ],
+              "minimum_root_height_m": 0.4411609933049637,
+              "minimum_torso_anatomical_up": 0.32530869821775427,
+              "actuator_peak_absolute_force": [
+                38.49668379336028,
+                8.062136061938585,
+                38.441158421616436,
+                48.24756696534747,
+                6.9837603979538905,
+                42.29449984886732,
+                58.203426950604694,
+                19.024621347212978,
+                56.635977872292635,
+                108.42467277702903,
+                19.31371674955244,
+                36.451216782009,
+                34.38835152340427,
+                12.186537956647545,
+                33.7060592236174,
+                138.26974237486186,
+                23.426450924126762,
+                35.71224283389853
+              ],
+              "actuator_force_limit_sample_fraction": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "initial_geometric_contact_count": 2,
+              "active_floor_contact_sample_fraction": 0.9828178694158075,
+              "peak_total_foot_floor_normal_force_n": 1613.2678697470155,
+              "peak_total_nonfoot_floor_normal_force_n": 0.0
+            },
+            {
+              "start_phase": 0.5,
+              "requested_seconds": 3.3249868154525757,
+              "simulated_seconds": 1.07,
+              "survived_cycles": 0.9654173619822537,
+              "completed_requested_horizon": false,
+              "stop_reasons": [
+                "root_height_below_environment_threshold"
+              ],
+              "simulated_steps": 214,
+              "finite_metric_samples": 214,
+              "joint_position_rmse_rad": 0.08960310774912576,
+              "joint_position_max_error_rad": 0.5072548474669648,
+              "root_position_rmse_m": 0.4225789559835423,
+              "final_free_root_position_error_xyz_m": [
+                1.5067238230064774,
+                -0.30872837031589634,
+                -1.0698509991907428
+              ],
+              "minimum_root_height_m": 0.4471502720571211,
+              "minimum_torso_anatomical_up": 0.3570276271985804,
+              "actuator_peak_absolute_force": [
+                28.24552040576378,
+                5.506135950249204,
+                56.96023804760745,
+                34.19832436809882,
+                6.271060372891284,
+                68.36817045829494,
+                44.098444348941506,
+                16.091029479656285,
+                61.91444944523325,
+                77.92114921381454,
+                21.66551683631439,
+                36.718971109694934,
+                30.06144855345621,
+                7.668241026554898,
+                54.370220506321886,
+                131.88626034141086,
+                27.62203263934417,
+                35.05228244725663
+              ],
+              "actuator_force_limit_sample_fraction": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "initial_geometric_contact_count": 3,
+              "active_floor_contact_sample_fraction": 0.9392523364485982,
+              "peak_total_foot_floor_normal_force_n": 1166.740382175436,
+              "peak_total_nonfoot_floor_normal_force_n": 0.0
+            },
+            {
+              "start_phase": 0.75,
+              "requested_seconds": 3.3249868154525757,
+              "simulated_seconds": 2.02,
+              "survived_cycles": 1.822563617947806,
+              "completed_requested_horizon": false,
+              "stop_reasons": [
+                "torso_anatomical_up_below_0.25"
+              ],
+              "simulated_steps": 404,
+              "finite_metric_samples": 404,
+              "joint_position_rmse_rad": 0.1106608130232045,
+              "joint_position_max_error_rad": 0.6504124664821916,
+              "root_position_rmse_m": 0.2799274002445921,
+              "final_free_root_position_error_xyz_m": [
+                0.1795576901324053,
+                1.372406678865821,
+                -0.93066417100794
+              ],
+              "minimum_root_height_m": 0.5899363863193305,
+              "minimum_torso_anatomical_up": 0.24294550342532664,
+              "actuator_peak_absolute_force": [
+                55.12271287316722,
+                10.649271492466042,
+                74.47359910908162,
+                55.61219635200022,
+                9.819691226945707,
+                83.32346754257792,
+                43.26903689494871,
+                12.635065105997205,
+                102.03723611985168,
+                153.05373326099047,
+                30.80573614913256,
+                37.87181328501775,
+                64.99859514839552,
+                12.476005792467923,
+                54.63110647529305,
+                167.5710553331187,
+                24.31991749421435,
+                40.64750847182917
+              ],
+              "actuator_force_limit_sample_fraction": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "initial_geometric_contact_count": 2,
+              "active_floor_contact_sample_fraction": 0.9232673267326733,
+              "peak_total_foot_floor_normal_force_n": 2147.7525377861693,
+              "peak_total_nonfoot_floor_normal_force_n": 0.0
+            }
+          ],
+          "limitations": [
+            "Native CPU physics, not MJX/Warp backend equivalence.",
+            "Open-loop position replay lacks learned feedback, velocity feed-forward, and balance corrections.",
+            "Actuator saturation does not include joint aggregate actuatorfrcrange or unmodeled hardware limits.",
+            "Failure is evidence against this controller/reference pairing, not proof no policy can walk."
+          ]
+        },
+        "control_rate_lookahead": {
+          "scope": "Idealized native reference-position replay; not policy evaluation or an RL feasibility certificate.",
+          "root_assistance": "None after exact reference qpos/qvel initialization.",
+          "clip_id": 1,
+          "reference_duration_seconds": 1.108328938484192,
+          "physics_timestep_seconds": 0.005,
+          "control_hold_seconds": 0.02,
+          "target_lookahead_seconds": 0.02,
+          "control_semantics": "Direct reference joint positions; existing native kp/kv/force limits; no action scaling, residual, smoothing, or gain changes.",
+          "termination": {
+            "minimum_root_qpos_z_m": 0.4556441009044647,
+            "minimum_torso_anatomical_up": 0.25,
+            "other_conditions": "Any nonfinite state/force or MuJoCo bad-qpos/qvel/qacc warning; no optional pose termination."
+          },
+          "force_sampling": "actuator_force and solved contacts from each mj_step, before post-step kinematic refresh; saturation counts only for actuator_forcelimited=True.",
+          "actuator_names": [
+            "abdomen_x_position",
+            "abdomen_y_position",
+            "abdomen_z_position",
+            "pelvis_x_position",
+            "pelvis_y_position",
+            "pelvis_z_position",
+            "left_hip_x_position",
+            "left_hip_y_position",
+            "left_hip_z_position",
+            "left_knee_z_position",
+            "left_ankle_y_position",
+            "left_ankle_z_position",
+            "right_hip_x_position",
+            "right_hip_y_position",
+            "right_hip_z_position",
+            "right_knee_z_position",
+            "right_ankle_y_position",
+            "right_ankle_z_position"
+          ],
+          "actuator_force_limited": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "actuator_force_ranges": [
+            [
+              -180.0,
+              180.0
+            ],
+            [
+              -180.0,
+              180.0
+            ],
+            [
+              -180.0,
+              180.0
+            ],
+            [
+              -240.0,
+              240.0
+            ],
+            [
+              -240.0,
+              240.0
+            ],
+            [
+              -240.0,
+              240.0
+            ],
+            [
+              -360.0,
+              360.0
+            ],
+            [
+              -300.0,
+              300.0
+            ],
+            [
+              -360.0,
+              360.0
+            ],
+            [
+              -420.0,
+              420.0
+            ],
+            [
+              -300.0,
+              300.0
+            ],
+            [
+              -260.0,
+              260.0
+            ],
+            [
+              -360.0,
+              360.0
+            ],
+            [
+              -300.0,
+              300.0
+            ],
+            [
+              -360.0,
+              360.0
+            ],
+            [
+              -420.0,
+              420.0
+            ],
+            [
+              -300.0,
+              300.0
+            ],
+            [
+              -260.0,
+              260.0
+            ]
+          ],
+          "all_phases_completed": false,
+          "runs": [
+            {
+              "start_phase": 0.0,
+              "requested_seconds": 3.3249868154525757,
+              "simulated_seconds": 1.71,
+              "survived_cycles": 1.5428632607379942,
+              "completed_requested_horizon": false,
+              "stop_reasons": [
+                "torso_anatomical_up_below_0.25"
+              ],
+              "simulated_steps": 342,
+              "finite_metric_samples": 342,
+              "joint_position_rmse_rad": 0.11268572439736764,
+              "joint_position_max_error_rad": 0.6077787248400197,
+              "root_position_rmse_m": 0.35582763697597425,
+              "final_free_root_position_error_xyz_m": [
+                1.5533209435086028,
+                -0.32995772716850624,
+                -0.7695470002427526
+              ],
+              "minimum_root_height_m": 0.7511372420057826,
+              "minimum_torso_anatomical_up": 0.24526329491578447,
+              "actuator_peak_absolute_force": [
+                55.46049114558114,
+                14.032789771629979,
+                52.63769763341529,
+                65.56661290824503,
+                16.617093164663686,
+                61.32278054908421,
+                65.73002540840169,
+                20.749920781030763,
+                59.20892061280614,
+                183.33436086103927,
+                24.283938581037262,
+                37.58949221406547,
+                61.8711250233745,
+                13.840809395005973,
+                63.842129406053544,
+                159.37875139209604,
+                26.324865373270598,
+                35.30789164619669
+              ],
+              "actuator_force_limit_sample_fraction": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "initial_geometric_contact_count": 2,
+              "active_floor_contact_sample_fraction": 0.9210526315789473,
+              "peak_total_foot_floor_normal_force_n": 1253.1014392437287,
+              "peak_total_nonfoot_floor_normal_force_n": 0.0
+            },
+            {
+              "start_phase": 0.25,
+              "requested_seconds": 3.3249868154525757,
+              "simulated_seconds": 1.43,
+              "survived_cycles": 1.2902306800323575,
+              "completed_requested_horizon": false,
+              "stop_reasons": [
+                "root_height_below_environment_threshold"
+              ],
+              "simulated_steps": 286,
+              "finite_metric_samples": 286,
+              "joint_position_rmse_rad": 0.08292404526868256,
+              "joint_position_max_error_rad": 0.38906396815144584,
+              "root_position_rmse_m": 0.3721486488361292,
+              "final_free_root_position_error_xyz_m": [
+                -1.1365511024117179,
+                -0.9561912791702569,
+                -1.0835834173388283
+              ],
+              "minimum_root_height_m": 0.43707126100589816,
+              "minimum_torso_anatomical_up": 0.3168881224771428,
+              "actuator_peak_absolute_force": [
+                37.59073843603227,
+                7.747036790240733,
+                38.836406647529635,
+                47.23767584416656,
+                7.221474380075196,
+                42.63001465011878,
+                60.72505265833528,
+                16.376008176195697,
+                56.727591648558985,
+                106.17596669451811,
+                19.246930140121236,
+                37.062755924476356,
+                33.961170922824515,
+                10.995104829323065,
+                35.49538414365389,
+                139.80066428985015,
+                23.65735343111072,
+                36.34714404510616
+              ],
+              "actuator_force_limit_sample_fraction": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "initial_geometric_contact_count": 2,
+              "active_floor_contact_sample_fraction": 0.9825174825174825,
+              "peak_total_foot_floor_normal_force_n": 1321.761426077329,
+              "peak_total_nonfoot_floor_normal_force_n": 0.0
+            },
+            {
+              "start_phase": 0.5,
+              "requested_seconds": 3.3249868154525757,
+              "simulated_seconds": 1.045,
+              "survived_cycles": 0.9428608815621075,
+              "completed_requested_horizon": false,
+              "stop_reasons": [
+                "root_height_below_environment_threshold"
+              ],
+              "simulated_steps": 209,
+              "finite_metric_samples": 209,
+              "joint_position_rmse_rad": 0.08425958437324818,
+              "joint_position_max_error_rad": 0.35143773896869746,
+              "root_position_rmse_m": 0.42195819433179754,
+              "final_free_root_position_error_xyz_m": [
+                1.4896663963428156,
+                -0.3085409759412393,
+                -1.069342036439101
+              ],
+              "minimum_root_height_m": 0.4473905370701152,
+              "minimum_torso_anatomical_up": 0.35585070260357476,
+              "actuator_peak_absolute_force": [
+                27.67101469208104,
+                5.692081664644374,
+                58.52960908410817,
+                33.640120290546875,
+                6.4733971056639685,
+                70.50264873290479,
+                44.808044019168356,
+                16.136799760064232,
+                62.911338607988135,
+                76.58979731746308,
+                21.831758274474282,
+                37.03536490851668,
+                32.25842222729962,
+                7.7249945358725185,
+                55.64050666104907,
+                130.59835765703133,
+                27.793825933256628,
+                30.882392689623643
+              ],
+              "actuator_force_limit_sample_fraction": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "initial_geometric_contact_count": 3,
+              "active_floor_contact_sample_fraction": 0.9425837320574163,
+              "peak_total_foot_floor_normal_force_n": 1203.7936253621504,
+              "peak_total_nonfoot_floor_normal_force_n": 0.0
+            },
+            {
+              "start_phase": 0.75,
+              "requested_seconds": 3.3249868154525757,
+              "simulated_seconds": 2.25,
+              "survived_cycles": 2.0300832378131504,
+              "completed_requested_horizon": false,
+              "stop_reasons": [
+                "torso_anatomical_up_below_0.25"
+              ],
+              "simulated_steps": 450,
+              "finite_metric_samples": 450,
+              "joint_position_rmse_rad": 0.10148516056667711,
+              "joint_position_max_error_rad": 0.49663323801749715,
+              "root_position_rmse_m": 0.2344550038691324,
+              "final_free_root_position_error_xyz_m": [
+                0.7822376955343155,
+                0.8897559524138756,
+                -0.7145122628003199
+              ],
+              "minimum_root_height_m": 0.7959023375719946,
+              "minimum_torso_anatomical_up": 0.23856529644397834,
+              "actuator_peak_absolute_force": [
+                55.579397022224384,
+                13.756410908853065,
+                73.17535931327978,
+                56.36181592754876,
+                14.6395011183056,
+                82.61407222573659,
+                75.4417182226928,
+                17.16525829632602,
+                89.46173054663706,
+                145.1012659437934,
+                32.038400524606516,
+                37.37546263627885,
+                75.06361759404078,
+                16.45108900945872,
+                61.508758431467456,
+                165.2846813392478,
+                22.041306366787587,
+                35.67152972327685
+              ],
+              "actuator_force_limit_sample_fraction": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "initial_geometric_contact_count": 2,
+              "active_floor_contact_sample_fraction": 0.9911111111111112,
+              "peak_total_foot_floor_normal_force_n": 2174.9393007766175,
+              "peak_total_nonfoot_floor_normal_force_n": 0.0
+            }
+          ],
+          "limitations": [
+            "Native CPU physics, not MJX/Warp backend equivalence.",
+            "Open-loop position replay lacks learned feedback, velocity feed-forward, and balance corrections.",
+            "Actuator saturation does not include joint aggregate actuatorfrcrange or unmodeled hardware limits.",
+            "Failure is evidence against this controller/reference pairing, not proof no policy can walk."
+          ]
+        }
+      }
+    }
+  },
+  "limitations": [
+    "Height labels are not true stance; 5mm preload is intentional.",
+    "Center lock and material contact-point velocity are different quantities.",
+    "Changing lock/XY settings can change the whole retargeting pipeline.",
+    "Inverse dynamics uses exact accelerations and the model's soft contacts; it does not optimize contact-force allocation.",
+    "Open-loop replay is not proof an RL policy cannot learn."
+  ]
+}

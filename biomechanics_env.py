@@ -243,17 +243,29 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             config = default_biomechanics_env_config()
         super().__init__(config, config_overrides)
         physics_version = self._config.get("recovery_physics_version", "legacy")
-        if physics_version not in {"legacy", "consistent_v1", "consistent_v2"}:
+        if physics_version not in {
+            "legacy",
+            "consistent_v1",
+            "consistent_v2",
+            "consistent_v3",
+        }:
             raise ValueError(
-                "recovery_physics_version must be legacy, consistent_v1 or consistent_v2."
+                "recovery_physics_version must be legacy, consistent_v1, "
+                "consistent_v2 or consistent_v3."
             )
         self._consistent_physics = physics_version != "legacy"
-        self._continuous_reference = physics_version == "consistent_v2"
+        self._continuous_reference = physics_version in {
+            "consistent_v2",
+            "consistent_v3",
+        }
+        self._framewise_foot_heights = physics_version == "consistent_v3"
         loop_closure = self._config.get("reference_loop_closure", "strict")
         if loop_closure not in {"strict", "bounded"}:
             raise ValueError("reference_loop_closure must be strict or bounded.")
         if loop_closure != "strict" and not self._continuous_reference:
-            raise ValueError("Bounded loop closure requires consistent_v2.")
+            raise ValueError(
+                "Bounded loop closure requires consistent_v2 or consistent_v3."
+            )
         motion_speed = float(self._config.get("reference_motion_speed_scale", 1.0))
         if not np.isfinite(motion_speed) or motion_speed <= 0.0:
             raise ValueError(
@@ -261,7 +273,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             )
         if not self._consistent_physics and motion_speed != 1.0:
             raise ValueError(
-                "reference_motion_speed_scale requires consistent_v1 or consistent_v2."
+                "reference_motion_speed_scale requires consistent_v1, "
+                "consistent_v2 or consistent_v3."
             )
         configured_xml_path = self._config.get("xml_path", None)
         if configured_xml_path:
@@ -1281,7 +1294,12 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         ik_target_names: tuple[str, ...],
         frame_counts: np.ndarray,
     ) -> np.ndarray:
-        """Shift SMPL foot marker Z so each frame has a stance contact target."""
+        """Normalize foot-target heights, preserving pre-v3 indexing semantics.
+
+        V3 applies one common vertical shift to both feet in each valid frame.
+        Historical versions instead shift each foot by its whole-clip minimum;
+        retaining that behavior keeps their processed references reproducible.
+        """
         foot_indices = [
             index
             for index, marker_name in enumerate(ik_target_names)
@@ -1299,11 +1317,19 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             frame_count = int(frame_counts[clip_id])
             if frame_count <= 0:
                 continue
-            foot_z = normalized[clip_id, :frame_count, foot_indices, 2]
-            per_frame_offset = stance_site_height - np.min(foot_z, axis=1)
-            normalized[clip_id, :frame_count, foot_indices, 2] += (
-                per_frame_offset[:, None]
-            )
+            if getattr(self, "_framewise_foot_heights", False):
+                # Slice the clip first: mixed advanced indexing on the full
+                # array moves the foot dimension ahead of the frame dimension.
+                clip_targets = normalized[clip_id, :frame_count]
+                foot_z = clip_targets[:, foot_indices, 2]
+                per_frame_offset = stance_site_height - np.min(foot_z, axis=1)
+                clip_targets[:, foot_indices, 2] += per_frame_offset[:, None]
+            else:
+                foot_z = normalized[clip_id, :frame_count, foot_indices, 2]
+                per_frame_offset = stance_site_height - np.min(foot_z, axis=1)
+                normalized[clip_id, :frame_count, foot_indices, 2] += (
+                    per_frame_offset[:, None]
+                )
             normalized[clip_id, frame_count:] = normalized[clip_id, frame_count - 1]
         return normalized
 

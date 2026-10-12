@@ -13,6 +13,33 @@ from config import EnvConfig, default_biomechanics_env_config
 
 
 class SavedConfigTests(unittest.TestCase):
+    def test_v3_normalization_version_round_trip_and_forwarding(self) -> None:
+        original = EnvConfig(
+            recovery_physics_version="consistent_v3", reference_loop_closure="bounded"
+        )
+        restored = evaluate.restore_saved_env_config({"env": asdict(original)})
+        self.assertEqual(restored, original)
+        for factory in (evaluate, train):
+            with patch.object(factory, "BiomechanicsJoystickEnv") as constructor:
+                factory.make_environment(restored)
+            forwarded = constructor.call_args.kwargs["config_overrides"]
+            self.assertEqual(forwarded["recovery_physics_version"], "consistent_v3")
+            self.assertEqual(forwarded["reference_loop_closure"], "bounded")
+
+    def test_resume_refuses_v2_to_v3_retarget_change(self) -> None:
+        with TemporaryDirectory() as directory:
+            run_dir = Path(directory)
+            checkpoint = run_dir / "checkpoints" / "000000000001"
+            checkpoint.mkdir(parents=True)
+            (run_dir / "config.json").write_text(
+                json.dumps({"env": {"recovery_physics_version": "consistent_v2"}}),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "consistent_v2.*consistent_v3"):
+                train.validate_resume_physics_version(
+                    checkpoint, EnvConfig(recovery_physics_version="consistent_v3")
+                )
+
     def test_resume_rejects_implicit_physics_migration(self) -> None:
         with TemporaryDirectory() as directory:
             run_dir = Path(directory)

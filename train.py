@@ -2374,7 +2374,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--recovery-physics-version",
-        choices=["legacy", "consistent_v1", "consistent_v2"],
+        choices=["legacy", "consistent_v1", "consistent_v2", "consistent_v3"],
         default=EnvConfig.recovery_physics_version,
         help="Opt into corrected measurements and reference timing for new runs.",
     )
@@ -2382,13 +2382,13 @@ def main() -> None:
         "--reference-motion-speed-scale",
         type=float,
         default=EnvConfig.reference_motion_speed_scale,
-        help="Positive playback speed multiplier; requires consistent_v1 or consistent_v2.",
+        help="Positive playback speed multiplier; requires consistent_v1, v2 or v3.",
     )
     parser.add_argument(
         "--reference-loop-closure",
         choices=["strict", "bounded"],
         default=EnvConfig.reference_loop_closure,
-        help="v2 loop preparation: reject mismatched endpoints, or explicitly repair small gaps.",
+        help="v2/v3: reject mismatched loop endpoints, or explicitly repair small gaps.",
     )
     parser.add_argument(
         "--reference-loop-mode",
