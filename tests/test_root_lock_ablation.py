@@ -9,6 +9,7 @@ import numpy as np
 
 from biomechanics_env import BiomechanicsJoystickEnv
 from tools.check_root_lock_ablation import lock_with_contact_history, root_lock_ablation
+from tools.check_root_lock_transitions import trace_lock_call
 
 
 class ContactHistoryLockTests(unittest.TestCase):
@@ -67,6 +68,29 @@ class ContactHistoryLockTests(unittest.TestCase):
             self.env, self.joints, self.roots, self.quaternions, 4
         )
         self.assertAlmostEqual(float(legacy[2, 0] - legacy[1, 0]), 0.2, places=6)
+        trace = trace_lock_call(
+            self.env,
+            self.joints,
+            self.roots,
+            self.quaternions,
+            4,
+            locked,
+            0.1,
+            contact_history=True,
+        )
+        self.assertTrue(trace["rows"][2]["selected_foot_previously_in_contact"])
+        self.assertLess(trace["max_stationary_center_recurrence_error_m_s"], 1e-6)
+
+    def test_explicit_lock_option_dispatches_to_contact_history(self) -> None:
+        corrected = BiomechanicsJoystickEnv._lock_clip_root_xy_to_stance_feet(
+            self.env,
+            self.joints,
+            self.roots,
+            self.quaternions,
+            4,
+            contact_history=True,
+        )
+        np.testing.assert_allclose(corrected[:, 0], [0, -0.02, -0.04, -0.06], atol=1e-7)
 
     def test_landing_without_overlap_and_flight_preserve_input_displacement(
         self,

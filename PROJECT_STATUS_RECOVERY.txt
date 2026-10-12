@@ -3,6 +3,12 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- Phase 7B implements consistent_v6: retain an incoming foot's prior world
+  anchor during final root locking when it was already in contact.
+  Initial alignment, IK poses, orientations and root Z are bit-identical to v5
+  on the selected cycle. Historical locking body and v5 digest are preserved.
+  All 184 tests pass; CLI/config/migration and contact-threshold cases covered.
+  No training preset promoted. See PROJECT_RECOVERY_PHASE7B_2026-10-12.md.
 - Phase 7A: four-condition diagnostic confirms a faulty support-handoff rule.
   Incoming support already had a world-space anchor, but the old rule discarded
   it for one interval. Reusing it drops peak root acceleration 684.615 ->

@@ -13,11 +13,11 @@ from typing import Any, Iterator
 from unittest.mock import patch
 
 import jax
-import mujoco
 import numpy as np
 
 from biomechanics_env import BiomechanicsJoystickEnv
 from config import PROJECT_ROOT, EnvConfig
+from reference_root import lock_with_contact_history
 from tools.check_recovery_reference import reference_digest
 from tools.check_reference_collisions import inspect_collision_geometry
 from tools.check_reference_contacts import inspect_contacts, sample_reference_states
@@ -25,54 +25,6 @@ from tools.check_reference_curves import inspect_consistency
 from tools.check_retarget_stages import capture_retarget_stages
 from tools.recovery_dynamics import inspect_dynamics
 from tools.recovery_replay import replay_reference
-
-
-def lock_with_contact_history(
-    env: BiomechanicsJoystickEnv,
-    joints: np.ndarray,
-    roots: np.ndarray,
-    quaternions: np.ndarray,
-    count: int,
-) -> np.ndarray:
-    """Anchor incoming support to its previous position when already in contact.
-
-    A sole which was below the height threshold in both frames has a previous
-    world position even if another sole was selected as support. Reuse it at a
-    handoff instead of inheriting an unrelated input-root increment. Genuine
-    landings and flight keep the original input displacement. This constrains
-    foot centers only; it is not a material-point no-slip or dynamics guarantee.
-    """
-    locked = np.asarray(roots, dtype=np.float32).copy()
-    if count <= 1:
-        return locked
-    data = mujoco.MjData(env._mj_model)
-    feet = np.asarray(env._foot_geom_ids_np, dtype=int)
-    threshold = float(env._config.get("reference_foot_lock_height", 0.035))
-    active: int | None = None
-    previous_contact = np.zeros(len(feet), dtype=bool)
-    previous_local = np.zeros((len(feet), 2))
-    for frame in range(count):
-        data.qpos[:] = env._init_q_np
-        data.qpos[:3] = roots[frame]
-        data.qpos[3:7] = quaternions[frame]
-        data.qpos[env._actuator_qpos_indices_np] = joints[frame]
-        mujoco.mj_forward(env._mj_model, data)
-        heights = np.array([env._geom_min_z(data, int(foot)) for foot in feet])
-        contact = heights <= threshold
-        local = data.geom_xpos[feet, :2] - roots[frame, :2]
-        if not np.any(contact):
-            active = None
-        elif active is None or not contact[active]:
-            active = int(np.argmin(np.where(contact, heights, np.inf)))
-        if frame:
-            displacement = roots[frame, :2] - roots[frame - 1, :2]
-            if active is not None and previous_contact[active]:
-                displacement = previous_local[active] - local[active]
-            locked[frame, :2] = locked[frame - 1, :2] + displacement
-        previous_contact = contact
-        previous_local = local.copy()
-    locked[count:] = locked[count - 1]
-    return locked
 
 
 @contextmanager
@@ -95,7 +47,7 @@ def root_lock_ablation(
         finally:
             state["active"] = -1
 
-    def lock(env, joints, roots, quaternions, count):
+    def lock(env, joints, roots, quaternions, count, **kwargs):
         state = states.get(id(env))
         if state is None or state["active"] not in (0, 1):
             raise ValueError("Root lock called outside the observed alignment pass.")
@@ -103,7 +55,7 @@ def root_lock_ablation(
             return np.asarray(roots, dtype=np.float32).copy()
         if state["active"] == 1 and handoff:
             return lock_with_contact_history(env, joints, roots, quaternions, count)
-        return original_lock(env, joints, roots, quaternions, count)
+        return original_lock(env, joints, roots, quaternions, count, **kwargs)
 
     with (
         patch.object(
@@ -201,6 +153,7 @@ def main() -> None:
         "biomechanics_env.py",
         "bvh_reference.py",
         "reference_ik.py",
+        "reference_root.py",
         "reference_interpolation.py",
         "tools/check_root_lock_ablation.py",
         "tools/check_retarget_stages.py",
@@ -231,7 +184,8 @@ def main() -> None:
             "Support labels are height proxies; foot centers can rotate and slide.",
             "Exact inverse dynamics does not optimize contact forces.",
             "Native open-loop replay has no learned balance feedback.",
-            "Same v5 config with overrides is diagnostic only; never resume a policy with it.",
+            "Same v5 config with overrides is diagnostic only; "
+            "never resume a policy with it.",
         ],
         "variants": {},
     }

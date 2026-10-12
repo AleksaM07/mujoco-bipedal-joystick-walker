@@ -264,7 +264,13 @@ def main() -> None:
     )
     parser.add_argument(
         "--recovery-physics-version",
-        choices=("consistent_v2", "consistent_v3", "consistent_v4", "consistent_v5"),
+        choices=(
+            "consistent_v2",
+            "consistent_v3",
+            "consistent_v4",
+            "consistent_v5",
+            "consistent_v6",
+        ),
         default="consistent_v2",
     )
     parser.add_argument(
@@ -318,6 +324,7 @@ def main() -> None:
                 "bvh_reference.py",
                 "reference_interpolation.py",
                 "reference_ik.py",
+                "reference_root.py",
                 "tools/check_reference_contacts.py",
                 "tools/check_reference_curves.py",
             )

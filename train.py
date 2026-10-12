@@ -2387,10 +2387,10 @@ def main() -> None:
         "--recovery-physics-version",
         choices=[
             "legacy", "consistent_v1", "consistent_v2", "consistent_v3",
-            "consistent_v4", "consistent_v5",
+            "consistent_v4", "consistent_v5", "consistent_v6",
         ],
         default=EnvConfig.recovery_physics_version,
-        help="Opt into recovery fixes; v5 additionally warms cyclic IK for new runs.",
+        help="Opt into recovery fixes; v6 also preserves support-handoff anchors.",
     )
     parser.add_argument(
         "--reference-motion-speed-scale",

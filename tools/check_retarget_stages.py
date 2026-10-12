@@ -86,9 +86,9 @@ def capture_retarget_stages(
         )
         return result
 
-    def aligned(env, joints, roots, quaternions, *args):
+    def aligned(env, joints, roots, quaternions, *args, **kwargs):
         result = originals["_align_reference_roots_to_sim_floor"](
-            env, joints, roots, quaternions, *args
+            env, joints, roots, quaternions, *args, **kwargs
         )
         previous = stages[-1]
         shifted_targets = (
@@ -123,9 +123,9 @@ def capture_retarget_stages(
         )
         return result
 
-    def locked(env, joints, roots, quaternions, count):
+    def locked(env, joints, roots, quaternions, count, **kwargs):
         result = originals["_lock_clip_root_xy_to_stance_feet"](
-            env, joints, roots, quaternions, count
+            env, joints, roots, quaternions, count, **kwargs
         )
         records = metadata.setdefault("root_lock_passes", [])
         clip = len(records) % len(metadata["counts"])
@@ -133,6 +133,7 @@ def capture_retarget_stages(
         records.append(
             {
                 "pass_index": len(records) // len(metadata["counts"]),
+                "requested_contact_history": bool(kwargs.get("contact_history", False)),
                 "runtime_clip_id": clip,
                 "source_clip_id": int(metadata["source_clip_ids"][clip]),
                 "before": inspect_root_node_motion(roots[:count], interval),
@@ -327,7 +328,13 @@ def main() -> None:
     parser.add_argument(
         "--version",
         default="consistent_v3",
-        choices=["consistent_v2", "consistent_v3", "consistent_v4", "consistent_v5"],
+        choices=[
+            "consistent_v2",
+            "consistent_v3",
+            "consistent_v4",
+            "consistent_v5",
+            "consistent_v6",
+        ],
     )
     parser.add_argument(
         "--loop-mode",
@@ -448,6 +455,7 @@ def main() -> None:
                 "bvh_reference.py",
                 "reference_interpolation.py",
                 "reference_ik.py",
+                "reference_root.py",
                 "tools/check_retarget_stages.py",
             )
         },

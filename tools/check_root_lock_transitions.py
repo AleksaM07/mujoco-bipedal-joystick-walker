@@ -28,6 +28,7 @@ def trace_lock_call(
     count: int,
     locked: np.ndarray,
     interval: float,
+    contact_history: bool = False,
 ) -> dict[str, Any]:
     """Reconstruct support choices from geometry without reimplementing root updates.
 
@@ -44,13 +45,16 @@ def trace_lock_call(
     rows = []
     active: int | None = None
     local_feet = []
+    previous_contact = np.zeros(len(feet), dtype=bool)
     for frame in range(count):
         data.qpos[:] = env._init_q_np
         data.qpos[:3] = roots[frame]
         data.qpos[3:7] = quaternions[frame]
         data.qpos[env._actuator_qpos_indices_np] = joints[frame]
         mujoco.mj_forward(model, data)
-        heights = np.array([env._geom_min_z(data, int(foot)) for foot in feet])
+        heights = np.array(
+            [env._geom_min_z(data, int(foot)) for foot in feet], dtype=np.float32
+        )
         contact = heights <= threshold
         previous = active
         if not np.any(contact):
@@ -71,6 +75,9 @@ def trace_lock_call(
                 if active is None
                 else model.geom(int(feet[active])).name,
                 "active_foot_index": active,
+                "selected_foot_previously_in_contact": (
+                    active is not None and bool(previous_contact[active])
+                ),
                 "foot_lowest_z_m": heights.tolist(),
                 "foot_xy_relative_to_root_m": relative.tolist(),
                 "input_root_xyz_m": roots[frame].tolist(),
@@ -82,6 +89,7 @@ def trace_lock_call(
                 ),
             }
         )
+        previous_contact = contact
     local_feet = np.asarray(local_feet)
     input_velocity = np.diff(roots[:count, :2], axis=0) / interval
     output_velocity = np.diff(locked[:count, :2], axis=0) / interval
@@ -97,7 +105,10 @@ def trace_lock_call(
         )
         if 0 < frame < count - 1:
             row["output_xy_second_difference_m_s2"] = acceleration[frame - 1].tolist()
-        if frame and row["event"] == "continue":
+        if frame and (
+            row["event"] == "continue"
+            or (contact_history and row["selected_foot_previously_in_contact"])
+        ):
             expected = (
                 -(local_feet[frame, active] - local_feet[frame - 1, active]) / interval
             )
@@ -108,6 +119,7 @@ def trace_lock_call(
     worst = int(np.argmax(np.linalg.norm(acceleration, axis=1))) + 1
     return {
         "frames": count,
+        "contact_history": contact_history,
         "interval_seconds": interval,
         "contact_height_threshold_m": threshold,
         "max_stationary_center_recurrence_error_m_s": max(
@@ -128,7 +140,9 @@ def main() -> None:
     """Save both actual locking passes of the fixed selected reference."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--version", choices=["consistent_v4", "consistent_v5"], default="consistent_v4"
+        "--version",
+        choices=["consistent_v4", "consistent_v5", "consistent_v6"],
+        default="consistent_v4",
     )
     parser.add_argument(
         "--output",
@@ -161,14 +175,19 @@ def main() -> None:
     original = BiomechanicsJoystickEnv._lock_clip_root_xy_to_stance_feet
     calls = []
 
-    def observed(env, joints, roots, quaternions, count):
+    def observed(env, joints, roots, quaternions, count, **kwargs):
         inputs = tuple(
             np.array(value, copy=True) for value in (joints, roots, quaternions)
         )
-        result = original(env, joints, roots, quaternions, count)
+        result = original(env, joints, roots, quaternions, count, **kwargs)
         calls.append(
             trace_lock_call(
-                env, *inputs, count, result, float(env._bvh_reference_frame_times[0])
+                env,
+                *inputs,
+                count,
+                result,
+                float(env._bvh_reference_frame_times[0]),
+                contact_history=bool(kwargs.get("contact_history", False)),
             )
         )
         return result
@@ -188,6 +207,7 @@ def main() -> None:
                 "biomechanics_env.py",
                 "bvh_reference.py",
                 "reference_ik.py",
+                "reference_root.py",
                 "tools/check_retarget_stages.py",
                 "tools/check_root_lock_transitions.py",
             )

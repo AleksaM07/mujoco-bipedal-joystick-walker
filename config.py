@@ -885,6 +885,7 @@ class EnvConfig:
     reference_motion_speed_scale: float = 1.0
     # v2+: bounded permits measured, limited loop pose correction.
     # v5 additionally warms cyclic IK; all versions remain explicit opt-ins.
+    # v6 preserves the incoming foot's prior anchor during final root locking.
     reference_loop_closure: str = "strict"
 
     # BVH/MimicKit-style imitation is the production default. "none" and

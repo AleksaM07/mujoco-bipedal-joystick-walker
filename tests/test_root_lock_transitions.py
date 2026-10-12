@@ -100,6 +100,53 @@ class RootLockTransitionTests(unittest.TestCase):
                 "stationary_center_recurrence_error_m_s", result["rows"][frame]
             )
 
+    def test_threshold_rounding_matches_actual_lock_support_selection(self) -> None:
+        threshold = self.env._config["reference_foot_lock_height"]
+        joints = self.joints.copy()
+        # This height is above the threshold in float64 but at it in float32.
+        # A float64 observer would falsely report a handoff to the right foot.
+        joints[1:, 1] = threshold + 1e-10
+        joints[:, 3] = 0.01
+        data = mujoco.MjData(self.model)
+        data.qpos[:] = self.env._init_q_np
+        data.qpos[self.env._actuator_qpos_indices_np] = joints[1]
+        mujoco.mj_forward(self.model, data)
+        height = self.env._geom_min_z(data, int(self.env._foot_geom_ids_np[0]))
+        self.assertGreater(height, threshold)
+        self.assertEqual(np.float32(height), np.float32(threshold))
+
+        for contact_history in (False, True):
+            with self.subTest(contact_history=contact_history):
+                locked = BiomechanicsJoystickEnv._lock_clip_root_xy_to_stance_feet(
+                    self.env,
+                    joints,
+                    self.roots,
+                    self.quaternions,
+                    3,
+                    contact_history=contact_history,
+                )
+                result = trace_lock_call(
+                    self.env,
+                    joints,
+                    self.roots,
+                    self.quaternions,
+                    3,
+                    locked,
+                    0.1,
+                    contact_history=contact_history,
+                )
+                np.testing.assert_allclose(locked[:, 0], [0, -0.02, -0.05], atol=1e-7)
+                self.assertEqual(
+                    [row["event"] for row in result["rows"]],
+                    ["initialize", "continue", "continue"],
+                )
+                self.assertTrue(
+                    all(row["active_foot"] == "left_foot" for row in result["rows"])
+                )
+                self.assertLess(
+                    result["max_stationary_center_recurrence_error_m_s"], 1e-6
+                )
+
     def test_observer_reports_inconsistent_output_without_repairing_it(self) -> None:
         modified = self.locked.copy()
         modified[1, 0] += 0.1

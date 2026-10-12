@@ -35,6 +35,7 @@ from reference_kinematics import (
     differentiate_reference_positions,
     scale_reference_frame_times,
 )
+from reference_root import lock_with_contact_history
 from smpl_reference import load_smpl_references
 
 
@@ -251,10 +252,12 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "consistent_v3",
             "consistent_v4",
             "consistent_v5",
+            "consistent_v6",
         }:
             raise ValueError(
                 "recovery_physics_version must be legacy, consistent_v1, "
-                "consistent_v2, consistent_v3, consistent_v4 or consistent_v5."
+                "consistent_v2, consistent_v3, consistent_v4, consistent_v5 "
+                "or consistent_v6."
             )
         self._consistent_physics = physics_version != "legacy"
         self._continuous_reference = physics_version in {
@@ -262,17 +265,23 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "consistent_v3",
             "consistent_v4",
             "consistent_v5",
+            "consistent_v6",
         }
         self._framewise_foot_heights = physics_version in {
             "consistent_v3",
             "consistent_v4",
             "consistent_v5",
+            "consistent_v6",
         }
         self._strict_bvh_ik_targets = physics_version in {
             "consistent_v4",
             "consistent_v5",
+            "consistent_v6",
         }
-        self._periodic_ik_warmstart = physics_version == "consistent_v5"
+        self._periodic_ik_warmstart = physics_version in {
+            "consistent_v5", "consistent_v6"
+        }
+        self._contact_history_root_lock = physics_version == "consistent_v6"
         self._reference_ik_warmstart_diagnostics = []
         loop_closure = self._config.get("reference_loop_closure", "strict")
         if loop_closure not in {"strict", "bounded"}:
@@ -280,7 +289,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         if loop_closure != "strict" and not self._continuous_reference:
             raise ValueError(
                 "Bounded loop closure requires consistent_v2, "
-                "consistent_v3, consistent_v4 or consistent_v5."
+                "consistent_v3, consistent_v4, consistent_v5 or consistent_v6."
             )
         motion_speed = float(self._config.get("reference_motion_speed_scale", 1.0))
         if not np.isfinite(motion_speed) or motion_speed <= 0.0:
@@ -290,7 +299,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         if not self._consistent_physics and motion_speed != 1.0:
             raise ValueError(
                 "reference_motion_speed_scale requires consistent_v1, "
-                "consistent_v2, consistent_v3, consistent_v4 or consistent_v5."
+                "consistent_v2, consistent_v3, consistent_v4, consistent_v5 "
+                "or consistent_v6."
             )
         configured_xml_path = self._config.get("xml_path", None)
         if configured_xml_path:
@@ -899,6 +909,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 references.frame_times,
                 references.frame_counts,
                 references.loop_modes,
+                contact_history=self._contact_history_root_lock,
             )
             sim_root_vel_targets *= velocity_scale
             root_angvel_targets *= velocity_scale
@@ -924,6 +935,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 references.frame_times,
                 references.frame_counts,
                 references.loop_modes,
+                contact_history=self._contact_history_root_lock,
             )
         if self._consistent_physics:
             # Retarget geometry at source speed, then change only its time base.
@@ -1636,6 +1648,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         frame_times: np.ndarray,
         frame_counts: np.ndarray,
         loop_modes: np.ndarray,
+        *,
+        contact_history: bool = False,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Bake reference root Z into the same floor-aligned MuJoCo space as reset.
 
@@ -1729,6 +1743,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                     aligned_root_pos[clip_id],
                     root_quat_targets[clip_id],
                     frame_count,
+                    contact_history=contact_history,
                 )
             if frame_count > 1:
                 aligned_root_vel[clip_id, :frame_count] = np.gradient(
@@ -1760,8 +1775,14 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         root_pos_targets: np.ndarray,
         root_quat_targets: np.ndarray,
         frame_count: int,
+        *,
+        contact_history: bool = False,
     ) -> np.ndarray:
         """Reduce kinematic foot skating by anchoring the lowest contact foot."""
+        if contact_history:
+            return lock_with_contact_history(
+                self, qpos_targets, root_pos_targets, root_quat_targets, frame_count
+            )
         locked_root = np.asarray(root_pos_targets, dtype=np.float32).copy()
         if frame_count <= 1:
             return locked_root

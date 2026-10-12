@@ -18,6 +18,7 @@ def make_height_environment(version: str) -> BiomechanicsJoystickEnv:
         "consistent_v3",
         "consistent_v4",
         "consistent_v5",
+        "consistent_v6",
     }
     env._standing_marker_height = Mock(return_value=0.05)
     return env
@@ -26,7 +27,7 @@ def make_height_environment(version: str) -> BiomechanicsJoystickEnv:
 class ReferenceHeightNormalizationTests(unittest.TestCase):
     """Keep old targets reproducible while correcting v3 frame/foot axes."""
 
-    def test_v4_and_v5_keep_v3_framewise_height_normalization(self) -> None:
+    def test_v4_through_v6_keep_v3_framewise_height_normalization(self) -> None:
         targets = np.zeros((1, 4, 2, 3), dtype=np.float32)
         targets[0, :, :, 2] = [[0.2, 0.3], [0.4, 0.1], [0.6, 0.5], [0.8, 0.2]]
         names = ("metatarsal_midpoint_right", "metatarsal_midpoint_left")
@@ -34,7 +35,12 @@ class ReferenceHeightNormalizationTests(unittest.TestCase):
             make_height_environment(version)._normalize_ik_foot_target_heights(
                 targets, names, np.array([4])
             )
-            for version in ("consistent_v3", "consistent_v4", "consistent_v5")
+            for version in (
+                "consistent_v3",
+                "consistent_v4",
+                "consistent_v5",
+                "consistent_v6",
+            )
         ]
         for result in outputs[1:]:
             np.testing.assert_array_equal(outputs[0], result)
@@ -134,6 +140,7 @@ class ReferenceHeightNormalizationTests(unittest.TestCase):
             "consistent_v3",
             "consistent_v4",
             "consistent_v5",
+            "consistent_v6",
         ):
             with self.subTest(version=version):
                 config = default_biomechanics_env_config()
@@ -144,6 +151,7 @@ class ReferenceHeightNormalizationTests(unittest.TestCase):
                     "consistent_v3",
                     "consistent_v4",
                     "consistent_v5",
+                    "consistent_v6",
                 }
                 if version in continuous_versions:
                     config.reference_loop_closure = "bounded"
@@ -160,13 +168,25 @@ class ReferenceHeightNormalizationTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     env._framewise_foot_heights,
-                    version in {"consistent_v3", "consistent_v4", "consistent_v5"},
+                    version
+                    in {
+                        "consistent_v3",
+                        "consistent_v4",
+                        "consistent_v5",
+                        "consistent_v6",
+                    },
                 )
                 self.assertEqual(
                     env._strict_bvh_ik_targets,
-                    version in {"consistent_v4", "consistent_v5"},
+                    version in {"consistent_v4", "consistent_v5", "consistent_v6"},
                 )
-                self.assertEqual(env._periodic_ik_warmstart, version == "consistent_v5")
+                self.assertEqual(
+                    env._periodic_ik_warmstart,
+                    version in {"consistent_v5", "consistent_v6"},
+                )
+                self.assertEqual(
+                    env._contact_history_root_lock, version == "consistent_v6"
+                )
 
     def test_unknown_version_is_rejected_before_model_loading(self) -> None:
         config = default_biomechanics_env_config()
