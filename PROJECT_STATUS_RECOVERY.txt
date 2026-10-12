@@ -3,13 +3,27 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- Phase 5A committed separately: d2e90b7 (source-cycle selection and tests).
+  Phase 5B records separate diagnostics/evidence, not additional controller fixes.
+  Explicit reference_clip_ids=[1] selects the accepted original loader
+  cycle BEFORE preprocessing; it becomes runtime clip 0 (source frames 79:213).
+  V4 WRAP numerical derivatives/seam/exact-reset pass and no sole overlap is
+  measured. None of 12 native free-root replays completes three cycles.
+  NEW RED LIGHTS: stance locking sharply changes root XY velocity, with final
+  curve root acceleration up to 1516.81 m/s^2; exact force demands remain invalid.
+  A nine-frame independent IK ablation shows pose regularization explains much
+  of the centimeter errors, but dropping it can reintroduce foot collision.
+  Production IK/lock/physics/rewards remain unchanged; no PPO or policy claim.
+  147 tests pass. See PROJECT_RECOVERY_PHASE5_2026-10-12.md for full evidence,
+  source-versus-runtime IDs, limits and reproducible Windows commands.
+  Next: periodic/contact-aware IK and root trajectory, not more PPO steps yet.
 - Phase 4: confirmed both BVH foot targets silently fell back to Hips because
   CMU names LeftToe/RightToe did not match the expected *ToeBase names.
   Opt-in consistent_v4 uses strict aliases and rejects missing source/XML markers.
   This removes measured sole overlap: 401/401 -> 0/401 pre-curve nodes;
   a separate finite CLAMP audit also has 0/1592 off-knot sole collisions.
   V3's processed reference hash is unchanged. 123 regression tests pass.
-  CURRENT RED LIGHT: the v4/auto batch rejects clip 0 at bounded WRAP closure
+  Phase-4 RED LIGHT: the full v4/auto batch rejects clip 0 at bounded WRAP closure
   (0.209577 rad > 0.2); clips 1 and 2 pass their individual numerical gate.
   Remaining IK errors are centimeters; no corrected-reference dynamics/tracker
   success or learned walking is claimed. CLAMP is NOT a repeating-gait fix.
@@ -112,11 +126,12 @@ The endpoint speed gap became larger because its old x0.25 attenuation was
 removed, not because we changed the pose geometry. Loop mode is WRAP here.
 These are sampled reference-path diagnostics, not policy rollout statistics.
 
-NEXT, IN ORDER (phase 4 updates source mapping/contact diagnosis)
+NEXT, IN ORDER (phase 5 updates cycle selection and dynamics/IK diagnosis)
 1. Numerical interpolation/loop continuity and exact-reset consistency now pass.
    Do NOT infer physical tracking success from this. See the phase-2 report.
-2. V4 removes measured source-mapping overlap; select a valid loop, resolve IK
-   residuals and audit stance/contact/slip,
+2. V4 removes measured source-mapping overlap and a valid numerical loop is
+   selected. Resolve IK residuals/collisions and root-lock trajectory roughness,
+   then audit stance/contact/slip,
    root accelerations, reachable motor targets and torque
    saturation with explicit definitions. PD replay is diagnostic, not an
    absolute theoretical prerequisite for RL.

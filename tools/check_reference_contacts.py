@@ -254,6 +254,13 @@ def main() -> None:
     )
     parser.add_argument("--clip-id", type=int, default=1)
     parser.add_argument(
+        "--reference-clip-ids",
+        nargs="+",
+        type=int,
+        help="Loader clip indices to retain before preprocessing; "
+        "--clip-id is the resulting runtime index.",
+    )
+    parser.add_argument(
         "--recovery-physics-version",
         choices=("consistent_v2", "consistent_v3", "consistent_v4"),
         default="consistent_v2",
@@ -286,6 +293,7 @@ def main() -> None:
         reference_gait="bvh",
         reference_gait_file=[str(args.reference_file)],
         reference_forced_clip_id=args.clip_id,
+        reference_clip_ids=args.reference_clip_ids,
         recovery_physics_version=args.recovery_physics_version,
         reference_loop_closure="bounded",
         deepmimic_reward_mode="pure",
@@ -305,6 +313,7 @@ def main() -> None:
             name: hashlib.sha256((PROJECT_ROOT / name).read_bytes()).hexdigest()
             for name in (
                 "biomechanics_env.py",
+                "bvh_reference.py",
                 "reference_interpolation.py",
                 "tools/check_reference_contacts.py",
                 "tools/check_reference_curves.py",
@@ -363,11 +372,17 @@ def main() -> None:
             "contacts": contact_summary,
             "processed_reference_sha256": reference_digest(env),
             "closure": env._reference_closure_diagnostics,
+            "source_clip_ids": env._bvh_reference_source_clip_ids_np.tolist(),
             "source_frame_range": [
                 int(env._bvh_reference_source_start_frames[args.clip_id]),
                 int(env._bvh_reference_source_end_frames[args.clip_id]),
             ],
         }
+        from tools.check_reference_collisions import inspect_collision_geometry
+        from tools.check_reference_curves import inspect_consistency
+
+        variant["numerical_curve_checks"] = inspect_consistency(env, args.clip_id)
+        variant["collisions"] = inspect_collision_geometry(env._mj_model, qpos, qvel)
         if not args.skip_dynamics:
             from tools.recovery_dynamics import inspect_dynamics
 

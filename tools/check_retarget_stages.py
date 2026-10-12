@@ -43,6 +43,7 @@ def capture_retarget_stages(
             "_align_reference_roots_to_sim_floor",
             "_retarget_reference_qpos_to_ik_targets",
             "_apply_reference_stability_prior",
+            "_lock_clip_root_xy_to_stance_feet",
         )
     }
 
@@ -67,6 +68,14 @@ def capture_retarget_stages(
             counts=np.array(result.frame_counts, copy=True),
             source_start_frames=np.array(result.source_start_frames, copy=True),
             source_end_frames=np.array(result.source_end_frames, copy=True),
+            source_clip_ids=np.array(
+                getattr(
+                    env,
+                    "_bvh_reference_source_clip_ids_np",
+                    np.arange(len(result.frame_counts)),
+                ),
+                copy=True,
+            ),
         )
         record(
             "raw_mapped_pose",
@@ -114,6 +123,24 @@ def capture_retarget_stages(
         )
         return result
 
+    def locked(env, joints, roots, quaternions, count):
+        result = originals["_lock_clip_root_xy_to_stance_feet"](
+            env, joints, roots, quaternions, count
+        )
+        records = metadata.setdefault("root_lock_passes", [])
+        clip = len(records) % len(metadata["counts"])
+        interval = float(env._bvh_reference_frame_times[clip])
+        records.append(
+            {
+                "pass_index": len(records) // len(metadata["counts"]),
+                "runtime_clip_id": clip,
+                "source_clip_id": int(metadata["source_clip_ids"][clip]),
+                "before": inspect_root_node_motion(roots[:count], interval),
+                "after": inspect_root_node_motion(result[:count], interval),
+            }
+        )
+        return result
+
     def prepared(*args, **kwargs):
         metadata["per_clip_curve_gates"] = []
         for clip in range(len(args[0])):
@@ -142,6 +169,7 @@ def capture_retarget_stages(
             ("_align_reference_roots_to_sim_floor", aligned),
             ("_retarget_reference_qpos_to_ik_targets", fitted),
             ("_apply_reference_stability_prior", prior),
+            ("_lock_clip_root_xy_to_stance_feet", locked),
         ):
             stack.enter_context(patch.object(BiomechanicsJoystickEnv, name, wrapper))
         stack.enter_context(
@@ -175,6 +203,34 @@ def scalar_summary(values: np.ndarray) -> dict[str, float]:
         "min": float(values.min()),
         "median": float(np.median(values)),
         "max": float(values.max()),
+    }
+
+
+def inspect_root_node_motion(positions: np.ndarray, interval: float) -> dict[str, Any]:
+    """Report nodal XY roughness, not the interpolant's exact acceleration.
+
+    Second differences expose abrupt root translations already present before
+    curve preparation. They are diagnostics, not continuous-curve derivatives.
+    """
+    positions = np.asarray(positions, dtype=float)
+    if positions.ndim != 2 or positions.shape[1] != 3 or len(positions) < 3:
+        raise ValueError("Root node audit requires at least three XYZ positions.")
+    if not np.isfinite(positions).all() or not np.isfinite(interval) or interval <= 0:
+        raise ValueError("Root positions and a positive interval must be finite.")
+    velocities = np.diff(positions[:, :2], axis=0) / interval
+    acceleration = np.diff(velocities, axis=0) / interval
+    norms = np.linalg.norm(acceleration, axis=1)
+    worst_frame = int(norms.argmax()) + 1
+    start = max(0, worst_frame - 2)
+    end = min(len(positions), worst_frame + 3)
+    return {
+        "frames": len(positions),
+        "interval_seconds": interval,
+        "xy_nodal_speed_m_s": scalar_summary(np.linalg.norm(velocities, axis=1)),
+        "xy_second_difference_m_s2": scalar_summary(norms),
+        "worst_center_frame": worst_frame,
+        "worst_window_start_frame": start,
+        "worst_window_root_xyz_m": positions[start:end].tolist(),
     }
 
 
@@ -230,6 +286,10 @@ def inspect_stage(
     return {
         "stage": stage["name"],
         "frames": count,
+        "root_node_motion": inspect_root_node_motion(
+            stage["roots"][clip_id, :count],
+            float(env._bvh_reference_frame_times[clip_id]),
+        ),
         "net_root_translation_m": (
             stage["roots"][clip_id, count - 1] - stage["roots"][clip_id, 0]
         ).tolist(),
@@ -259,6 +319,12 @@ def main() -> None:
     """Save stage evidence for the fixed v21 / CMU02_01 experiment."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--reference-clip-ids",
+        nargs="+",
+        type=int,
+        help="Loader clip indices to retain before preparation.",
+    )
+    parser.add_argument(
         "--version",
         default="consistent_v3",
         choices=["consistent_v2", "consistent_v3", "consistent_v4"],
@@ -268,6 +334,11 @@ def main() -> None:
         choices=["auto", "wrap", "clamp"],
         default="auto",
         help="CLAMP is a finite-clip diagnostic, not certification of a WRAP loop.",
+    )
+    parser.add_argument(
+        "--ik-fit",
+        action="store_true",
+        help="Run a selected-frame solver ablation without changing references.",
     )
     parser.add_argument(
         "--dense",
@@ -295,7 +366,8 @@ def main() -> None:
                 PROJECT_ROOT / "BVH_walking_animation/cmuconvert-max-01-09/02/02_01.bvh"
             )
         ],
-        reference_forced_clip_id=1,
+        reference_forced_clip_id=0 if args.reference_clip_ids is not None else 1,
+        reference_clip_ids=args.reference_clip_ids,
         deepmimic_reward_mode="pure",
         recovery_physics_version=args.version,
         reference_loop_closure="bounded",
@@ -310,6 +382,7 @@ def main() -> None:
         ]
         clip_summary = {
             "clip_id": clip,
+            "source_clip_id": int(metadata["source_clip_ids"][clip]),
             "source_start_frame": int(metadata["source_start_frames"][clip]),
             "source_end_frame": int(metadata["source_end_frames"][clip]),
             "stages": measured,
@@ -351,6 +424,7 @@ def main() -> None:
         "initialization_complete": "curve_preparation_error" not in metadata,
         "curve_preparation_error": metadata.get("curve_preparation_error"),
         "per_clip_curve_gates": metadata["per_clip_curve_gates"],
+        "root_lock_passes": metadata.get("root_lock_passes", []),
         "bvh_ik_mapping": {
             "source_file_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
             "model_file_sha256": hashlib.sha256(
@@ -388,6 +462,14 @@ def main() -> None:
         ],
         "clips": summaries,
     }
+    if args.ik_fit:
+        from tools.audit_ik_fit import inspect_ik_fit
+
+        output["ik_fit"] = inspect_ik_fit(env, metadata, stages)
+        name = "tools/audit_ik_fit.py"
+        output["source_sha256"][name] = hashlib.sha256(
+            (PROJECT_ROOT / name).read_bytes()
+        ).hexdigest()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
     print(f"Report: {args.output}", flush=True)
