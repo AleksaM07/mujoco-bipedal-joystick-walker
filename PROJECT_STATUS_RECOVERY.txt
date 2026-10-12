@@ -3,6 +3,17 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- Phase 6C comparison complete: v5 removes cyclic IK startup reversal and
+  reduces peak exact root acceleration 1516.807 -> 684.615 m/s^2, floor
+  penetration 10.511 -> 8.722 mm. It is NOT a walking improvement: all 12
+  free-root replay trials still fail; phase-zero survival gets worse.
+  Exact prescribed force-limit exceedance rises 91.17% -> 93.42% of samples.
+  Remaining acceleration peak is beside the frame-76 support switch; root X
+  velocity into frames 75/76/77 is +0.713, -0.295, +1.211 m/s at 8.333 ms.
+  A fresh v4 control exactly reproduces phase-5 geometry/dynamics/replays.
+  170 tests pass. Full comparison: PROJECT_RECOVERY_PHASE6C_2026-10-12.md.
+  Next: diagnostic separation of pre-IK locking and support handoffs, then
+  contact-aware continuous root motion. No long PPO and no promoted preset yet.
 - Phase 6B adds opt-in consistent_v5 cyclic IK startup warmup. Same kernel,
   targets, weights, limits and locking; old versions and default preserved.
   Four unique-node cycles precede the retained solve, with a 1e-6 rad

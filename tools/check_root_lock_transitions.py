@@ -125,8 +125,11 @@ def trace_lock_call(
 
 
 def main() -> None:
-    """Save both actual locking passes of the fixed selected v4 reference."""
+    """Save both actual locking passes of the fixed selected reference."""
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--version", choices=["consistent_v4", "consistent_v5"], default="consistent_v4"
+    )
     parser.add_argument(
         "--output",
         type=Path,
@@ -151,7 +154,7 @@ def main() -> None:
         ],
         reference_clip_ids=[1],
         reference_forced_clip_id=0,
-        recovery_physics_version="consistent_v4",
+        recovery_physics_version=args.version,
         reference_loop_closure="bounded",
         deepmimic_reward_mode="pure",
     )
@@ -178,11 +181,13 @@ def main() -> None:
         "scope": "Observation only; no support/IK/trajectory/controller changes.",
         "config": asdict(config),
         "reference_digest": reference_digest(env),
+        "ik_warmstart": getattr(env, "_reference_ik_warmstart_diagnostics", []),
         "source_sha256": {
             name: hashlib.sha256((PROJECT_ROOT / name).read_bytes()).hexdigest()
             for name in (
                 "biomechanics_env.py",
                 "bvh_reference.py",
+                "reference_ik.py",
                 "tools/check_retarget_stages.py",
                 "tools/check_root_lock_transitions.py",
             )

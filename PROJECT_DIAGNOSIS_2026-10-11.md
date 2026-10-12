@@ -1,5 +1,10 @@
 **Dijagnostika šest grana — 11. oktobar 2026.**
 
+> Istorijski pregled. Aktuelno stanje oporavka je u
+> [PROJECT_STATUS_RECOVERY.txt](PROJECT_STATUS_RECOVERY.txt), a najnovije kontrolisano
+> poređenje u [izveštaju faze 6C](PROJECT_RECOVERY_PHASE6C_2026-10-12.md).
+> Ispravljeno je više grešaka reference; stabilan naučen hod još nije potvrđen.
+
 Preporuka je da razvoj nastavimo iz `project_v2_refrences_only`, uz selektivno
 prenošenje popravki iz `experiment/v21-stable-baseline`. Stable grana nije za
 otpisivanje: donela je dokaz stabilnog stajanja, ispravku vremenske konzistentnosti
