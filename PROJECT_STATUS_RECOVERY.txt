@@ -3,6 +3,14 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- Phase 7A: four-condition diagnostic confirms a faulty support-handoff rule.
+  Incoming support already had a world-space anchor, but the old rule discarded
+  it for one interval. Reusing it drops peak root acceleration 684.615 ->
+  216.962 m/s^2 and peak inverse root force 57,963 -> 16,599 N, while joint
+  poses and floor penetration stay identical and peak point speeds decrease.
+  All 48 replay trials still fail; physical feasibility remains unresolved.
+  Skipping initial pre-IK locking adds no peak benefit once handoff is fixed.
+  Next: version the final-pass correction only; see PROJECT_RECOVERY_PHASE7A_2026-10-12.md.
 - Phase 6C comparison complete: v5 removes cyclic IK startup reversal and
   reduces peak exact root acceleration 1516.807 -> 684.615 m/s^2, floor
   penetration 10.511 -> 8.722 mm. It is NOT a walking improvement: all 12
