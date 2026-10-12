@@ -687,6 +687,7 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         reference_gait_file=[
             DEFAULT_BVH_REFERENCE_LIST.relative_to(PROJECT_ROOT).as_posix()
         ],
+        reference_clip_ids=None,
         reference_forced_clip_id=None,
         reference_target_observation=True,
         # REF: MIMICKIT-ACTION-BOUNDS-POS
@@ -894,6 +895,9 @@ class EnvConfig:
             DEFAULT_BVH_REFERENCE_LIST.relative_to(PROJECT_ROOT).as_posix()
         ]
     )
+    # Original loader batch IDs, selected before duration and curve processing.
+    reference_clip_ids: list[int] | None = None
+    # Runtime index after selection/filtering, not an original loader ID.
     reference_forced_clip_id: int | None = None
     reference_target_observation: bool = True
     reference_action_mode: str = "residual"

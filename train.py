@@ -1234,6 +1234,7 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         "reference_loop_closure": env_config.reference_loop_closure,
         "reference_gait": env_config.reference_gait,
         "arm_actuators": env_config.arm_actuators,
+        "reference_clip_ids": env_config.reference_clip_ids,
         "reference_forced_clip_id": env_config.reference_forced_clip_id,
         "reference_target_observation": env_config.reference_target_observation,
         "reference_action_mode": env_config.reference_action_mode,
@@ -2354,11 +2355,21 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--reference-clip-ids",
+        type=int,
+        nargs="+",
+        default=EnvConfig.reference_clip_ids,
+        help=(
+            "Select original loader batch clip IDs before duration/curve processing, "
+            "in this order. Forced clip IDs then index the selected runtime batch."
+        ),
+    )
+    parser.add_argument(
         "--reference-force-clip-id",
         type=int,
         default=None,
         help=(
-            "Force training/reset sampling to one loaded reference clip id. "
+            "Force training/reset sampling to one selected runtime clip index. "
             "Useful because one BVH file can contain multiple stride clips."
         ),
     )
@@ -2734,6 +2745,7 @@ def main() -> None:
         reference_gait=args.reference_gait,
         arm_actuators=args.arm_actuators,
         reference_gait_file=reference_gait_file,
+        reference_clip_ids=args.reference_clip_ids,
         reference_forced_clip_id=args.reference_force_clip_id,
         reference_action_mode=args.reference_action_mode,
         reference_action_center=args.reference_action_center,

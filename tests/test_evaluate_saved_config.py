@@ -13,6 +13,50 @@ from config import EnvConfig, default_biomechanics_env_config
 
 
 class SavedConfigTests(unittest.TestCase):
+    def test_training_cli_builds_ordered_loader_selection(self) -> None:
+        arguments = [
+            "train.py",
+            "--reference-clip-ids",
+            "2",
+            "0",
+            "--reference-force-clip-id",
+            "1",
+            "--reference-playback-audit",
+        ]
+        with (
+            patch("sys.argv", arguments),
+            patch.object(train, "choose_device"),
+            patch.object(train.jax.config, "update"),
+            patch.object(train, "expand_reference_gait_files", return_value=["unused"]),
+            patch.object(train, "run_reference_playback_audit") as run_audit,
+            patch("builtins.print"),
+        ):
+            train.main()
+        requested = run_audit.call_args.args[0]
+        self.assertEqual(requested.reference_clip_ids, [2, 0])
+        self.assertEqual(requested.reference_forced_clip_id, 1)
+
+    def test_selected_loader_clip_ids_round_trip_and_forwarding(self) -> None:
+        original = EnvConfig(
+            recovery_physics_version="consistent_v4",
+            reference_clip_ids=[2, 0],
+            reference_forced_clip_id=1,
+        )
+        saved = json.loads(json.dumps({"env": asdict(original)}))
+        restored = evaluate.restore_saved_env_config(saved)
+        self.assertEqual(restored, original)
+        for factory in (evaluate, train):
+            with patch.object(factory, "BiomechanicsJoystickEnv") as constructor:
+                factory.make_environment(restored)
+            forwarded = constructor.call_args.kwargs["config_overrides"]
+            self.assertEqual(forwarded["reference_clip_ids"], [2, 0])
+            self.assertEqual(forwarded["reference_forced_clip_id"], 1)
+
+    def test_old_saved_configs_do_not_select_a_clip_subset(self) -> None:
+        restored = evaluate.restore_saved_env_config({"env": {}})
+        self.assertIsNone(restored.reference_clip_ids)
+        self.assertIsNone(default_biomechanics_env_config().reference_clip_ids)
+
     def test_v4_strict_mapping_version_round_trip_and_forwarding(self) -> None:
         original = EnvConfig(
             recovery_physics_version="consistent_v4", reference_loop_closure="bounded"

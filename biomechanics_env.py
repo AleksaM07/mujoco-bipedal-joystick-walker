@@ -1042,19 +1042,57 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         self,
         references: BvhReferenceBatch,
     ) -> BvhReferenceBatch:
-        """Filter out pathological short clips from the training reference batch."""
+        """Select loader clip IDs, then apply the minimum-duration policy.
+
+        Explicit IDs preserve requested order and fail if any requested clip is
+        too short. With no selection, retain the historical all-short fallback.
+        Forced reset IDs continue to index the resulting runtime batch.
+        """
+        frame_counts = np.asarray(references.frame_counts, dtype=np.int32)
+        source_ids = np.arange(len(frame_counts), dtype=np.int32)
+        requested_ids = self._config.get("reference_clip_ids", None)
         min_motion_length = float(self._config.get("reference_min_motion_length", 0.0))
-        if min_motion_length <= 0.0:
+        if requested_ids is None and min_motion_length <= 0.0:
+            self._bvh_reference_source_clip_ids_np = source_ids
             return references
 
-        frame_counts = np.asarray(references.frame_counts, dtype=np.int32)
         motion_lengths = np.asarray(references.frame_times, dtype=np.float32) * np.maximum(
             frame_counts - 1,
             1,
         )
-        keep = motion_lengths >= min_motion_length
-        if not np.any(keep):
-            return references
+        if requested_ids is not None:
+            if not isinstance(requested_ids, (list, tuple)) or not requested_ids:
+                raise ValueError("reference_clip_ids must be a nonempty list of integers.")
+            if any(
+                isinstance(index, (bool, np.bool_))
+                or not isinstance(index, (int, np.integer))
+                for index in requested_ids
+            ):
+                raise ValueError("reference_clip_ids must contain integers, not booleans.")
+            if len(set(requested_ids)) != len(requested_ids):
+                raise ValueError("reference_clip_ids must not contain duplicate IDs.")
+            if any(index < 0 or index >= len(frame_counts) for index in requested_ids):
+                raise ValueError(
+                    "reference_clip_ids are loader batch indices; expected IDs in "
+                    f"[0, {len(frame_counts)}), got {requested_ids}."
+                )
+            keep = np.asarray(requested_ids, dtype=np.int32)
+            if min_motion_length > 0.0:
+                short_ids = keep[motion_lengths[keep] < min_motion_length]
+                if short_ids.size:
+                    raise ValueError(
+                        f"Selected reference_clip_ids {short_ids.tolist()} are shorter "
+                        f"than reference_min_motion_length={min_motion_length}; "
+                        "explicitly selected clips are not silently dropped."
+                    )
+            keep_indices = keep
+        else:
+            keep = motion_lengths >= min_motion_length
+            if not np.any(keep):
+                self._bvh_reference_source_clip_ids_np = source_ids
+                return references
+            keep_indices = np.flatnonzero(keep)
+        self._bvh_reference_source_clip_ids_np = source_ids[keep_indices].copy()
 
         weights = np.asarray(references.weights[keep], dtype=np.float32)
         weight_sum = float(weights.sum())
@@ -1063,7 +1101,6 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         else:
             weights[:] = 1.0 / float(weights.shape[0])
 
-        keep_indices = np.flatnonzero(keep)
         diagnostic_summaries = tuple(
             references.diagnostic_summaries[index]
             for index in keep_indices
