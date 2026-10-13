@@ -3,6 +3,19 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- Phase 11B measures weak reward discrimination on unchanged v6 (1,664 native
+  snapshots, 128 phases). Mean imitation: exact ~1, neutral standing 0.785682,
+  wrong quarter/half phase 0.806860/0.801513, sagittal leg swap 0.859956.
+  Either knee velocity +/-2 rad/s retains 0.999777 while changing near-floor
+  foot velocity by median ~0.98 m/s. These are instantaneous probes, not a
+  demonstrated sustained policy or proof of the cause of previous run failures.
+  Actual pure reward/termination were executed; all cases are nonterminal and
+  within joint/control position bounds. 274 tests pass, production unchanged.
+  User requests actual training next: fresh 80M v6 pure tracker with the existing
+  mean reward explicitly recorded, then a separate normalization A/B if needed.
+  Do not make more geometry audits a prerequisite. Reference physics and
+  full-body validation remain open. See phase 11B report.
+  PROJECT_RECOVERY_PHASE11B_2026-10-13.md
 - Phase 11A adds a native-snapshot audit executing the actual pure imitation
   reward and termination on frozen v6. Thirteen cases per phase include exact,
   neutral standing, frozen/stopped poses, wrong phase, sagittal leg exchange,

@@ -2,7 +2,7 @@
 
 > Istorijski pregled. Aktuelno stanje oporavka je u
 > [PROJECT_STATUS_RECOVERY.txt](PROJECT_STATUS_RECOVERY.txt), a najnovije kontrolisano
-> poređenje u [izveštaju faze 10B](PROJECT_RECOVERY_PHASE10B_2026-10-13.md).
+> poređenje u [izveštaju faze 11B](PROJECT_RECOVERY_PHASE11B_2026-10-13.md).
 > Ispravljeno je više grešaka reference; stabilan naučen hod još nije potvrđen.
 
 Preporuka je da razvoj nastavimo iz `project_v2_refrences_only`, uz selektivno
