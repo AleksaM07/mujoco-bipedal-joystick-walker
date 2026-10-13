@@ -3,6 +3,16 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- Phase 7C verifies production v6 exactly matches the measured handoff candidate.
+  Peak exact root acceleration is 216.962 m/s^2 (v5: 684.615), but all 12
+  native replay trials still fail; survival changes only 0-10 ms.
+  New dominant root acceleration is vertical near fractional frame 69.875:
+  XYZ approximately [-87.49, -28.31, +196.51] m/s^2. Largest actuator/torque
+  demand is separately near frame 113.875. At frame 70 the lowest sole swaps
+  right->left and root Z slope reverses -0.509 -> +0.423 m/s; the floor-height
+  rule creates a cusp despite the Z speed limiter. Further trajectory/contact and
+  reward audits remain; no validated walking preset or long PPO yet.
+  Full evidence and limits: PROJECT_RECOVERY_PHASE7C_2026-10-12.md.
 - Phase 7B implements consistent_v6: retain an incoming foot's prior world
   anchor during final root locking when it was already in contact.
   Initial alignment, IK poses, orientations and root Z are bit-identical to v5
