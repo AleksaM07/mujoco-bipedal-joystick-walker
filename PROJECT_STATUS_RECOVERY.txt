@@ -3,6 +3,15 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- Phase 8B completes the controlled 0/5/10 mm final-height experiment.
+  Sampled root acceleration falls 216.962 -> 160.662 / 158.264 m/s^2,
+  but all 36 native replay trials fail and exact actuator demands remain high.
+  At 10 mm both soles lift up to 0.115 mm on the midpoint grid. No candidate
+  is promoted; production remains v6. All 201 regression tests pass.
+  Next: isolate which post-IK blend group disrupts Cartesian foot motion;
+  separately audit the raw IK knee/hip roughness near frame 114. Reward
+  discrimination and a fixed feedback-tracker experiment remain outstanding.
+  Evidence and decision: PROJECT_RECOVERY_PHASE8B_2026-10-13.md.
 - Phase 8A adds a construction-only final root-height smoothing experiment.
   Epsilon 0/5/10 mm retains the original minimum height, speed limiter,
   real-geometry XY locking and curve closure; production defaults unchanged.
