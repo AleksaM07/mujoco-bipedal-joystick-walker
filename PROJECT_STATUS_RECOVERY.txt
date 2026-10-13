@@ -3,6 +3,17 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- Real training next (user-requested): scripts/train_recovery_v6_tracker.sh.
+  Fresh 80M-step v6 pure reference tracker, no joystick/ERFI/randomization,
+  existing mean-normalized reward (baseline, not claimed fixed), residual1,
+  current-frame PD target, source clip1/runtime0, v21 no-arms, bounded wrap.
+  RTX2060 memory settings: 256 train envs, 8 eval envs, batch512; existing
+  one-clip PPO lr1e-4/unroll10/minibatches4/updates2. Episode500=10 seconds,
+  41 evals/checkpoints at about 2M intervals. No resume/old checkpoint overwrite.
+  Baseline answers whether a learned feedback controller improves on open-loop;
+  low early reward is not sufficient reason to stop. Review actual motion at
+  first useful checkpoints, not only reward. Normalization A/B remains separate.
+  Launcher logs Git/source/input identity; train saves config/XML/checkpoints.
 - Phase 11B measures weak reward discrimination on unchanged v6 (1,664 native
   snapshots, 128 phases). Mean imitation: exact ~1, neutral standing 0.785682,
   wrong quarter/half phase 0.806860/0.801513, sagittal leg swap 0.859956.
