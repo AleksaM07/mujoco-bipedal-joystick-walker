@@ -3,6 +3,17 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- Phase 9B isolates two mechanisms without changing production v6.
+  Restoring torso/pelvis or hip-Y reduces right-foot frame-69 nodal XY
+  curvature 61.636 -> 38.419 / 38.126 m/s^2; ankle-Z does not. Raw IK has
+  better median marker fit but worse whole-cycle curvature peaks, so wholesale
+  prior removal is not promoted. These are frozen-geometry FK tests, not replay.
+  Loader reconstruction exactly reproduces a left-knee seed plateau at frames
+  114-129: the standing offset pushes targets above the unchanged 0-rad bound.
+  At frame 114 knee second difference is +6.21 before clipping, -346.83 after
+  clipping, -303.34 after IK. Next: isolated limit-preserving knee-offset
+  experiment, keeping prior/limits/rewards unchanged. All 222 tests pass.
+  Full evidence and scope: PROJECT_RECOVERY_PHASE9B_2026-10-13.md.
 - Phase 9A adds one-capture native FK attribution for the post-IK prior:
   restore torso/pelvis, hip-Y or ankle-Z separately on frozen geometry.
   It also reconstructs the BVH knee seed before/after original bound clipping.
