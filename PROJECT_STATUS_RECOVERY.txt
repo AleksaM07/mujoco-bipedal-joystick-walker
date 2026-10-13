@@ -1,8 +1,15 @@
-PROJECT-V2 RECOVERY - updated 2026-10-12
+PROJECT-V2 RECOVERY - updated 2026-10-13
 Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- Phase 8A adds a construction-only final root-height smoothing experiment.
+  Epsilon 0/5/10 mm retains the original minimum height, speed limiter,
+  real-geometry XY locking and curve closure; production defaults unchanged.
+  All 201 tests pass. Separate physics measurements/decision follow in 8B.
+  The frame-113.875 motor-demand peak is mainly transmitted contact wrench
+  plus coupled inertia, distinct from the frame-70 height cusp.
+  See PROJECT_RECOVERY_PHASE8A_2026-10-13.md.
 - Phase 7C verifies production v6 exactly matches the measured handoff candidate.
   Peak exact root acceleration is 216.962 m/s^2 (v5: 684.615), but all 12
   native replay trials still fail; survival changes only 0-10 ms.
