@@ -3,6 +3,12 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- Phase 9A adds one-capture native FK attribution for the post-IK prior:
+  restore torso/pelvis, hip-Y or ankle-Z separately on frozen geometry.
+  It also reconstructs the BVH knee seed before/after original bound clipping.
+  All 222 tests pass. No new prepared reference or production change;
+  results follow in phase 9B.
+  See PROJECT_RECOVERY_PHASE9A_2026-10-13.md.
 - Phase 8B completes the controlled 0/5/10 mm final-height experiment.
   Sampled root acceleration falls 216.962 -> 160.662 / 158.264 m/s^2,
   but all 36 native replay trials fail and exact actuator demands remain high.
