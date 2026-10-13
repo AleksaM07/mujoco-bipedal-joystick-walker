@@ -3,6 +3,15 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- Phase 10B completes the full-pipeline knee-offset experiment (248 tests).
+  A limit-preserving constant left-knee offset removes frame-114 clipping:
+  prepared knee second difference -303.422 -> +17.966 rad/s^2. However peak
+  root acceleration worsens 216.962 -> 281.912 m/s^2, inverse root force
+  16,599 -> 21,594 N and dense-grid penetration 8.722 -> 9.830 mm.
+  All 24 native replay trials fail. Candidate is NOT promoted; production
+  remains v6. Not all issues are fixed and no walking policy is validated.
+  Next: reward discrimination audit on frozen v6, independently of open-loop
+  survival. No new PPO run. See PROJECT_RECOVERY_PHASE10B_2026-10-13.md.
 - Phase 10A adds a full-pipeline constant knee-offset diagnostic, preserving
   physical/control limits and source angular variation instead of clipping.
   It runs after source selection and before alignment/IK; raw non-knee fields
