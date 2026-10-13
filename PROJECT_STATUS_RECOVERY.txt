@@ -3,6 +3,19 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- 2026-10-13 20:00 local: requested 80M tracker process started through hidden
+  WSL Ubuntu launch (Windows wsl PID18512, Linux Python PID323 at startup).
+  Launch implementation commit53099d9. Startup/compilation is not yet evidence
+  of optimizer progress or walking. Stable live logs from Windows Git Bash:
+    tail -f artifacts/recovery_v6_tracker_80m.stdout.log
+  Errors: artifacts/recovery_v6_tracker_80m.stderr.log.
+  Saved run config and direct (unbuffered logger) progress:
+  runs/20261013_2001_recovery_v6_pure_tracker_mean_80m_V1_steps-80m_reward-pending_running/
+  Model/reference construction completed at20:01:44; initial GPU reset is being
+  compiled. CUDA environment is WSL .venv (not CPU-only .venv-wsl).
+  Do not run the launcher a second time; close viewers freely but do not shut
+  down WSL or the PC while training. No current process is monitored forever
+  by this status file; consult fresh logs before interpreting the run state.
 - Real training next (user-requested): scripts/train_recovery_v6_tracker.sh.
   Fresh 80M-step v6 pure reference tracker, no joystick/ERFI/randomization,
   existing mean-normalized reward (baseline, not claimed fixed), residual1,
