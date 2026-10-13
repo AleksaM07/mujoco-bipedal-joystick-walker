@@ -3,6 +3,13 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- CORRECTION 2026-10-13 22:28 local: the first 256-env launch did NOT train.
+  It entered ppo.train at 20:10 but Linux OOM killed Python at 20:35 before
+  step0/checkpoint: ~7.50GB resident, WSL8GB RAM exhausted, all2GB swap used.
+  No Python traceback because this was SIGKILL. The stale first run directory
+  is evidence only and must not be resumed or described as a trained policy.
+  Retry changes only throughput/memory shape:64 envs,4 eval envs,batch128.
+  Model/reference/reward/PPO update ratios/80M target remain unchanged.
 - 2026-10-13 20:00 local: requested 80M tracker process started through hidden
   WSL Ubuntu launch (Windows wsl PID18512, Linux Python PID323 at startup).
   Launch implementation commit53099d9. Startup/compilation is not yet evidence
@@ -16,11 +23,11 @@ CURRENT CHECKPOINT
   Do not run the launcher a second time; close viewers freely but do not shut
   down WSL or the PC while training. No current process is monitored forever
   by this status file; consult fresh logs before interpreting the run state.
-- Real training next (user-requested): scripts/train_recovery_v6_tracker.sh.
+- Real training launcher: scripts/train_recovery_v6_tracker.sh.
   Fresh 80M-step v6 pure reference tracker, no joystick/ERFI/randomization,
   existing mean-normalized reward (baseline, not claimed fixed), residual1,
   current-frame PD target, source clip1/runtime0, v21 no-arms, bounded wrap.
-  RTX2060 memory settings: 256 train envs, 8 eval envs, batch512; existing
+  RTX2060/WSL-safe retry:64 train envs,4 eval envs,batch128; existing
   one-clip PPO lr1e-4/unroll10/minibatches4/updates2. Episode500=10 seconds,
   41 evals/checkpoints at about 2M intervals. No resume/old checkpoint overwrite.
   Baseline answers whether a learned feedback controller improves on open-loop;

@@ -22,16 +22,17 @@ sha256sum train.py biomechanics_env.py config.py bvh_reference.py \
   generated_models/human_male_180cm_75kg_standard_trainfast_v21_noarms.xml \
   BVH_walking_animation/cmuconvert-max-01-09/02/02_01.bvh
 
-# 256 worlds / 512 batch limit memory on the local RTX 2060 (6 GB).
+# 64 worlds / 128 batch fit the local WSL 8 GB RAM limit. The first attempt
+# with 256/512 was killed by the kernel OOM killer before its first PPO update.
 # 41 evaluations = initial plus about every 2M steps, with saved checkpoints.
 # The preset otherwise retains residual1/current-frame/pure/noDR/noERFI.
 exec .venv/bin/python -u train.py \
   --device gpu \
   --one-clip-overfit \
   --timesteps 80000000 \
-  --num-envs 256 \
-  --num-eval-envs 8 \
-  --batch-size 512 \
+  --num-envs 64 \
+  --num-eval-envs 4 \
+  --batch-size 128 \
   --num-evals 41 \
   --episode-length 500 \
   --seed 7 \
