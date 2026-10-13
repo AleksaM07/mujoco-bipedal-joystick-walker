@@ -3,6 +3,11 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- Phase 10A adds a full-pipeline constant knee-offset diagnostic, preserving
+  physical/control limits and source angular variation instead of clipping.
+  It runs after source selection and before alignment/IK; raw non-knee fields
+  remain unchanged, downstream geometry is measured rather than assumed fixed.
+  Production stays v6; see PROJECT_RECOVERY_PHASE10A_2026-10-13.md.
 - Phase 9B isolates two mechanisms without changing production v6.
   Restoring torso/pelvis or hip-Y reduces right-foot frame-69 nodal XY
   curvature 61.636 -> 38.419 / 38.126 m/s^2; ankle-Z does not. Raw IK has
