@@ -3,6 +3,12 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- Phase 11A adds a native-snapshot audit executing the actual pure imitation
+  reward and termination on frozen v6. Thirteen cases per phase include exact,
+  neutral standing, frozen/stopped poses, wrong phase, sagittal leg exchange,
+  XY invariance and root/knee velocity probes with native foot Jacobians.
+  274 tests pass; production and reward semantics unchanged. Separate results
+  follow in phase 11B. See PROJECT_RECOVERY_PHASE11A_2026-10-13.md.
 - Phase 10B completes the full-pipeline knee-offset experiment (248 tests).
   A limit-preserving constant left-knee offset removes frame-114 clipping:
   prepared knee second difference -303.422 -> +17.966 rad/s^2. However peak
