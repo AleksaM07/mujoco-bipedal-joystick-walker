@@ -3,6 +3,14 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- SECOND CORRECTION 2026-10-14: the 64-env retry also did NOT train. It reached
+  ppo.train/jit_reset, then was OOM-killed at 23:05 before step0/checkpoint:
+  ~7.45GB resident and all2GB default swap used. This proves XLA compilation,
+  not world count alone, is the dominant host-memory load. The next retry keeps
+  64 train envs,4 eval envs,batch128 and installs
+  scripts/wslconfig_recovery.ini as the user .wslconfig: WSL RAM10GB,swap8GB.
+  This is an operational-capacity change only; experiment semantics stay fixed.
+  Both stale empty-checkpoint run folders are failed-run evidence, not policies.
 - CORRECTION 2026-10-13 22:28 local: the first 256-env launch did NOT train.
   It entered ppo.train at 20:10 but Linux OOM killed Python at 20:35 before
   step0/checkpoint: ~7.50GB resident, WSL8GB RAM exhausted, all2GB swap used.
