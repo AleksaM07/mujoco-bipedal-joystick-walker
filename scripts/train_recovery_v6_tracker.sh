@@ -5,6 +5,8 @@ project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd -- "$project_dir"
 export PYTHONUNBUFFERED=1
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
+# Opt-in detailed JAX compile logs: JAX_LOG_COMPILES=1 bash scripts/...
+# Training callbacks distinguish executed PPO blocks from the initial JIT wait.
 mkdir -p artifacts
 exec 9>artifacts/recovery_v6_tracker.lock
 if ! flock -n 9; then
@@ -36,6 +38,7 @@ exec .venv/bin/python -u train.py \
   --num-eval-envs 4 \
   --batch-size 128 \
   --num-evals 41 \
+  --training-metrics-steps 100000 \
   --episode-length 500 \
   --seed 7 \
   --reference-gait-file BVH_walking_animation/cmuconvert-max-01-09/02/02_01.bvh \

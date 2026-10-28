@@ -80,10 +80,34 @@ class TrainingProgressLogger:
             metrics.get("eval/episode_length"),
         )
         if reward is None and episode_length is None:
-            logger.info("train progress callback | step={}", step)
+            diagnostics = []
+            for key, label in (
+                ("episode/sps", "sps"),
+                ("episode/sum_reward", "episode_reward"),
+                ("episode/length", "episode_length"),
+                ("episode/total_loss", "loss"),
+                ("episode/policy_loss", "policy_loss"),
+                ("episode/v_loss", "value_loss"),
+                ("training/sps", "epoch_sps"),
+                ("training/walltime", "training_seconds"),
+                ("training/total_loss", "epoch_loss"),
+            ):
+                if key in metrics:
+                    diagnostics.append(f"{label}={float(metrics[key]):.3f}")
+            logger.info(
+                "train progress | step={}{}",
+                step,
+                "" if not diagnostics else " | " + " | ".join(diagnostics),
+            )
             return
 
         diagnostics = []
+        for key, label in (
+            ("training/sps", "training_sps"),
+            ("training/walltime", "training_seconds"),
+        ):
+            if key in metrics:
+                diagnostics.append(f"{label}={float(metrics[key]):.3f}")
         for key, label in TRAIN_DIAGNOSTIC_METRICS:
             value = metrics.get(key)
             if value is not None:
@@ -427,6 +451,11 @@ def make_ppo_config(
     for key, value in overrides.items():
         if value is not None:
             rl_config[key] = value
+    if train_config.training_metrics_steps is not None:
+        if train_config.training_metrics_steps < 1:
+            raise ValueError("training_metrics_steps must be positive")
+        rl_config.log_training_metrics = True
+        rl_config.training_metrics_steps = train_config.training_metrics_steps
     if train_config.distribution_type is not None:
         rl_config.network_factory.distribution_type = train_config.distribution_type
 
@@ -695,6 +724,14 @@ def run_training(
         rl_config.get("num_eval_envs", None),
         env_steps_per_training_block(rl_config),
     )
+    if rl_config.get("log_training_metrics", False):
+        logger.info(
+            "training callbacks enabled | interval_steps={} | "
+            "reported at completed PPO blocks; callback steps are run-local, "
+            "not restored checkpoint steps; initial tracing/compilation "
+            "has no step progress and is included in the first callback sps",
+            rl_config.training_metrics_steps,
+        )
     if rl_config.num_timesteps < env_steps_per_training_block(rl_config):
         logger.warning(
             "requested timesteps is smaller than one PPO block; "
@@ -1091,7 +1128,11 @@ def log_eval_environment_summary(env) -> None:
         "warp_naconmax={} | warp_njmax={} | rfi_limit={} | rao_limit={}",
         getattr(env._config, "enable_erfi", None),
         getattr(env._config, "physics_backend", None),
-        getattr(env._config, "warp_num_worlds", None),
+        (
+            getattr(env._config, "warp_num_worlds", None)
+            if getattr(env._config, "physics_backend", None) == "mjx_warp"
+            else None
+        ),
         getattr(env._config, "warp_naconmax", None),
         getattr(env._config, "warp_njmax", None),
         getattr(env._config, "rfi_torque_limit", None),
@@ -2539,6 +2580,17 @@ def main() -> None:
     parser.add_argument("--num-envs", type=int, default=None)
     parser.add_argument("--num-eval-envs", type=int, default=None)
     parser.add_argument("--num-evals", type=int, default=None)
+    parser.add_argument(
+        "--training-metrics-steps",
+        type=int,
+        default=None,
+        help=(
+            "Log completed PPO blocks within an evaluation interval, roughly "
+            "every N environment steps (positive). Adds Brax host callbacks; "
+            "does not change evaluation/checkpoint frequency. Callback steps "
+            "start at zero for this invocation, including checkpoint resumes."
+        ),
+    )
     parser.add_argument("--episode-length", type=int, default=None)
     parser.add_argument("--unroll-length", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=None)
@@ -2825,6 +2877,7 @@ def main() -> None:
         num_evals=args.num_evals
         if args.num_evals is not None
         else debug_defaults.get("num_evals"),
+        training_metrics_steps=args.training_metrics_steps,
         num_envs=args.num_envs or debug_defaults.get("num_envs"),
         num_eval_envs=(
             args.num_eval_envs

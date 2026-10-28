@@ -3,6 +3,17 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- 2026-10-28 training visibility: --training-metrics-steps enables Brax's
+  within-epoch callbacks (100,000 in the recovery launcher). Reports executed
+  PPO blocks, speed, loss and finished-episode reward/length without changing
+  evaluation/checkpoint frequency or contaminating best-evaluation tracking.
+  This is opt-in host instrumentation, not a change to the optimizer/reward.
+  Callback steps are run-local, including on resume; the first rate includes
+  startup/compilation. There are no executed-step callbacks during initial JIT.
+  Eval logs also retain epoch training speed/time. The unused Warp capacity is
+  no longer presented as a JAX world count. Six CLI/config/logger tests pass.
+  Full suite: 288 tests passed in 125.52s; the additional CLI-forwarding test
+  passed in the separately rerun six-test logging module.
 - 2026-10-28 reset compilation fix: MJX-JAX validates candidate geometry with
   kinematics and runs full dynamics only once on the selected raw coordinates.
   The previous 2-attempt/3-projection reset traced 15 full forward calls; now 1.

@@ -966,6 +966,7 @@ class TrainConfig:
     num_evals: int | None = None
     num_envs: int | None = None
     num_eval_envs: int | None = None
+    training_metrics_steps: int | None = None
     episode_length: int | None = None
     unroll_length: int | None = None
     batch_size: int | None = None
