@@ -3,6 +3,22 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- 2026-10-28 actual CPU PPO startup check: one real v21 no-arms training block
+  COMPLETED (160/160 environment steps, 4 envs, batch4, seed7, consistent_v6,
+  same source clip1/runtime0 and unchanged mean reward). At 21:22:06 the new
+  callback reported finite loss=32.115, policy_loss=0.326, value_loss=31.819.
+  Checkpoint 000000000160 was written and independently loaded: 21 parameter
+  tree leaves, all finite. This verifies update/checkpoint plumbing, NOT gait.
+  The bounded 600-second attempt stopped before final evaluation completed;
+  no completed eval score or full successful-run status is claimed. Its local
+  process tree has exited. The folder's _running suffix is stale, not live.
+  CPU train-epoch tracing took 72.42s and XLA compilation 113.12s. First callback
+  speed includes startup and is NOT a steady-state GPU throughput estimate.
+  Run: runs/20261028_2113_recovery_v6_startup_check_160_V1_steps-160_reward-pending_running
+  Detailed local log: artifacts/ppo_startup_20261028_211257.log
+  Code phases: 74dae01 (terminal metadata), 8501385 (reset compilation),
+  2033555 (within-epoch progress). Next: the agreed fresh 80M GPU baseline once
+  the school server's NVIDIA driver is repaired; no server changes or push.
 - 2026-10-28 training visibility: --training-metrics-steps enables Brax's
   within-epoch callbacks (100,000 in the recovery launcher). Reports executed
   PPO blocks, speed, loss and finished-episode reward/length without changing
