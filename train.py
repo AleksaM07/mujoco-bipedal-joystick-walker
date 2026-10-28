@@ -974,8 +974,14 @@ class ConditionalAutoResetWrapper(playground_wrapper.Wrapper):
 
         done_count_key = self._key("done_count")
         next_info[done_count_key] = stepped_state.info[done_count_key]
-        if "steps" in next_info:
-            next_info["steps"] = stepped_state.info["steps"]
+        # PPO consumes the just-finished transition even though data/obs already
+        # belong to the next episode. Clearing truncation here turns time limits
+        # into true terminals in GAE; clearing episode_done hides completed
+        # episodes from Brax's metrics logger. EpisodeWrapper clears the totals
+        # on the following step using the preserved episode_done flag.
+        for key in ("steps", "truncation", "episode_done", "episode_metrics"):
+            if key in stepped_state.info:
+                next_info[key] = stepped_state.info[key]
 
         preserve_info_key = self._key("preserve_info")
         if preserve_info_key in next_info:

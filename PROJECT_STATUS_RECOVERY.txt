@@ -1,8 +1,23 @@
-PROJECT-V2 RECOVERY - updated 2026-10-13
+PROJECT-V2 RECOVERY - updated 2026-10-28
 Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- 2026-10-28: corrected PPO auto-reset bookkeeping. Preserve the finished
+  transition's truncation, episode_done and episode_metrics while resetting
+  physical state/observations. Previously a time-limit reset erased truncation,
+  making PPO treat it as a physical terminal, and hid completed episodes from
+  Brax training metrics. Four JIT wrapper regressions pass (timeout, failure,
+  mixed batch, fresh reproducible resets); three failed before the fix.
+- FINAL STATE OF 20261014_1049: stopped at user request after about 2h56.
+  Initial evaluation DID complete at 11:34:00 (step=0, reward=86.950073).
+  No completed training epoch or checkpoint was observed. The logger reported
+  only every roughly 2M steps, so it cannot prove zero optimizer updates.
+  The earlier jit_reset warning ended at 11:14:12; it does not establish which
+  compilation/execution stage consumed the remaining time after initial eval.
+  10GB RAM / 8GB swap let initial eval finish, but swap later nearly filled.
+  This capacity change did not establish a usable training configuration.
+  The folder suffix remains _running as historical evidence, not live status.
 - SECOND CORRECTION 2026-10-14: the 64-env retry also did NOT train. It reached
   ppo.train/jit_reset, then was OOM-killed at 23:05 before step0/checkpoint:
   ~7.45GB resident and all2GB default swap used. This proves XLA compilation,
@@ -35,7 +50,7 @@ CURRENT CHECKPOINT
   Fresh 80M-step v6 pure reference tracker, no joystick/ERFI/randomization,
   existing mean-normalized reward (baseline, not claimed fixed), residual1,
   current-frame PD target, source clip1/runtime0, v21 no-arms, bounded wrap.
-  RTX2060/WSL-safe retry:64 train envs,4 eval envs,batch128; existing
+  Attempted RTX2060/WSL retry:64 train envs,4 eval envs,batch128; existing
   one-clip PPO lr1e-4/unroll10/minibatches4/updates2. Episode500=10 seconds,
   41 evals/checkpoints at about 2M intervals. No resume/old checkpoint overwrite.
   Baseline answers whether a learned feedback controller improves on open-loop;
