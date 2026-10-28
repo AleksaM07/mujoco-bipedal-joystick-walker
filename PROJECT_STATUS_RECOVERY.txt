@@ -3,6 +3,17 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- 2026-10-28 reset compilation fix: MJX-JAX validates candidate geometry with
+  kinematics and runs full dynamics only once on the selected raw coordinates.
+  The previous 2-attempt/3-projection reset traced 15 full forward calls; now 1.
+  RNG order, candidates, rejection counters, fallback and final dynamics are
+  preserved; Warp retains its previous path. Five CPU JIT/contact regressions
+  pass, including full Data/obs/info equivalence, projected/late/fallback resets,
+  nonunit quaternions and mixed-batch vmap.
+  Real v21 + saved run config: StableHLO text 16,874,263 -> 11,631,092 characters
+  (199,444 -> 141,850 lines); lowering 128.61 -> 58.49 seconds on this host.
+  New single-reset CPU compile 62.91s; seed7/8 exact resets passed, repeated call
+  0.00749s. These are CPU reset measurements, NOT a GPU PPO speed guarantee.
 - 2026-10-28: corrected PPO auto-reset bookkeeping. Preserve the finished
   transition's truncation, episode_done and episode_metrics while resetting
   physical state/observations. Previously a time-limit reset erased truncation,

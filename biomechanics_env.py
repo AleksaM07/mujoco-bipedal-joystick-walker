@@ -604,6 +604,15 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         """Return pristine reset Data without allocating inside JAX transforms."""
         return self._reset_data_template.replace(ctrl=self._default_ctrl)
 
+    def _prepare_reset_candidate(self, data: mjx.Data) -> mjx.Data:
+        """Compute reset acceptance geometry without unused candidate dynamics."""
+        if self._physics_backend == "mjx_jax":
+            # Reset checks need normalized qpos and torso/foot transforms only.
+            # Full dynamics is computed once, after the selected state is known.
+            return mjx.kinematics(self._mjx_model, data)
+        # Preserve the existing Warp path and its shared-buffer behavior.
+        return mjx.forward(self._mjx_model, data)
+
     def _configure_policy_observation_layout(self) -> None:
         """Reconstruct the policy observation layout saved in a checkpoint."""
         self._include_gait_phase_observation = True
@@ -2111,6 +2120,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             jax.random.split(rng, 6)
         )
         pure_imitation = self._is_pure_reference_imitation()
+        defer_reset_dynamics = self._physics_backend == "mjx_jax"
         fallback_qpos = self._init_q.at[2].set(self._standing_height())
         fallback_qvel = jp.zeros(self._mjx_model.nv)
         fallback_data = self._fresh_reset_data().replace(
@@ -2118,9 +2128,11 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             qvel=fallback_qvel,
             ctrl=self._default_ctrl,
         )
-        fallback_data = mjx.forward(self._mjx_model, fallback_data)
+        if not defer_reset_dynamics:
+            fallback_data = mjx.forward(self._mjx_model, fallback_data)
         data = fallback_data
         qpos = fallback_qpos
+        qvel = fallback_qvel
         ctrl = self._default_ctrl
         last_action = jp.zeros(self.action_size)
         bvh_clip_id = jp.array(0, dtype=jp.int32)
@@ -2169,7 +2181,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 qvel=candidate_qvel,
                 ctrl=candidate_ctrl,
             )
-            candidate_data = mjx.forward(self._mjx_model, candidate_data)
+            candidate_data = self._prepare_reset_candidate(candidate_data)
             (
                 candidate_low,
                 candidate_tipped,
@@ -2192,13 +2204,15 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             exact_rejected_count = exact_rejected_count + candidate_rejected.astype(
                 jp.float32
             )
-            data = select_data(
-                data,
-                take_candidate,
-                candidate_data,
-                self._physics_backend,
-            )
+            if not defer_reset_dynamics:
+                data = select_data(
+                    data,
+                    take_candidate,
+                    candidate_data,
+                    self._physics_backend,
+                )
             qpos = jp.where(take_candidate, candidate_qpos, qpos)
+            qvel = jp.where(take_candidate, candidate_qvel, qvel)
             ctrl = jp.where(take_candidate, candidate_ctrl, ctrl)
             last_action = jp.where(
                 take_candidate,
@@ -2240,7 +2254,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                     qvel=candidate_qvel,
                     ctrl=candidate_ctrl,
                 )
-                candidate_data = mjx.forward(self._mjx_model, candidate_data)
+                candidate_data = self._prepare_reset_candidate(candidate_data)
                 (
                     candidate_low,
                     candidate_tipped,
@@ -2259,13 +2273,15 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 rejected_invalid_count = rejected_invalid_count + (
                     candidate_rejected & candidate_invalid
                 ).astype(jp.float32)
-                data = select_data(
-                    data,
-                    take_candidate,
-                    candidate_data,
-                    self._physics_backend,
-                )
+                if not defer_reset_dynamics:
+                    data = select_data(
+                        data,
+                        take_candidate,
+                        candidate_data,
+                        self._physics_backend,
+                    )
                 qpos = jp.where(take_candidate, candidate_qpos, qpos)
+                qvel = jp.where(take_candidate, candidate_qvel, qvel)
                 ctrl = jp.where(take_candidate, candidate_ctrl, ctrl)
                 last_action = jp.where(
                     take_candidate,
@@ -2279,6 +2295,12 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                     bvh_time_offset,
                 )
                 sampled_valid = sampled_valid | (~candidate_terminal)
+
+        if defer_reset_dynamics:
+            # Use the original selected coordinates: kinematics normalizes root
+            # quaternions, so forwarding its output would normalize them twice.
+            data = self._fresh_reset_data().replace(qpos=qpos, qvel=qvel, ctrl=ctrl)
+            data = mjx.forward(self._mjx_model, data)
 
         command = jp.where(
             pure_imitation,
@@ -4389,7 +4411,7 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             qvel=qvel,
             ctrl=ctrl,
         )
-        data = mjx.forward(self._mjx_model, data)
+        data = self._prepare_reset_candidate(data)
         desired_lowest_height = jp.array(
             -self.FOOT_CONTACT_PRELOAD,
             dtype=qpos.dtype,
