@@ -24,6 +24,24 @@ The existing shell launcher still defaults to the smaller 64/4-env WSL attempt;
 the explicit server command above selects the requested larger shape.
 
 CURRENT CHECKPOINT
+- 2026-10-29 output safety: run and checkpoint directories are now claimed with
+  exclusive mkdir before writing logs/config/checkpoints. Reusing a same-minute
+  run folder or any existing --checkpoint-out (even empty) is rejected; use a
+  new tag/minute and fresh checkpoint destination. This prevents silent log/
+  config replacement and Brax force=True checkpoint overwrites by repeat runs.
+  Ctrl+C during ppo.train now marks the run incomplete (_f) and re-raises the
+  interrupt. Hard kills/OOM and interruptions before ppo.train are not covered.
+  Final logs point to the real checkpoint path after the run folder is renamed;
+  genuinely external destinations are unchanged. Resume help/logs explicitly
+  state that only networks/normalization are restored, not optimizer/step count.
+  The 4096-world Warp throughput warning no longer appears on the JAX preset.
+  Eight output regressions added; full suite 313 tests passed in 113.80s.
+  No model/reward/reference/optimizer changes; server CLI still validates.
+  Known optional-path limitation: external --checkpoint-out does not carry the
+  owning run config/XML manifest, so v6 resume/eval from that isolated location
+  is not certified. Keep the default run/checkpoints layout for the server run.
+  A failed checkpoint-directory reservation can leave an empty new run folder;
+  existing outputs are not deleted or altered. Server still unavailable per user.
 - 2026-10-29 real checkpoint inspection COMPLETED (exit0, 500 steps, seed7,
   deterministic policy) using checkpoint 000000000160 from the Oct28 startup
   check. Nine physical terminations, zero timeouts, mean completed episode
@@ -35,7 +53,7 @@ CURRENT CHECKPOINT
   evaluator run or validate learned gait. The local evaluation process exited.
   Evidence: artifacts/eval_startup_20261029_131332.log (about nine minutes on CPU).
   Evaluation fixes committed as 0167620. No long training or server writes.
-- Server command below was parsed through the real train.py CLI with device
+- Server command above was parsed through the real train.py CLI with device
   initialization/training mocked, confirming 80M, 256/16 envs, batch512,
   lr1e-4/unroll10/minibatches4/updates2, pure v6 source clip1/runtime0 and noDR/
   noERFI. This validates configuration, NOT actual GPU availability/performance.

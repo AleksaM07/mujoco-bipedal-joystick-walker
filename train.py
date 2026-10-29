@@ -291,6 +291,37 @@ def make_run_dir(
     )
 
 
+def reserve_training_directories(
+    run_dir: Path, checkpoint_dir: Path | None
+) -> tuple[Path, Path | None]:
+    """Claim fresh output directories before any log/config/checkpoint writes.
+
+    Brax saves checkpoints with force=True, so even parameter-only resumes need
+    a new destination. Exclusive mkdir also rejects concurrent starts targeting
+    the same path; preflight existence checks alone would not protect that race.
+    """
+    run_dir = run_dir.expanduser().resolve()
+    checkpoint_dir = (
+        checkpoint_dir.expanduser().resolve() if checkpoint_dir is not None else None
+    )
+    if checkpoint_dir is not None and run_dir.is_relative_to(checkpoint_dir):
+        raise ValueError("Checkpoint output must not be the run directory or its parent.")
+    if run_dir.exists():
+        raise FileExistsError(
+            f"Refusing to reuse run directory: {run_dir}. "
+            "Choose a new --run-tag or retry in the next minute."
+        )
+    if checkpoint_dir is not None and checkpoint_dir.exists():
+        raise FileExistsError(
+            f"Refusing to reuse checkpoint output: {checkpoint_dir}. "
+            "Choose a new, nonexistent --checkpoint-out directory, including on resume."
+        )
+    run_dir.mkdir(parents=True, exist_ok=False)
+    if checkpoint_dir is not None:
+        checkpoint_dir.mkdir(parents=True, exist_ok=False)
+    return run_dir, checkpoint_dir
+
+
 def mark_run_status(
     run_dir: Path,
     status: str,
@@ -637,11 +668,13 @@ def run_training(
         run_source_name(env_config, train_config),
         rl_config.num_timesteps,
     )
-    checkpoint_dir = (
-        Path(train_config.checkpoint_out).expanduser()
-        if train_config.checkpoint_out
-        else run_dir / "checkpoints"
-    )
+    checkpoint_dir = None
+    if train_config.save_checkpoints:
+        checkpoint_dir = (
+            Path(train_config.checkpoint_out).expanduser()
+            if train_config.checkpoint_out
+            else run_dir / "checkpoints"
+        )
     restore_checkpoint = resolve_resume_checkpoint_path(train_config.resume_from)
     validate_resume_physics_version(restore_checkpoint, env_config)
     restore_checkpoint_path = str(restore_checkpoint) if restore_checkpoint else None
@@ -650,9 +683,7 @@ def run_training(
         if inferred_xml_path is not None:
             env_config.xml_path = inferred_xml_path
 
-    run_dir.mkdir(parents=True, exist_ok=True)
-    if train_config.save_checkpoints:
-        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    run_dir, checkpoint_dir = reserve_training_directories(run_dir, checkpoint_dir)
 
     logger.remove()
     logger.add(lambda msg: print(msg, end=""), level="INFO")
@@ -702,6 +733,7 @@ def run_training(
     if restore_checkpoint_path is not None:
         logger.info(
             "resume enabled | restore_checkpoint_path={} | "
+            "weights/normalizer only; optimizer and step counter restart | "
             "requires compatible env/action/obs/network config",
             restore_checkpoint_path,
         )
@@ -738,7 +770,7 @@ def run_training(
             "run will overshoot to at least {} env steps",
             env_steps_per_training_block(rl_config),
         )
-    if rl_config.num_envs < 512:
+    if rl_config.num_envs < 512 and env_config.physics_backend == "mjx_warp":
         logger.warning(
             "biomechanics run uses only {} envs; GPU throughput is usually "
             "better with --num-envs 4096 on the MJX-Warp path",
@@ -802,8 +834,8 @@ def run_training(
                 **train_kwargs_extra,
                 **train_kwargs,
             )
-    except Exception:
-        logger.exception("trening pukao pre status rename-a")
+    except (Exception, KeyboardInterrupt):
+        logger.exception("trening prekinut ili neuspesan pre status rename-a")
         close_file_logger()
         failed_dir = mark_run_status(run_dir, "f")
         logger.error("trening pukao | run_dir={}", failed_dir)
@@ -816,6 +848,8 @@ def run_training(
         progress_logger.final_reward,
         progress_logger.best_reward,
     )
+    if checkpoint_dir is not None and checkpoint_dir.is_relative_to(run_dir):
+        checkpoint_dir = success_dir / checkpoint_dir.relative_to(run_dir)
     logger.info(
         "trening gotov | run_dir={} | checkpoints={} | best_reward={} | best_step={}",
         success_dir,
@@ -2658,7 +2692,8 @@ def main() -> None:
         default=None,
         help=(
             "Alternativni folder za checkpointove; korisno u WSL-u da se pise "
-            "na Linux filesystem umesto na /mnt/c."
+            "na Linux filesystem umesto na /mnt/c. Mora biti nov, nepostojeci "
+            "folder, cak i pri --resume-from, da se stari checkpointovi ne prepisu."
         ),
     )
     parser.add_argument(
@@ -2668,7 +2703,8 @@ def main() -> None:
         help=(
             "Putanja do kompatibilnog Brax/Orbax checkpointa, checkpoints "
             "foldera ili run foldera. Ako je folder, koristi najnoviji "
-            "numericki checkpoint. Mora biti isti env/action/obs/network setup."
+            "numericki checkpoint. Mora biti isti env/action/obs/network setup. "
+            "Ucita mreze i normalizator; optimizer i brojac koraka pocinju iznova."
         ),
     )
     parser.add_argument(
