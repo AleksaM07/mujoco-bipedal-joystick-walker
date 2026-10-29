@@ -2,7 +2,43 @@ PROJECT-V2 RECOVERY - updated 2026-10-29
 Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
+SERVER HANDOFF (Linux Bash, after the administrator repairs the GPU driver)
+Use this branch with the Oct28 training fixes; do not start two runs together.
+These read-only checks must work first (no sudo or driver installation):
+  nvidia-smi
+  .venv/bin/python -c "import jax; print(jax.devices('gpu'))"
+
+Fresh run, not resume of the 160-step technical checkpoint:
+PYTHONUNBUFFERED=1 XLA_PYTHON_CLIENT_PREALLOCATE=false .venv/bin/python -u train.py \
+  --device gpu --one-clip-overfit \
+  --timesteps 80000000 --num-envs 256 --num-eval-envs 16 --batch-size 512 \
+  --num-evals 41 --episode-length 500 --training-metrics-steps 100000 --seed 7 \
+  --reference-gait-file BVH_walking_animation/cmuconvert-max-01-09/02/02_01.bvh \
+  --reference-clip-ids 1 --reference-force-clip-id 0 \
+  --recovery-physics-version consistent_v6 --reference-loop-closure bounded \
+  --xml-path generated_models/human_male_180cm_75kg_standard_trainfast_v21_noarms.xml \
+  --run-tag recovery_v6_tracker_256env_strong
+
+Follow the NEW run directory printed at startup, not the stopped Oct14 log.
+The existing shell launcher still defaults to the smaller 64/4-env WSL attempt;
+the explicit server command above selects the requested larger shape.
+
 CURRENT CHECKPOINT
+- 2026-10-29 real checkpoint inspection COMPLETED (exit0, 500 steps, seed7,
+  deterministic policy) using checkpoint 000000000160 from the Oct28 startup
+  check. Nine physical terminations, zero timeouts, mean completed episode
+  53.3 steps (~1.07s at dt0.02); final 20-step partial episode reported separately.
+  Total reward 882.907 is cumulative over ALL those episodes, not a single PPO
+  evaluation score and not evidence of walking. The model only has 160 training
+  steps. This verifies restored-policy inference, physics, termination, repeated
+  reset and summary reporting end-to-end; it does NOT complete the Oct28 Brax
+  evaluator run or validate learned gait. The local evaluation process exited.
+  Evidence: artifacts/eval_startup_20261029_131332.log (about nine minutes on CPU).
+  Evaluation fixes committed as 0167620. No long training or server writes.
+- Server command below was parsed through the real train.py CLI with device
+  initialization/training mocked, confirming 80M, 256/16 envs, batch512,
+  lr1e-4/unroll10/minibatches4/updates2, pure v6 source clip1/runtime0 and noDR/
+  noERFI. This validates configuration, NOT actual GPU availability/performance.
 - 2026-10-29 evaluation correctness/portability: JIT warmup now compiles without
   advancing the episode, consuming the first action key or discarding an early
   fall/reward/frame. Pure reference policies always receive zero commands,
