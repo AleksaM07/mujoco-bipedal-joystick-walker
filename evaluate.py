@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import time
 from dataclasses import asdict, fields
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 # REF: PROJECT-XLA-PREALLOCATE-DEFAULT
@@ -51,6 +51,7 @@ from config import (
     KEY_SPACE,
     KEY_UP,
     KEY_W,
+    PROJECT_ROOT,
     expand_reference_gait_files,
 )
 from phase1_backends import resolve_warp_capacities
@@ -62,9 +63,12 @@ PERFECT_WALK_STEPS = 500
 class JoystickController:
     """Cita tastaturu iz MuJoCo viewer-a i menja command vektor politike."""
 
-    def __init__(self, command: np.ndarray, step: float):
+    def __init__(
+        self, command: np.ndarray, step: float, command_enabled: bool = True
+    ):
         self.command = command
         self.step = step
+        self.command_enabled = command_enabled
         self.paused = False
 
     def key_callback(self, keycode: int) -> None:
@@ -72,6 +76,8 @@ class JoystickController:
         if keycode == KEY_SPACE:
             self.paused = not self.paused
             print(f"paused={self.paused}", flush=True)
+            return
+        if not self.command_enabled:
             return
         if keycode in (KEY_UP, KEY_W, KEY_NUMPAD_8):
             self.command[0] += self.step
@@ -218,8 +224,13 @@ def find_run_config(checkpoint_path: Path) -> dict | None:
 def find_run_dir(checkpoint_path: Path) -> Path | None:
     """Find the run directory that owns a checkpoint."""
     for path in (checkpoint_path, *checkpoint_path.parents):
-        if (path / "config.json").exists() or (path / "xml_manifest.json").exists():
+        if (path / "xml_manifest.json").is_file():
             return path
+        config_path = path / "config.json"
+        if config_path.is_file():
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            if isinstance(config, dict) and "env" in config:
+                return path
     return None
 
 
@@ -259,12 +270,22 @@ def validate_xml_manifest(checkpoint_path: Path, env: BiomechanicsJoystickEnv) -
 
 def resolve_saved_xml_path(raw_path: str) -> str | None:
     """Resolve a saved Windows/WSL XML path against this checkout."""
-    direct_path = Path(raw_path).expanduser()
-    if direct_path.exists():
+    normalized_path = raw_path.replace("\\", "/")
+    direct_path = Path(normalized_path).expanduser()
+    if direct_path.is_file():
         return str(direct_path)
 
-    local_path = GENERATED_MODEL_DIR / direct_path.name
-    if local_path.exists():
+    is_absolute = (
+        PurePosixPath(normalized_path).is_absolute()
+        or PureWindowsPath(normalized_path).is_absolute()
+    )
+    if not is_absolute:
+        project_path = PROJECT_ROOT / direct_path
+        if project_path.is_file():
+            return str(project_path)
+
+    local_path = GENERATED_MODEL_DIR / PurePosixPath(normalized_path).name
+    if local_path.is_file():
         return str(local_path)
     return None
 
@@ -371,8 +392,11 @@ def load_ppo_policy(checkpoint_path: Path, deterministic: bool):
     return make_policy(params, deterministic=deterministic)
 
 
-def identity_observation_preprocessor(normalizer_params, observations):
+def identity_observation_preprocessor(
+    observations: Any, normalizer_params: Any
+) -> Any:
     """Vraca observation bez normalizacije kada checkpoint to ne trazi."""
+    del normalizer_params
     return observations
 
 
@@ -453,9 +477,15 @@ def validate_observation_compatibility(checkpoint_path: Path, obs) -> None:
     )
 
 
-def set_command(state, command: np.ndarray):
+def set_command(
+    state, command: np.ndarray, *, pure_imitation: bool | jax.Array = False
+):
     """Upise joystick komandu u info i observation koje politika cita."""
-    command_array = jnp.asarray(command, dtype=jnp.float32)
+    command_array = jnp.where(
+        pure_imitation,
+        jnp.zeros(3, dtype=jnp.float32),
+        jnp.asarray(command, dtype=jnp.float32),
+    )
 
     info = dict(state.info)
     info["command"] = command_array
@@ -668,7 +698,9 @@ def render_host_replay_frames(
 def reset_state(env, rng, command: np.ndarray):
     """Resetuje epizodu i zadrzava trenutnu joystick komandu."""
     state = env.reset(rng)
-    return set_command(state, command)
+    return set_command(
+        state, command, pure_imitation=env._is_pure_reference_imitation()
+    )
 
 
 def print_debug(step: int, state, action) -> None:
@@ -718,17 +750,35 @@ def print_done_reason(state) -> None:
 @functools.partial(jax.jit, static_argnames=("env", "policy"))
 def simulation_step(env, policy, state, rng, command):
     """Izvrsi jedan JIT-ovan policy+environment korak."""
-    state = set_command(state, command)
+    state = set_command(
+        state, command, pure_imitation=env._is_pure_reference_imitation()
+    )
     action, _ = policy(state.obs, rng)
     next_state = env.step(state, action)
     return next_state, action
 
 
-def inspect_policy(env, policy, rng, command: np.ndarray, steps: int) -> None:
+def compile_simulation_step(env, policy, state, rng, command: np.ndarray) -> None:
+    """Compile without advancing the episode or consuming an action RNG key."""
+    simulation_step.lower(env, policy, state, rng, command).compile()
+
+
+def inspect_policy(
+    env,
+    policy,
+    rng,
+    command: np.ndarray,
+    steps: int,
+    episode_length: int = PERFECT_WALK_STEPS,
+) -> None:
     """Pokreni headless rollout i ispisi objektivne survival metrike."""
+    if steps < 1 or episode_length < 1:
+        raise ValueError("Inspection steps and episode_length must be positive.")
     state = reset_state(env, rng, command)
     total_reward = 0.0
     reset_count = 0
+    termination_count = 0
+    timeout_count = 0
     episode_lengths = []
     current_episode_length = 0
     z_values = []
@@ -736,9 +786,7 @@ def inspect_policy(env, policy, rng, command: np.ndarray, steps: int) -> None:
     action_norm_values = []
 
     print("compiling first JAX inspect step...", flush=True)
-    rng, action_key = jax.random.split(rng)
-    state, action = simulation_step(env, policy, state, action_key, command)
-    jax.block_until_ready(action)
+    compile_simulation_step(env, policy, state, rng, command)
     print("compile done, running inspect rollout", flush=True)
 
     for step in range(steps):
@@ -768,23 +816,34 @@ def inspect_policy(env, policy, rng, command: np.ndarray, steps: int) -> None:
                 flush=True,
             )
 
-        if done:
+        timeout = current_episode_length >= episode_length and not done
+        if done or timeout:
             reset_count += 1
+            termination_count += int(done)
+            timeout_count += int(timeout)
             episode_lengths.append(current_episode_length)
             state = reset_state(env, reset_key, command)
             current_episode_length = 0
 
-    if current_episode_length:
-        episode_lengths.append(current_episode_length)
+    # A partially observed final episode is not evidence of an early failure.
+    mean_length = float(np.mean(episode_lengths)) if episode_lengths else None
+    mean_length_text = "n/a" if mean_length is None else f"{mean_length:.1f}"
+    survive_text = (
+        "n/a" if mean_length is None else f"{100.0 * mean_length / episode_length:.1f}"
+    )
 
     print(
         "inspect summary | "
         f"steps={steps} "
         f"resets={reset_count} "
-        f"mean_episode_length={np.mean(episode_lengths):.1f} "
+        f"terminations={termination_count} "
+        f"timeouts={timeout_count} "
+        f"episode_limit={episode_length} "
+        f"mean_episode_length={mean_length_text} "
+        f"partial_episode_length={current_episode_length} "
         f"total_reward={total_reward:.3f} "
         f"score_pct={score_percent(total_reward, steps):.1f} "
-        f"mean_survive_pct={survival_percent(int(np.mean(episode_lengths))):.1f} "
+        f"mean_survive_pct={survive_text} "
         f"mean_z={np.mean(z_values):.3f} "
         f"min_z={np.min(z_values):.3f} "
         f"mean_torso_up={np.mean(torso_up_values):.3f} "
@@ -819,9 +878,7 @@ def record_policy_video(
     done_reason = "none"
 
     print("compiling first JAX record step...", flush=True)
-    rng, action_key = jax.random.split(rng)
-    state, action = simulation_step(env, policy, state, action_key, command)
-    jax.block_until_ready(action)
+    compile_simulation_step(env, policy, state, rng, command)
     print("compile done, recording video", flush=True)
 
     for step in range(steps):
@@ -1176,11 +1233,24 @@ def main():
         dtype=np.float32,
     )
     clip_command(command)
-    state = set_command(state, command)
+    pure_imitation = bool(env._is_pure_reference_imitation())
+    if pure_imitation:
+        command[:] = 0.0
+        print("pure tracker: joystick commands disabled, matching training", flush=True)
+    state = set_command(state, command, pure_imitation=pure_imitation)
     validate_observation_compatibility(args.checkpoint, state.obs)
 
     if args.inspect:
-        inspect_policy(env, policy, rng, command, args.inspect_steps)
+        saved_ppo = (run_config or {}).get("brax_ppo", {})
+        episode_length = int(saved_ppo.get("episode_length", PERFECT_WALK_STEPS))
+        inspect_policy(
+            env,
+            policy,
+            rng,
+            command,
+            args.inspect_steps,
+            episode_length=episode_length,
+        )
         return
 
     if args.record_video is not None:
@@ -1201,15 +1271,15 @@ def main():
         return
 
     print("compiling first JAX simulation step...", flush=True)
-    rng, action_key = jax.random.split(rng)
-    state, action = simulation_step(env, policy, state, action_key, command)
-    jax.block_until_ready(action)
+    compile_simulation_step(env, policy, state, rng, command)
     print("compile done, opening MuJoCo viewer", flush=True)
 
     model = env.mj_model
     data = mujoco.MjData(model)
     update_viewer_data(model, data, state)
-    controller = JoystickController(command, args.command_step)
+    controller = JoystickController(
+        command, args.command_step, command_enabled=not pure_imitation
+    )
     step = 0
 
     with mujoco.viewer.launch_passive(

@@ -1,8 +1,20 @@
-PROJECT-V2 RECOVERY - updated 2026-10-28
+PROJECT-V2 RECOVERY - updated 2026-10-29
 Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 CURRENT CHECKPOINT
+- 2026-10-29 evaluation correctness/portability: JIT warmup now compiles without
+  advancing the episode, consuming the first action key or discarding an early
+  fall/reward/frame. Pure reference policies always receive zero commands,
+  including CLI/keyboard input; joystick control remains available for other
+  policies and pause still works. Headless inspection applies the saved PPO
+  episode limit, distinguishes physical terminals/timeouts, and reports a
+  final incomplete episode separately rather than biasing mean survival.
+  Windows XML paths rebase on Linux while retaining the XML hash check; old
+  checkpoint network config.json no longer hides the actual run manifest.
+  Non-normalized policies now use the correct identity-preprocessor argument
+  order. Sixteen focused regressions added; all 305 tests pass (112.18s).
+  Training, reward, reference generation and physics remain unchanged.
 - 2026-10-28 actual CPU PPO startup check: one real v21 no-arms training block
   COMPLETED (160/160 environment steps, 4 envs, batch4, seed7, consistent_v6,
   same source clip1/runtime0 and unchanged mean reward). At 21:22:06 the new
