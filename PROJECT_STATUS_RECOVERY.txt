@@ -1,6 +1,44 @@
-PROJECT-V2 RECOVERY - updated 2026-10-29
+PROJECT-V2 RECOVERY - updated 2026-10-30
 Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
+
+LOCAL BACKGROUND LAUNCH (Windows PowerShell or Git Bash, from the project root)
+The school workstation is unavailable; do not change its driver remotely again
+as part of this local training task. Local RTX 2060 6GB is visible to JAX 0.11.0
+in Ubuntu WSL2, default backend=gpu. No local drivers/dependencies were changed.
+
+Bounded throughput probe, NOT a walking-quality test:
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start_recovery_v6_local.ps1 -Probe
+Full fresh 80M run, only after the probe finishes and its speed is reviewed:
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start_recovery_v6_local.ps1
+
+Both use 64 train envs / 4 eval envs / batch128, the existing v6 model/reference/
+reward and PPO settings. The probe runs 102,400 steps, 3 evals, metrics every
+5,120 steps; timeout sends SIGINT after 30min, then SIGKILL after another 30s
+if necessary. A hard-killed run may retain a stale _running directory suffix.
+Full run uses 80M steps, 41 evals, metrics every 51,200 steps and no timeout.
+This is a fresh run, not an automatic continuation of the probe checkpoint.
+Only the launcher is detached; there is no automatic 80M launch or restart.
+WSL process runs hidden with nice +5; closing the calling terminal is okay.
+Windows sleep/shutdown or wsl --shutdown interrupts it. Keep laptop on AC.
+
+Each launch writes unique artifacts/recovery_local_<mode>_<timestamp> files:
+  .stdout.log = main training/progress log; .stderr.log = errors/compiler logs;
+  .json = Windows launcher PID, run tag, start time and both log paths.
+The existing flock guard rejects overlapping recovery-script runs.
+JAX persistent compilation cache defaults to ~/.cache/mujoco-bipedal-jax in
+WSL (or XDG_CACHE_HOME); this can reuse compatible compiled functions on later
+starts, not accelerate simulation steps or guarantee reuse of every function.
+PowerShell ExecutionPolicy Bypass applies only to that invocation.
+
+Initial Oct30 probe launched at 15:16 local:
+  artifacts/recovery_local_probe_20261030_151619_854.stdout.log
+  artifacts/recovery_local_probe_20261030_151619_854.stderr.log
+  Windows launcher PID1472, Linux training PID440 at launch.
+At 15:21 it was still in reference reset diagnostics, with no PPO step reported.
+Do not infer walking, training throughput, or completion from process creation.
+Initial host RAM was ~16GB with ~4.6GB free; WSL limit remains 10GB+8GB swap.
+No further memory limits, services, power settings or system packages changed.
 
 SERVER HANDOFF (Linux Bash, after the administrator repairs the GPU driver)
 Use this branch with the Oct28 training fixes; do not start two runs together.

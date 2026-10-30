@@ -5,6 +5,9 @@ project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd -- "$project_dir"
 export PYTHONUNBUFFERED=1
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
+# Reuse expensive compiled executables on subsequent compatible launches.
+# Keep this on the Linux filesystem when the project lives under /mnt/c.
+export JAX_COMPILATION_CACHE_DIR="${JAX_COMPILATION_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/mujoco-bipedal-jax}"
 # Opt-in detailed JAX compile logs: JAX_LOG_COMPILES=1 bash scripts/...
 # Training callbacks distinguish executed PPO blocks from the initial JIT wait.
 mkdir -p artifacts
@@ -28,17 +31,18 @@ sha256sum train.py biomechanics_env.py config.py bvh_reference.py \
 # Both 256/512 and 64/128 were OOM-killed during XLA compilation under WSL's
 # default 8 GB RAM plus 2 GB swap, before either run completed its first step.
 # The 10 GB RAM / 8 GB swap limit changes capacity, not experiment semantics.
-# 41 evaluations = initial plus about every 2M steps, with saved checkpoints.
+# Default: 41 evaluations = initial plus about every 2M steps, with checkpoints.
+# The local launcher overrides duration/eval frequency for a throughput probe.
 # The preset otherwise retains residual1/current-frame/pure/noDR/noERFI.
 exec .venv/bin/python -u train.py \
   --device gpu \
   --one-clip-overfit \
-  --timesteps 80000000 \
+  --timesteps "${RECOVERY_TIMESTEPS:-80000000}" \
   --num-envs 64 \
   --num-eval-envs 4 \
   --batch-size 128 \
-  --num-evals 41 \
-  --training-metrics-steps 100000 \
+  --num-evals "${RECOVERY_NUM_EVALS:-41}" \
+  --training-metrics-steps "${RECOVERY_METRICS_STEPS:-100000}" \
   --episode-length 500 \
   --seed 7 \
   --reference-gait-file BVH_walking_animation/cmuconvert-max-01-09/02/02_01.bvh \
@@ -47,4 +51,4 @@ exec .venv/bin/python -u train.py \
   --recovery-physics-version consistent_v6 \
   --reference-loop-closure bounded \
   --xml-path generated_models/human_male_180cm_75kg_standard_trainfast_v21_noarms.xml \
-  --run-tag recovery_v6_pure_tracker_mean_80m
+  --run-tag "${RECOVERY_RUN_TAG:-recovery_v6_pure_tracker_mean_80m}"
