@@ -3,13 +3,23 @@ Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 LOCAL BACKGROUND LAUNCH (Windows PowerShell or Git Bash, from the project root)
+Oct30 17:31 local: user explicitly requested the full run without a timeout.
+Started fresh 80M mode via start_recovery_v6_local.ps1 (without -Probe).
+Verified detached Windows PID7232 / WSL launcher PID314; no timeout wrapper.
+Main log: artifacts/recovery_local_80m_20261030_173151_872.stdout.log
+Errors: artifacts/recovery_local_80m_20261030_173151_872.stderr.log
+At launch it was still in startup, not yet evidence of completed PPO updates.
+Earlier 30min probe had exited by 17:14, with no checkpoint or PPO progress;
+last compiler message was 15:46:10 in jit_generate_eval_unroll. Timing is
+consistent with its timeout, but the launcher did not retain an exit code.
+
 The school workstation is unavailable; do not change its driver remotely again
 as part of this local training task. Local RTX 2060 6GB is visible to JAX 0.11.0
 in Ubuntu WSL2, default backend=gpu. No local drivers/dependencies were changed.
 
 Bounded throughput probe, NOT a walking-quality test:
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start_recovery_v6_local.ps1 -Probe
-Full fresh 80M run, only after the probe finishes and its speed is reviewed:
+Full fresh 80M run (no timeout; now running at the user's explicit request):
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start_recovery_v6_local.ps1
 
 Both use 64 train envs / 4 eval envs / batch128, the existing v6 model/reference/
