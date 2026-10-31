@@ -1008,8 +1008,6 @@ class ConditionalAutoResetWrapper(playground_wrapper.Wrapper):
         rng_key = jax.vmap(jax.random.split)(rng)
         rng, key = rng_key[..., 0], rng_key[..., 1]
         state = self.env.reset(key)
-        state.info[self._key("first_data")] = state.data
-        state.info[self._key("first_obs")] = state.obs
         state.info[self._key("rng")] = rng
         state.info[self._key("done_count")] = jnp.zeros(
             key.shape[:-1],

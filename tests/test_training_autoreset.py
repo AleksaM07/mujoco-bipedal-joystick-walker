@@ -135,6 +135,12 @@ class TrainingAutoResetTests(unittest.TestCase):
             )
         self.assertEqual(len(set(markers)), len(markers))
 
+    def test_reset_does_not_carry_unused_full_state_copies(self):
+        _, state = self.make_environment(episode_length=5, batch_size=3)
+
+        self.assertNotIn("AutoResetWrapper_first_data", state.info)
+        self.assertNotIn("AutoResetWrapper_first_obs", state.info)
+
 
 if __name__ == "__main__":
     unittest.main()
