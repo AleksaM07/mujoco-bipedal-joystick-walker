@@ -60,6 +60,14 @@ steps. Restore includes policy/normalizer; optimizer and run step counter restar
 No replacement long training had been launched at the time of this measurement.
 Evidence: artifacts/rollout_batch_comparison_20261031.json.
 
+Oct31 19:47 local: resumed background training was launched from checkpoint
+000002001920 with128 train envs and77,998,080 requested new steps. There is no
+timeout. The launcher recorded Git HEAD032d81b and the real train.py process was
+alive as PID427; make_environment completed in20.65s and reference reset
+diagnostics started. At this entry, stderr was empty and PPO updates had not yet
+started. Main log: artifacts/recovery_local_custom_resume_20261031_194712_713.stdout.log
+Errors: artifacts/recovery_local_custom_resume_20261031_194712_713.stderr.log
+
 Oct30 17:31 local: user explicitly requested the full run without a timeout.
 Started fresh 80M mode via start_recovery_v6_local.ps1 (without -Probe).
 Verified detached Windows PID7232 / WSL launcher PID314; no timeout wrapper.
