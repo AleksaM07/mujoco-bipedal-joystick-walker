@@ -67,6 +67,11 @@ alive as PID427; make_environment completed in20.65s and reference reset
 diagnostics started. At this entry, stderr was empty and PPO updates had not yet
 started. Main log: artifacts/recovery_local_custom_resume_20261031_194712_713.stdout.log
 Errors: artifacts/recovery_local_custom_resume_20261031_194712_713.stderr.log
+Oct31 20:45 local: the user requested this run be stopped because it slowed the
+laptop during study. SIGINT interrupted the first large PPO block; JAX reported
+KeyboardInterrupt during cleanup, then SIGTERM released the remaining process.
+No run-local training metric or checkpoint completed. The source checkpoint at
+step2,001,920 remains the correct restart point and was not modified.
 
 Oct30 17:31 local: user explicitly requested the full run without a timeout.
 Started fresh 80M mode via start_recovery_v6_local.ps1 (without -Probe).
