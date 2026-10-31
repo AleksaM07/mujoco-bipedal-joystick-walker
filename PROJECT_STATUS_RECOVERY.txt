@@ -20,12 +20,36 @@ Startup diagnostic reset took372.18s. The post-checkpoint eval interval was
 about15min; the old evaluator executes500 steps even after all scored episodes
 finish. We are optimizing startup/evaluation first, not changing gait/rewards.
 
-Oct31 performance phase1: compile the standalone startup diagnostic reset as
+Oct31 performance phase1 (42a8361): compile the standalone startup diagnostic reset as
 one JAX program and synchronize before reporting its metrics. The diagnostic
 does not feed the PPO initial state or consume PPO RNG. Production reset math,
 rewards, seeds and checkpoints are unchanged. Five real reset/contact tests
-and eight training-output tests pass on Windows CPU. GPU timing is in progress;
-do not claim a measured acceleration until that result is available.
+and eight training-output tests pass on Windows CPU. Actual v21 GPU diagnostic:
+cold173.406s, repeated same-process0.112s, versus372.18s historical eager reset.
+That is startup evidence, not a controlled simultaneous speed comparison or an
+improvement to steady-state PPO throughput.
+
+Oct31 performance phase2: JAX evaluation now runs only the first scored episode
+per world, with the SAME initial key indexing as the old wrapper. Completed
+worlds are frozen; after all finish, physics is skipped for the remaining scan.
+No change to training auto-reset, physics, rewards, seeds or Warp evaluation.
+Eight targeted regressions cover physical failures, mixed timeouts, survivors,
+action repeat, reset, finite inactive states and backend/routing isolation.
+All321 tests passed (127.697s); the subsequent eval-time logger test also passed.
+Real GPU evaluation restored21 finite checkpoint leaves and reproduced episode
+lengths49/41/67/53 and reward95.26194 at the original eval RNG index1. Timings:
+new run99.824s and102.482s, versus ~15min historical eval interval (not a clean
+paired benchmark). First cold attempt took362.211s; subsequent107.431s.
+Evidence: artifacts/evaluation_first_episode_20261031.json. Repeated GPU rewards
+differ by7.63e-6; auxiliary diagnostic deltas reach1.13e-4. The initial overly
+strict all-diagnostic repeat assertion failed AFTER saving this report; reward
+and episode-length checks pass. Benchmark now reports auxiliary deltas instead
+of claiming bitwise equality. It gates reward/length and exact episode steps.
+The first attempted optimization retained auto-reset inside another condition;
+it reached~8.8GB WSL RAM and was stopped, then replaced by this simpler version.
+No new long training has been launched. 64/128-world rollout measurement is now
+running sequentially; it excludes optimizer/callback cost and cannot by itself
+establish full PPO speed. Keep the original checkpoint for continuation.
 
 Oct30 17:31 local: user explicitly requested the full run without a timeout.
 Started fresh 80M mode via start_recovery_v6_local.ps1 (without -Probe).

@@ -69,12 +69,14 @@ class TrainingProgressTests(unittest.TestCase):
                     "eval/avg_episode_length": 60.0,
                     "training/sps": 500.0,
                     "training/walltime": 4000.0,
+                    "eval/epoch_eval_time": 107.4,
                 },
             )
         line = log.call_args.args[0].format(*log.call_args.args[1:])
         self.assertIn("eval | step=2001920", line)
         self.assertIn("training_sps=500.000", line)
         self.assertIn("training_seconds=4000.000", line)
+        self.assertIn("eval_seconds=107.400", line)
         self.assertEqual(progress.best_step, 2001920)
         self.assertEqual(progress.best_reward, 100.0)
 

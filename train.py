@@ -105,6 +105,7 @@ class TrainingProgressLogger:
         for key, label in (
             ("training/sps", "training_sps"),
             ("training/walltime", "training_seconds"),
+            ("eval/epoch_eval_time", "eval_seconds"),
         ):
             if key in metrics:
                 diagnostics.append(f"{label}={float(metrics[key]):.3f}")
@@ -878,6 +879,12 @@ def make_wrap_env_fn(eval_env):
         del full_reset
         if wrapped_env is eval_env:
             randomization_fn = None
+        if wrapped_env is eval_env and getattr(
+            getattr(wrapped_env, "_config", None), "physics_backend", None
+        ) == "mjx_jax":
+            return wrap_biomechanics_evaluation(
+                wrapped_env, episode_length, action_repeat
+            )
         return wrap_biomechanics_training(
             wrapped_env,
             episode_length=episode_length,
@@ -1081,6 +1088,83 @@ class ConditionalAutoResetWrapper(playground_wrapper.Wrapper):
             info=next_info,
             metrics=metrics,
         )
+
+
+class CompletedEvaluationWrapper(playground_wrapper.Wrapper):
+    """Freeze completed episodes and skip physics once all episodes finish.
+
+    Wrap EpisodeWrapper(VmapWrapper(env)), without auto-reset. Brax scores
+    only the first episode of each world, so later episodes are unnecessary.
+    The outer EvalWrapper still owns score/length accumulation. This wrapper
+    is evaluation-only and must not be used for training rollouts.
+    """
+
+    ACTIVE_KEY = "evaluation_active_episodes"
+
+    def reset(self, rng: jax.Array) -> mjx_env.State:
+        # Preserve the existing wrapper's indexing, including legacy uint32
+        # keys, so this performance change does not resample initial phases.
+        reset_key = jax.vmap(jax.random.split)(rng)[..., 1]
+        state = self.env.reset(reset_key)
+        return state.replace(
+            info={**state.info, self.ACTIVE_KEY: jnp.ones_like(state.done, dtype=bool)},
+            metrics={**state.metrics, "reward": state.reward},
+        )
+
+    def step(self, state: mjx_env.State, action: jax.Array) -> mjx_env.State:
+        active = state.info[self.ACTIVE_KEY]
+
+        def advance(current_state: mjx_env.State) -> mjx_env.State:
+            # Keep this evaluator-owned mask outside the inner state.
+            inner_state = current_state.replace(
+                info={
+                    key: value
+                    for key, value in current_state.info.items()
+                    if key != self.ACTIVE_KEY
+                }
+            )
+            stepped = self.env.step(inner_state, action)
+            truncation = stepped.info.get("truncation", jnp.zeros_like(stepped.done))
+            stepped = stepped.replace(
+                metrics={
+                    **stepped.metrics,
+                    "terminated": stepped.done * (1.0 - truncation),
+                    "truncated": stepped.done * truncation,
+                }
+            )
+
+            def where_active(next_value, previous_value):
+                if next_value.ndim == 0 or next_value.shape[0] != active.shape[0]:
+                    return next_value
+                mask = active.reshape(
+                    (active.shape[0],) + (1,) * (next_value.ndim - 1)
+                )
+                return jnp.where(mask, next_value, previous_value)
+
+            # Keep inactive worlds at their first terminal state. Letting them
+            # continue falling can produce invalid states that poison metrics
+            # even when multiplied by Brax's zero active-episode mask.
+            stepped = jax.tree.map(where_active, stepped, inner_state)
+            return stepped.replace(
+                info={
+                    **stepped.info,
+                    self.ACTIVE_KEY: active & ~stepped.done.astype(bool),
+                },
+                metrics={**stepped.metrics, "reward": stepped.reward},
+            )
+
+        return jax.lax.cond(jnp.any(active), advance, lambda current: current, state)
+
+
+def wrap_biomechanics_evaluation(
+    env: mjx_env.MjxEnv,
+    episode_length: int = 1000,
+    action_repeat: int = 1,
+) -> CompletedEvaluationWrapper:
+    """Evaluate first episodes with the same initial RNG as training wrappers."""
+    env = BiomechanicsVmapWrapper(env)
+    env = brax_training.EpisodeWrapper(env, episode_length, action_repeat)
+    return CompletedEvaluationWrapper(env)
 
 
 def wrap_biomechanics_training(
