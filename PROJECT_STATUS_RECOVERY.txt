@@ -68,10 +68,25 @@ diagnostics started. At this entry, stderr was empty and PPO updates had not yet
 started. Main log: artifacts/recovery_local_custom_resume_20261031_194712_713.stdout.log
 Errors: artifacts/recovery_local_custom_resume_20261031_194712_713.stderr.log
 Oct31 20:45 local: the user requested this run be stopped because it slowed the
-laptop during study. SIGINT interrupted the first large PPO block; JAX reported
-KeyboardInterrupt during cleanup, then SIGTERM released the remaining process.
-No run-local training metric or checkpoint completed. The source checkpoint at
-step2,001,920 remains the correct restart point and was not modified.
+laptop during study. It completed614,400 run-local steps but had not reached the
+first ~1.95M checkpoint. Excluding the first compile-heavy callback, median PPO
+throughput was290.7 env steps/s (individual callbacks245.5-516.2), versus164.5
+median in the old64-env run. Thus128 envs improved real PPO throughput by~77%,
+although less than the isolated rollout benchmark. SIGINT interrupted the next
+PPO block; JAX reported KeyboardInterrupt during cleanup, then SIGTERM released
+the remaining process. The source checkpoint at step2,001,920 remains the correct
+restart point and was not modified. No learning from these614,400 steps was saved.
+
+Oct31 performance phases4-5: remove unused full MuJoCo data/observation copies
+from ConditionalAutoResetWrapper state, then replace training EpisodeWrapper's
+duplicate aggregation of every diagnostic with sum_reward+length only. Complete
+diagnostics remain in state.metrics and evaluation still aggregates all of them.
+Physics, observations, actions, rewards, done/truncation, reset RNG, PPO/GAE,
+network shape and checkpoint format are unchanged. A direct legacy/new rollout
+regression matches data, observation, reward, done, metrics, reset markers, RNG,
+episode totals and timeout behavior across falls/resets. All323 tests pass in
+133.274s. Commits: ea16bf0 and cf66596. GPU speedup is intentionally unclaimed
+until the next real run reports stable callback sps.
 
 Oct30 17:31 local: user explicitly requested the full run without a timeout.
 Started fresh 80M mode via start_recovery_v6_local.ps1 (without -Probe).
