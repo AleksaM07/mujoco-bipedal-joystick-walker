@@ -1,8 +1,32 @@
-PROJECT-V2 RECOVERY - updated 2026-10-30
+PROJECT-V2 RECOVERY - updated 2026-10-31
 Branch: recovery/project-v2-imitation
 Base: project_v2_refrences_only @ 8b4d442
 
 LOCAL BACKGROUND LAUNCH (Windows PowerShell or Git Bash, from the project root)
+Oct31 review: the Oct30 full run is STOPPED; _running is a stale folder suffix.
+Last recorded training callback: 2,201,600 steps at 21:56:53. A checkpoint exists
+at checkpoints/000002001920 inside the Oct30 17:33 run directory. Windows logged
+Kernel-Power 41 and EventLog 6008 on the next boot, confirming an unclean system
+shutdown; those events do not identify its cause. There is no Python traceback.
+No replacement long training has been started during this performance review.
+
+Quality: initial eval reward86.950 / length51.5; at step2,001,920 reward95.262 /
+length52.5, i.e. +9.6% reward but only +1.9% survival (~1.05s of a 10s horizon).
+All four eval worlds physically terminated (done_low=1); no walking is proven.
+Training episode reward/length improved more, but are not the same eval sample.
+Typical callbacks ran at150-200 env steps/s; first epoch reports159.547 steps/s
+including compilation. 80M at that epoch rate is ~5.8days before eval overhead.
+Startup diagnostic reset took372.18s. The post-checkpoint eval interval was
+about15min; the old evaluator executes500 steps even after all scored episodes
+finish. We are optimizing startup/evaluation first, not changing gait/rewards.
+
+Oct31 performance phase1: compile the standalone startup diagnostic reset as
+one JAX program and synchronize before reporting its metrics. The diagnostic
+does not feed the PPO initial state or consume PPO RNG. Production reset math,
+rewards, seeds and checkpoints are unchanged. Five real reset/contact tests
+and eight training-output tests pass on Windows CPU. GPU timing is in progress;
+do not claim a measured acceleration until that result is available.
+
 Oct30 17:31 local: user explicitly requested the full run without a timeout.
 Started fresh 80M mode via start_recovery_v6_local.ps1 (without -Probe).
 Verified detached Windows PID7232 / WSL launcher PID314; no timeout wrapper.
@@ -19,7 +43,7 @@ in Ubuntu WSL2, default backend=gpu. No local drivers/dependencies were changed.
 
 Bounded throughput probe, NOT a walking-quality test:
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start_recovery_v6_local.ps1 -Probe
-Full fresh 80M run (no timeout; now running at the user's explicit request):
+Full fresh 80M run (no timeout; command starts from scratch, not a saved policy):
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start_recovery_v6_local.ps1
 
 Both use 64 train envs / 4 eval envs / batch128, the existing v6 model/reference/

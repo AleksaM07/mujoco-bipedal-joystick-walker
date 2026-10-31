@@ -712,7 +712,12 @@ def run_training(
     log_eval_environment_summary(eval_env)
     if getattr(env._config, "reference_gait", "none") in ("bvh", "smpl"):
         with logged_stage("reference reset diagnostics"):
-            log_reference_reset_diagnostics(env.reset(jax.random.PRNGKey(train_config.seed)))
+            # Compile the diagnostic as one program instead of dispatching and
+            # compiling hundreds of small GPU operations in an eager reset.
+            diagnostic_state = jax.jit(env.reset)(
+                jax.random.PRNGKey(train_config.seed)
+            )
+            log_reference_reset_diagnostics(jax.block_until_ready(diagnostic_state))
     logger.info(
         "trening start | env={} | impl={} | run_dir={}",
         env_name,
