@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fresh 80M learned baseline. No experimental reward/reference monkeypatches.
+# 80M learned baseline, optionally restoring saved weights and normalization.
 set -euo pipefail
 project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd -- "$project_dir"
@@ -27,18 +27,22 @@ sha256sum train.py biomechanics_env.py config.py bvh_reference.py \
   generated_models/human_male_180cm_75kg_standard_trainfast_v21_noarms.xml \
   BVH_walking_animation/cmuconvert-max-01-09/02/02_01.bvh
 
-# Use 64 worlds / 128 batch together with scripts/wslconfig_recovery.ini.
+# Default: 64 worlds / 128 batch with scripts/wslconfig_recovery.ini.
 # Both 256/512 and 64/128 were OOM-killed during XLA compilation under WSL's
 # default 8 GB RAM plus 2 GB swap, before either run completed its first step.
 # The 10 GB RAM / 8 GB swap limit changes capacity, not experiment semantics.
 # Default: 41 evaluations = initial plus about every 2M steps, with checkpoints.
 # The local launcher overrides duration/eval frequency for a throughput probe.
 # The preset otherwise retains residual1/current-frame/pure/noDR/noERFI.
+resume_args=()
+if [[ -n "${RECOVERY_RESUME_FROM:-}" ]]; then
+  resume_args=(--resume-from "$RECOVERY_RESUME_FROM")
+fi
 exec .venv/bin/python -u train.py \
   --device gpu \
   --one-clip-overfit \
   --timesteps "${RECOVERY_TIMESTEPS:-80000000}" \
-  --num-envs 64 \
+  --num-envs "${RECOVERY_NUM_ENVS:-64}" \
   --num-eval-envs 4 \
   --batch-size 128 \
   --num-evals "${RECOVERY_NUM_EVALS:-41}" \
@@ -51,4 +55,5 @@ exec .venv/bin/python -u train.py \
   --recovery-physics-version consistent_v6 \
   --reference-loop-closure bounded \
   --xml-path generated_models/human_male_180cm_75kg_standard_trainfast_v21_noarms.xml \
-  --run-tag "${RECOVERY_RUN_TAG:-recovery_v6_pure_tracker_mean_80m}"
+  --run-tag "${RECOVERY_RUN_TAG:-recovery_v6_pure_tracker_mean_80m}" \
+  "${resume_args[@]}"

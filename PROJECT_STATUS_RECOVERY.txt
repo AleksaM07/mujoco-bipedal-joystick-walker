@@ -47,9 +47,18 @@ and episode-length checks pass. Benchmark now reports auxiliary deltas instead
 of claiming bitwise equality. It gates reward/length and exact episode steps.
 The first attempted optimization retained auto-reset inside another condition;
 it reached~8.8GB WSL RAM and was stopped, then replaced by this simpler version.
-No new long training has been launched. 64/128-world rollout measurement is now
-running sequentially; it excludes optimizer/callback cost and cannot by itself
-establish full PPO speed. Keep the original checkpoint for continuation.
+Oct31 performance phase3: a sequential saved-policy rollout benchmark completed
+for64 and128 training worlds. Excluding compilation and the first settling block,
+64 worlds sustained1088.3 env steps/s and128 sustained2074.8 env steps/s, a90.7%
+increase. Raw warm block times were0.829/1.044/0.952/0.938s for64 and
+0.852/1.043/1.106/0.947s for128. This isolates production physics/auto-reset;
+it excludes PPO optimizer and callbacks, so full-training speed must be measured
+from the resumed run. Both fit without swap/OOM. Use128 worlds while keeping the
+PPO batch size128 and all model/reference/reward settings unchanged. The launcher
+can restore the original step2,001,920 checkpoint and requests77,998,080 new
+steps. Restore includes policy/normalizer; optimizer and run step counter restart.
+No replacement long training had been launched at the time of this measurement.
+Evidence: artifacts/rollout_batch_comparison_20261031.json.
 
 Oct30 17:31 local: user explicitly requested the full run without a timeout.
 Started fresh 80M mode via start_recovery_v6_local.ps1 (without -Probe).
@@ -69,9 +78,12 @@ Bounded throughput probe, NOT a walking-quality test:
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start_recovery_v6_local.ps1 -Probe
 Full fresh 80M run (no timeout; command starts from scratch, not a saved policy):
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start_recovery_v6_local.ps1
+Resume the interrupted checkpoint to approximately80M total, using128 worlds:
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start_recovery_v6_local.ps1 -NumEnvs 128 -Timesteps 77998080 -ResumeFrom "runs/20261030_1733_recovery_v6_local_80m_20261030_173151_87_V1_steps-80m_reward-pending_running/checkpoints/000002001920"
 
-Both use 64 train envs / 4 eval envs / batch128, the existing v6 model/reference/
-reward and PPO settings. The probe runs 102,400 steps, 3 evals, metrics every
+The fresh/probe default is64 train envs; the measured resume command uses128.
+Both use4 eval envs / batch128 and the existing v6 model/reference/reward and
+PPO settings. The probe runs 102,400 steps, 3 evals, metrics every
 5,120 steps; timeout sends SIGINT after 30min, then SIGKILL after another 30s
 if necessary. A hard-killed run may retain a stale _running directory suffix.
 Full run uses 80M steps, 41 evals, metrics every 51,200 steps and no timeout.
