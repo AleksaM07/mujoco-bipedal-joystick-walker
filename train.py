@@ -994,6 +994,56 @@ class PerEpisodeDomainRandomizationVmapWrapper(playground_wrapper.Wrapper):
         )
 
 
+class TrainingEpisodeWrapper(brax_training.EpisodeWrapper):
+    """Track only episode values consumed by Brax's training logger.
+
+    Environment diagnostics stay available in ``state.metrics`` and evaluation
+    still aggregates all of them. PPO training only consumes episode reward and
+    length, so duplicating every diagnostic into ``state.info`` adds device
+    state, reductions, and host-callback payload without affecting learning.
+    """
+
+    def reset(self, rng: jax.Array) -> mjx_env.State:
+        state = super().reset(rng)
+        state.info["episode_metrics"] = {
+            "sum_reward": jnp.zeros(rng.shape[:-1]),
+            "length": jnp.zeros(rng.shape[:-1]),
+        }
+        return state
+
+    def step(self, state: mjx_env.State, action: jax.Array) -> mjx_env.State:
+        def repeat_step(current_state, _):
+            next_state = self.env.step(current_state, action)
+            return next_state, next_state.reward
+
+        state, rewards = jax.lax.scan(
+            repeat_step,
+            state,
+            (),
+            self.action_repeat,
+        )
+        state = state.replace(reward=jnp.sum(rewards, axis=0))
+        steps = state.info["steps"] + self.action_repeat
+        episode_limit = jnp.asarray(self.episode_length, dtype=jnp.int32)
+        reached_limit = steps >= episode_limit
+        done = jnp.where(reached_limit, jnp.ones_like(state.done), state.done)
+        state.info["truncation"] = jnp.where(
+            reached_limit,
+            1 - state.done,
+            jnp.zeros_like(state.done),
+        )
+        state.info["steps"] = steps
+
+        previous_done = state.info["episode_done"]
+        episode_metrics = state.info["episode_metrics"]
+        episode_metrics["sum_reward"] *= 1 - previous_done
+        episode_metrics["sum_reward"] += jnp.sum(rewards, axis=0)
+        episode_metrics["length"] *= 1 - previous_done
+        episode_metrics["length"] += self.action_repeat
+        state.info["episode_done"] = done
+        return state.replace(done=done)
+
+
 class ConditionalAutoResetWrapper(playground_wrapper.Wrapper):
     """Full-reset auto wrapper that only builds reset states when needed."""
 
@@ -1177,7 +1227,7 @@ def wrap_biomechanics_training(
         env = BiomechanicsVmapWrapper(env)
     else:
         env = PerEpisodeDomainRandomizationVmapWrapper(env, randomization_fn)
-    env = brax_training.EpisodeWrapper(env, episode_length, action_repeat)
+    env = TrainingEpisodeWrapper(env, episode_length, action_repeat)
     return ConditionalAutoResetWrapper(env)
 
 

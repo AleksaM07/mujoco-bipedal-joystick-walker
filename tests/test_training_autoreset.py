@@ -7,9 +7,14 @@ import unittest
 import jax
 import jax.numpy as jnp
 import numpy as np
+from brax.envs.wrappers import training as brax_training
 from mujoco_playground._src import mjx_env
 
-from train import wrap_biomechanics_training
+from train import (
+    BiomechanicsVmapWrapper,
+    ConditionalAutoResetWrapper,
+    wrap_biomechanics_training,
+)
 
 
 class ToyEnvironment:
@@ -140,6 +145,68 @@ class TrainingAutoResetTests(unittest.TestCase):
 
         self.assertNotIn("AutoResetWrapper_first_data", state.info)
         self.assertNotIn("AutoResetWrapper_first_obs", state.info)
+
+    def test_slim_episode_metrics_preserve_training_transitions(self):
+        keys = jax.random.split(jax.random.PRNGKey(13), 3)
+        optimized_env = wrap_biomechanics_training(ToyEnvironment(), episode_length=3)
+        legacy_env = ConditionalAutoResetWrapper(
+            brax_training.EpisodeWrapper(
+                BiomechanicsVmapWrapper(ToyEnvironment()),
+                episode_length=3,
+                action_repeat=1,
+            )
+        )
+        optimized_state = optimized_env.reset(keys)
+        legacy_state = legacy_env.reset(keys)
+
+        self.assertEqual(
+            set(optimized_state.info["episode_metrics"]),
+            {"sum_reward", "length"},
+        )
+        self.assertGreater(len(legacy_state.info["episode_metrics"]), 2)
+
+        optimized_step = jax.jit(optimized_env.step)
+        legacy_step = jax.jit(legacy_env.step)
+        actions = (
+            jnp.zeros((3, 1)),
+            jnp.array([[0.0], [-1.0], [0.0]]),
+            jnp.zeros((3, 1)),
+            jnp.zeros((3, 1)),
+        )
+        for action in actions:
+            optimized_state = optimized_step(optimized_state, action)
+            legacy_state = legacy_step(legacy_state, action)
+            for optimized, legacy in (
+                (optimized_state.data, legacy_state.data),
+                (optimized_state.obs, legacy_state.obs),
+                (optimized_state.reward, legacy_state.reward),
+                (optimized_state.done, legacy_state.done),
+                (optimized_state.metrics, legacy_state.metrics),
+            ):
+                for optimized_leaf, legacy_leaf in zip(
+                    jax.tree.leaves(optimized),
+                    jax.tree.leaves(legacy),
+                    strict=True,
+                ):
+                    np.testing.assert_array_equal(optimized_leaf, legacy_leaf)
+            for key in (
+                "steps",
+                "truncation",
+                "episode_done",
+                "reset_marker",
+                "age",
+                "AutoResetWrapper_rng",
+                "AutoResetWrapper_done_count",
+            ):
+                np.testing.assert_array_equal(
+                    optimized_state.info[key],
+                    legacy_state.info[key],
+                )
+            for key in ("sum_reward", "length"):
+                np.testing.assert_array_equal(
+                    optimized_state.info["episode_metrics"][key],
+                    legacy_state.info["episode_metrics"][key],
+                )
 
 
 if __name__ == "__main__":
