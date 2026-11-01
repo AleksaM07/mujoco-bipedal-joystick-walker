@@ -97,6 +97,26 @@ restore was explicitly confirmed and stderr was empty at handoff. Git code HEAD
 recorded by the launcher:844bbc4 (includes ea16bf0/cf66596; 844bbc4 is docs).
 Main log: artifacts/recovery_local_custom_resume_20261101_021805_622.stdout.log
 Errors: artifacts/recovery_local_custom_resume_20261101_021805_622.stderr.log
+Nov01 09:59 local: stopped at user request. Completed3,379,200 run-local steps;
+latest saved checkpoint is3,010,560, so368,640 trailing steps were not saved.
+Four checkpoints exist at752,640-step intervals. Eval reward/length progressed:
+step0 122.527/65.0; 752,640 145.722/72.75; 1,505,280 116.189/62.25;
+2,257,920 151.820/75.5; 3,010,560 171.427/84.25. The latest is best,
+but each eval uses only4 stochastic worlds and the path is visibly non-monotonic.
+Initial-to-latest reward rose39.9%, length29.6%, reward/step8.0%, quality
+62.8->67.8 and root-velocity imitation0.190->0.250. Action magnitude/step
+improved3.064->2.884. All eval worlds still terminated from low height, at only
+16.9% of the500-step horizon (~1.69s); command and progress were zero. This is
+better short-horizon tracking/survival, not evidence of walking. Integrated foot
+slip rose76.9->118.2; normalized by episode length it worsened about18.5%.
+Performance also regressed over the sustained run: callback median117.7 steps/s,
+first-half median138.5 and second-half112.5, versus290.7 in the earlier short
+128-env sample. The semantically neutral bookkeeping changes did not demonstrate
+an end-to-end speed gain here. Sustained thermal/power/system load is plausible
+given the time trend, but was not logged and is therefore not proven. Evaluation
+after warmup took30-36s except one545.8s outlier. Stop produced the expected JAX
+KeyboardInterrupt cleanup trace; SIGTERM then removed train.py. Evidence:
+artifacts/recovery_30m_summary_20261101.json.
 
 Oct30 17:31 local: user explicitly requested the full run without a timeout.
 Started fresh 80M mode via start_recovery_v6_local.ps1 (without -Probe).
