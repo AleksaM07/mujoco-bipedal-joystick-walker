@@ -88,6 +88,16 @@ episode totals and timeout behavior across falls/resets. All323 tests pass in
 133.274s. Commits: ea16bf0 and cf66596. GPU speedup is intentionally unclaimed
 until the next real run reports stable callback sps.
 
+Nov01 02:18 local: user requested a30M overnight experiment. Background run
+started from checkpoint000002001920 with128 training envs and all phase4-5
+efficiency changes. Requested steps are30,000,000 new run-local steps; optimizer
+and run counter restart while policy/normalizer restore. There is no timeout.
+PID558 entered ppo.train after make_environment22.56s and reset diagnostics44.36s;
+restore was explicitly confirmed and stderr was empty at handoff. Git code HEAD
+recorded by the launcher:844bbc4 (includes ea16bf0/cf66596; 844bbc4 is docs).
+Main log: artifacts/recovery_local_custom_resume_20261101_021805_622.stdout.log
+Errors: artifacts/recovery_local_custom_resume_20261101_021805_622.stderr.log
+
 Oct30 17:31 local: user explicitly requested the full run without a timeout.
 Started fresh 80M mode via start_recovery_v6_local.ps1 (without -Probe).
 Verified detached Windows PID7232 / WSL launcher PID314; no timeout wrapper.
