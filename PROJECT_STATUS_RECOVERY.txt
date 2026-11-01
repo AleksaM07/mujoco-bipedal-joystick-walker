@@ -118,6 +118,15 @@ after warmup took30-36s except one545.8s outlier. Stop produced the expected JAX
 KeyboardInterrupt cleanup trace; SIGTERM then removed train.py. Evidence:
 artifacts/recovery_30m_summary_20261101.json.
 
+Nov01 23:02 local: resumed the best saved checkpoint000003010560 for the
+remaining26,989,440 requested steps, so the two run-local saved segments target
+approximately30M in total. Policy/normalizer restore was explicitly confirmed;
+optimizer and the new run counter restart. Configuration remains128 train envs,
+batch128, LR1e-4, pure tracker and no timeout. PID461 entered ppo.train after
+make_environment14.86s and reset diagnostics34.32s; stderr was empty at handoff.
+Main log: artifacts/recovery_local_custom_resume_20261101_230220_337.stdout.log
+Errors: artifacts/recovery_local_custom_resume_20261101_230220_337.stderr.log
+
 Oct30 17:31 local: user explicitly requested the full run without a timeout.
 Started fresh 80M mode via start_recovery_v6_local.ps1 (without -Probe).
 Verified detached Windows PID7232 / WSL launcher PID314; no timeout wrapper.
