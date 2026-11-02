@@ -60,6 +60,24 @@ Mi ovim komandama nastavljamo **isti pure tracker**. Joystick i ruke još nemaju
 odobren novi trening preset; njihov redosled definišemo u [ROADMAP.md](ROADMAP.md).
 Trening log i lokaciju novog run-a dobijamo iz launchera u `artifacts/`.
 
+## Naš prvi arms + joystick curriculum
+
+Na grani `experiment/arms-joystick-v1` širimo provereni 18-DOF checkpoint na
+26 akcija. Migracija zadržava stare lokomocione težine i normalizator, dok osam
+novih shoulder/elbow izlaza počinje kao nulti residual nad BVH referencom. Vrat
+za sada ostaje pasivno stabilizovan; nije deo 26 aktuatora.
+
+Prvo samo ispisujemo komandu:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start_arms_joystick_v1.ps1 -NumEnvs 64 -Timesteps 30000000 -PrintCommand
+```
+
+Bez `-PrintCommand` pokrećemo pozadinski 30M run bez timeout-a. Preset koristi
+`standard_easy` komande u svim smerovima, mixed task+DeepMimic reward, aktivne
+ruke, isti `02_01.bvh` ciklus i manji learning rate `5e-5` radi zaštite naučenog
+hoda.
+
 ## Naša Python okruženja
 
 Mi čuvamo `pyproject.toml` i `uv.lock` bez promene trening zavisnosti u ovom
