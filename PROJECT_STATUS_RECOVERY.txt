@@ -126,6 +126,30 @@ batch128, LR1e-4, pure tracker and no timeout. PID461 entered ppo.train after
 make_environment14.86s and reset diagnostics34.32s; stderr was empty at handoff.
 Main log: artifacts/recovery_local_custom_resume_20261101_230220_337.stdout.log
 Errors: artifacts/recovery_local_custom_resume_20261101_230220_337.stderr.log
+Nov02 10:53 local: continuation completed successfully at27,033,600 steps
+(44,160 above requested due to PPO block rounding), taking11h48m including evals.
+Together with the preceding3,010,560 saved segment this is30,044,160 new steps
+after the original2,001,920 checkpoint, about32.05M cumulative policy exposure.
+There are41 evals and40 checkpoints. First full500/500 eval occurred at20,275,200
+(reward1383.493); three evals reached the full horizon. Best reward is1396.087 at
+checkpoint25,681,920: length500, survival100%, quality93.1%, reward/step2.792,
+no physical termination. Final checkpoint27,033,600 scored1373.414, length495.5,
+survival99.1% and quality92.4%; one of four stochastic worlds terminated.
+Last-ten-eval medians are reward1016.85, length377.375 and quality88.95%, so the
+gain is broader than one lucky eval but still noisy. After step4,055,040 the
+training callback median was1670.7 steps/s (range730.8-1814.7), explaining the
+large overnight speedup; the reason for the abrupt within-run speed transition
+was not instrumented, so it cannot be attributed solely to code changes.
+
+Critical limitation: command/progress remain zero in every eval. Global root-XY
+error per step rises from0.485 at continuation start to2.837 at the first full
+horizon,4.150 at best-reward and6.371 at final. The imitation reward is largely
+translation invariant, so500/500 proves a stable long-horizon pure tracker, not
+forward walking. Visual comparison is required before more training. Compare:
+first full checkpoint20,275,200; best reward25,681,920; final27,033,600. The first
+full checkpoint has lower root-XY error and lower foot slip than best reward,
+while final has lowest slip but one late failure and greatest XY divergence.
+Evidence: artifacts/recovery_completed_summary_20261102.json.
 
 Oct30 17:31 local: user explicitly requested the full run without a timeout.
 Started fresh 80M mode via start_recovery_v6_local.ps1 (without -Probe).
