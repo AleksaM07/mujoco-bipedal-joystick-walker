@@ -1,7 +1,7 @@
 # Humanoid koji je naučio da hoda
 
 Mi treniramo humanoida u MuJoCo simulatoru pomoću PPO-a i BVH reference.
-Na grani **`recovery/project-v2-imitation`** imamo prvi vizuelno potvrđen hod:
+Na grani **`main`** imamo prvi vizuelno potvrđen hod:
 checkpoint **`000025681920`**, `consistent_v6`, jedan ciklus `02_01.bvh` i 18 akcija.
 Trenutno učimo imitaciju sa modelom bez aktivnih ruku. Joystick, ustajanje i
 izbegavanje projektila ostaju naši naredni zadaci.

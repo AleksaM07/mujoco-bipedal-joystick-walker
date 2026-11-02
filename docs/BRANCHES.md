@@ -1,16 +1,19 @@
 # Kako mi koristimo grane i arhivske tagove
 
-Posle čišćenja 2. novembra 2026. na glavnom GitHub repository-ju držimo dve
-grane sa jasnom ulogom:
+Posle čišćenja 2. novembra 2026. na glavnom GitHub repository-ju držimo jednu
+kanonsku granu:
 
 | Grana | Uloga |
 | --- | --- |
-| `main` | Naša ranija objedinjena osnova; ne sadrži novi DeepMimic uspeh. |
-| `recovery/project-v2-imitation` | Naša aktivna linija sa prvim uspešnim hodom. |
+| `main` | Naša proverena linija sa prvim uspešnim hodom i sređenom dokumentacijom. |
 
-Mi trenutno radimo na `recovery/project-v2-imitation`. Kada završimo sređivanje
-i proverimo čist checkout, možemo zasebno odlučiti da li ova linija postaje novi
-`main`. Samo čišćenje ne menja podrazumevanu granu automatski.
+Stara `main` istorija bila je direktni predak recovery linije, pa smo `main`
+bez prepisivanja istorije pomerili unapred za 102 commita. Privremeni naziv
+`recovery/project-v2-imitation` zatim smo uklonili. Stari vrh `main` grane ostaje
+sačuvan tagom `archive/20261102/main-before-first-walk`.
+
+Za sledeću funkcionalnost pravimo novu kratkotrajnu granu iz `main`, umesto da
+ponovo održavamo više nejasnih dugovečnih linija.
 
 ## Šta smo arhivirali
 
@@ -19,6 +22,7 @@ vrhove:
 
 | Arhivski tag | Nekadašnja grana | Commit |
 | --- | --- | --- |
+| `archive/20261102/main-before-first-walk` | stari vrh `main` | `33eaa1f` |
 | `archive/20261102/main-modern-bvh` | `experiment/main-modern-bvh` | `a6ca23d` |
 | `archive/20261102/v21-stable-baseline` | `experiment/v21-stable-baseline` | `cd6557c` |
 | `archive/20261102/backup-before-test` | `backup/with-7f1294e-before-test` | `de5cc52` |
@@ -26,8 +30,8 @@ vrhove:
 | `archive/20261102/lets-call-it-dave` | lokalni `lets_call_it_dave` | `0cd3da8` |
 | `archive/20261102/diagnosis-stash` | `stash@{0}: dijagnostika` | `ddf7a7c` |
 
-Prva četiri arhivska taga i milestone tag `v0.1-first-walk` nalaze se i na
-`origin` remote-u. Tagove za drugi repository i stari dijagnostički stash čuvamo
+Prvih pet arhivskih tagova i milestone tag `v0.1-first-walk` nalaze se i na
+`origin` remote-u. Tagove za lokalni stari rad i dijagnostički stash čuvamo
 lokalno i u bundle-u.
 
 Mi vraćamo granu iz taga bez menjanja trenutnog checkout-a:
