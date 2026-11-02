@@ -1,3 +1,5 @@
+"""Build a strict CMU walking manifest; deletion requires the explicit --delete flag."""
+
 from __future__ import annotations
 
 import argparse

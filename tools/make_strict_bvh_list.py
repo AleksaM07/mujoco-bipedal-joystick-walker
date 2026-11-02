@@ -1,9 +1,11 @@
+"""Write the BVH clip list corresponding to the saved CMU walking manifest."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 KEEP_MANIFEST = PROJECT_ROOT / "CMU_SMPL+H-G" / "_walking_filter_report" / "keep_manifest.txt"
 BVH_INDEX_ROOT = PROJECT_ROOT / "BVH_walking_animation" / "cmuconvert-max-01-09"
 OUTPUT_LIST = PROJECT_ROOT / "BVH_walking_animation" / "cmu_strict_flat_walk_96.txt"
