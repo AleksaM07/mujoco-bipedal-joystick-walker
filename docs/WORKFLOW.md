@@ -76,7 +76,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start_arms_joystick_
 Bez `-PrintCommand` pokrećemo pozadinski 30M run bez timeout-a. Preset koristi
 `standard_easy` komande u svim smerovima, mixed task+DeepMimic reward, aktivne
 ruke, isti `02_01.bvh` ciklus i manji learning rate `5e-5` radi zaštite naučenog
-hoda.
+hoda. PPO zadržava uspešne vrednosti `unroll=10`, `minibatches=4` i
+`updates_per_batch=2`; ne preuzima novije globalne default-e.
 
 ## Naša Python okruženja
 

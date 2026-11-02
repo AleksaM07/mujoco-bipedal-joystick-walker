@@ -47,6 +47,9 @@ exec .venv/bin/python -u train.py \
   --num-envs "${ARMS_JOYSTICK_NUM_ENVS:-64}" \
   --num-eval-envs 4 \
   --batch-size 128 \
+  --unroll-length 10 \
+  --num-minibatches 4 \
+  --updates-per-batch 2 \
   --num-evals "${ARMS_JOYSTICK_NUM_EVALS:-31}" \
   --training-metrics-steps "${ARMS_JOYSTICK_METRICS_STEPS:-50000}" \
   --episode-length 500 \
