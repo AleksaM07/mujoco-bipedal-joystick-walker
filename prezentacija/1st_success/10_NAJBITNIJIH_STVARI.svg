@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1320" viewBox="0 0 1800 1320">
+  <defs>
+    <linearGradient id="header" x1="0" x2="1">
+      <stop offset="0" stop-color="#172554"/>
+      <stop offset="1" stop-color="#1e3a8a"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="5" stdDeviation="7" flood-opacity="0.18"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#64748b"/>
+    </marker>
+    <style>
+      .title { font: 700 38px 'Segoe UI', Arial, sans-serif; fill: white; }
+      .subtitle { font: 400 20px 'Segoe UI', Arial, sans-serif; fill: #dbeafe; }
+      .colhead { font: 700 24px 'Segoe UI', Arial, sans-serif; }
+      .num { font: 700 23px 'Segoe UI', Arial, sans-serif; fill: white; text-anchor: middle; dominant-baseline: middle; }
+      .problem { font: 600 19px 'Segoe UI', Arial, sans-serif; fill: #7f1d1d; }
+      .fix { font: 600 19px 'Segoe UI', Arial, sans-serif; fill: #14532d; }
+      .small { font: 400 16px 'Segoe UI', Arial, sans-serif; fill: #334155; }
+      .metric { font: 700 25px 'Segoe UI', Arial, sans-serif; fill: #0f172a; text-anchor: middle; }
+      .metric2 { font: 500 17px 'Segoe UI', Arial, sans-serif; fill: #475569; text-anchor: middle; }
+    </style>
+  </defs>
+
+  <rect width="1800" height="1320" fill="#f8fafc"/>
+  <rect x="0" y="0" width="1800" height="130" fill="url(#header)"/>
+  <text x="70" y="58" class="title">Kako smo dobili prvi uspešan hod</text>
+  <text x="70" y="96" class="subtitle">Naših 10 ključnih dijagnoza i popravki — recovery/project-v2-imitation</text>
+
+  <rect x="70" y="160" width="760" height="58" rx="14" fill="#fee2e2"/>
+  <text x="100" y="198" class="colhead" fill="#991b1b">Šta smo otkrili da je pogrešno</text>
+  <rect x="970" y="160" width="760" height="58" rx="14" fill="#dcfce7"/>
+  <text x="1000" y="198" class="colhead" fill="#166534">Šta smo uradili da proradi</text>
+
+  <!-- Row 1 -->
+  <circle cx="900" cy="270" r="26" fill="#1d4ed8"/><text x="900" y="270" class="num">1</text>
+  <rect x="70" y="235" width="760" height="72" rx="13" fill="#fff1f2" filter="url(#shadow)"/>
+  <text x="95" y="265" class="problem">Imali smo grane i runove sa pomešanim značenjem.</text>
+  <text x="95" y="290" class="small">Nismo znali da li testiramo isti model, reward i fiziku.</text>
+  <rect x="970" y="235" width="760" height="72" rx="13" fill="#f0fdf4" filter="url(#shadow)"/>
+  <text x="995" y="265" class="fix">Izolovali smo project-v2 recovery osnovu.</text>
+  <text x="995" y="290" class="small">Verzionisali smo fiziku i prenosili samo dokazane popravke.</text>
+
+  <!-- Row 2 -->
+  <circle cx="900" cy="370" r="26" fill="#1d4ed8"/><text x="900" y="370" class="num">2</text>
+  <rect x="70" y="335" width="760" height="72" rx="13" fill="#fff1f2" filter="url(#shadow)"/>
+  <text x="95" y="365" class="problem">qpos, qvel i sat nisu opisivali isti motion.</text>
+  <text x="95" y="390" class="small">Istorijski 0.25 faktor pravio je kontradiktorne targete.</text>
+  <rect x="970" y="335" width="760" height="72" rx="13" fill="#f0fdf4" filter="url(#shadow)"/>
+  <text x="995" y="365" class="fix">Uskladili smo vreme i ponovo računali dq/dt.</text>
+  <text x="995" y="390" class="small">Pozicija, brzina i faza sada opisuju istu putanju.</text>
+
+  <!-- Row 3 -->
+  <circle cx="900" cy="470" r="26" fill="#1d4ed8"/><text x="900" y="470" class="num">3</text>
+  <rect x="70" y="435" width="760" height="72" rx="13" fill="#fff1f2" filter="url(#shadow)"/>
+  <text x="95" y="465" class="problem">Loop seam je pravio skok pri svakom ciklusu.</text>
+  <text x="95" y="490" class="small">Kraj i početak nisu imali konzistentne derivate i root.</text>
+  <rect x="970" y="435" width="760" height="72" rx="13" fill="#f0fdf4" filter="url(#shadow)"/>
+  <text x="995" y="465" class="fix">Uveli smo bounded closure i wrap delta.</text>
+  <text x="995" y="490" class="small">Dobili smo kontinuiran ciklus koji nastavlja napred.</text>
+
+  <!-- Row 4 -->
+  <circle cx="900" cy="570" r="26" fill="#1d4ed8"/><text x="900" y="570" class="num">4</text>
+  <rect x="70" y="535" width="760" height="72" rx="13" fill="#fff1f2" filter="url(#shadow)"/>
+  <text x="95" y="565" class="problem">Oba stopala su praktično ciljala karlicu.</text>
+  <text x="95" y="590" class="small">BVH resolver nije nalazio prave leve/desne toe markere.</text>
+  <rect x="970" y="535" width="760" height="72" rx="13" fill="#f0fdf4" filter="url(#shadow)"/>
+  <text x="995" y="565" class="fix">Popravili smo anatomsko foot/toe mapiranje.</text>
+  <text x="995" y="590" class="small">Prvi put smo dobili dva smislena IK targeta stopala.</text>
+
+  <!-- Row 5 -->
+  <circle cx="900" cy="670" r="26" fill="#1d4ed8"/><text x="900" y="670" class="num">5</text>
+  <rect x="70" y="635" width="760" height="72" rx="13" fill="#fff1f2" filter="url(#shadow)"/>
+  <text x="95" y="665" class="problem">Root je mogao da hoda iz zemlje ili iznad poda.</text>
+  <text x="95" y="690" class="small">BVH i MuJoCo floor nisu bili u istom koordinatnom sistemu.</text>
+  <rect x="970" y="635" width="760" height="72" rx="13" fill="#f0fdf4" filter="url(#shadow)"/>
+  <text x="995" y="665" class="fix">Poravnali smo konačni root sa MuJoCo floor-om.</text>
+  <text x="995" y="690" class="small">XY putanju smo konzistentno kalibrisali na 0.35.</text>
+
+  <!-- Row 6 -->
+  <circle cx="900" cy="770" r="26" fill="#1d4ed8"/><text x="900" y="770" class="num">6</text>
+  <rect x="70" y="735" width="760" height="72" rx="13" fill="#fff1f2" filter="url(#shadow)"/>
+  <text x="95" y="765" class="problem">Retargetovali smo i problematične delove celog BVH-a.</text>
+  <text x="95" y="790" class="small">Različite faze pipeline-a nisu radile nad istim ciklusom.</text>
+  <rect x="970" y="735" width="760" height="72" rx="13" fill="#f0fdf4" filter="url(#shadow)"/>
+  <text x="995" y="765" class="fix">Izabrali smo source ciklus 79:213 pre retargetinga.</text>
+  <text x="995" y="790" class="small">Sve dalje faze dobile su isti čist motion segment.</text>
+
+  <!-- Row 7 -->
+  <circle cx="900" cy="870" r="26" fill="#1d4ed8"/><text x="900" y="870" class="num">7</text>
+  <rect x="70" y="835" width="760" height="72" rx="13" fill="#fff1f2" filter="url(#shadow)"/>
+  <text x="95" y="865" class="problem">IK početak i kraj birali su različite grane rešenja.</text>
+  <text x="95" y="890" class="small">Ciklus je geometrijski pucao i kad je source bio čist.</text>
+  <rect x="970" y="835" width="760" height="72" rx="13" fill="#f0fdf4" filter="url(#shadow)"/>
+  <text x="995" y="865" class="fix">Dodali smo cyclic IK warm-start u consistent_v5.</text>
+  <text x="995" y="890" class="small">Zadržali smo isti fitting cilj, ali stabilniju granu rešenja.</text>
+
+  <!-- Row 8 -->
+  <circle cx="900" cy="970" r="26" fill="#1d4ed8"/><text x="900" y="970" class="num">8</text>
+  <rect x="70" y="935" width="760" height="72" rx="13" fill="#fff1f2" filter="url(#shadow)"/>
+  <text x="95" y="965" class="problem">Gubili smo support anchor tokom prenosa težine.</text>
+  <text x="95" y="990" class="small">Finalni root lock prerano je puštao prethodno stopalo.</text>
+  <rect x="970" y="935" width="760" height="72" rx="13" fill="#f0fdf4" filter="url(#shadow)"/>
+  <text x="995" y="965" class="fix">Sačuvali smo contact history u consistent_v6.</text>
+  <text x="995" y="990" class="small">Oslonac sada preživljava handoff između stopala.</text>
+
+  <!-- Row 9 -->
+  <circle cx="900" cy="1070" r="26" fill="#1d4ed8"/><text x="900" y="1070" class="num">9</text>
+  <rect x="70" y="1035" width="760" height="72" rx="13" fill="#fff1f2" filter="url(#shadow)"/>
+  <text x="95" y="1065" class="problem">Reward je dopuštao phase free-riding i stajanje.</text>
+  <text x="95" y="1090" class="small">Temporal best-match je birao lakši, pogrešan frejm.</text>
+  <rect x="970" y="1035" width="760" height="72" rx="13" fill="#f0fdf4" filter="url(#shadow)"/>
+  <text x="995" y="1065" class="fix">Ocenili smo tačan wall-clock DeepMimic frejm.</text>
+  <text x="995" y="1090" class="small">Izolovali smo pure tracker bez joystick shaping-a.</text>
+
+  <!-- Row 10 -->
+  <circle cx="900" cy="1170" r="26" fill="#1d4ed8"/><text x="900" y="1170" class="num">10</text>
+  <rect x="70" y="1135" width="760" height="72" rx="13" fill="#fff1f2" filter="url(#shadow)"/>
+  <text x="95" y="1165" class="problem">Reset metadata i kratki runovi davali su lažnu sliku.</text>
+  <text x="95" y="1190" class="small">1M koraka nije bio validan sud o učenju ove politike.</text>
+  <rect x="970" y="1135" width="760" height="72" rx="13" fill="#f0fdf4" filter="url(#shadow)"/>
+  <text x="995" y="1165" class="fix">Popravili smo PPO/eval i trenirali oko 32.05M.</text>
+  <text x="995" y="1190" class="small">Najbolji model je završio 500/500 sa 93.1% kvaliteta.</text>
+
+  <rect x="70" y="1240" width="1660" height="58" rx="18" fill="#dbeafe"/>
+  <text x="340" y="1277" class="metric">500/500</text>
+  <text x="740" y="1277" class="metric">100% survival</text>
+  <text x="1120" y="1277" class="metric">93.1% kvalitet</text>
+  <text x="1510" y="1277" class="metric">4 potvrđena videa</text>
+</svg>

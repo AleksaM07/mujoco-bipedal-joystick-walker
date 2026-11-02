@@ -1,0 +1,72 @@
+NAJGORE GREŠKE KOJE SMO PRONAŠLI
+================================
+
+Ovu listu čuvamo da tokom čišćenja repository-ja ne uklonimo zaštite i ne vratimo
+iste greške pod drugim imenom.
+
+1. POGREŠNO MAPIRANJE STOPALA
+
+Pronašli smo da oba BVH stopala, zbog resolver/fallback greške, praktično ciljaju
+pelvis/hip umesto levih i desnih toe/foot markera. Time smo pravili nemoguć IK
+problem i preklopljena stopala. Popravili smo stvarno anatomsko mapiranje.
+
+2. NEKONZISTENTNO VREME I ISTORIJSKI 0.25 FAKTOR
+
+Pronašli smo da qpos, qvel i fazni sat mogu opisivati različite pokrete. Brzine
+su mogle biti skalirane bez odgovarajuće promene trajanja i položaja. Uveli smo
+jedinstvenu vremensku osu i ponovo izračunali brzine iz konačnih putanja.
+
+3. ROOT/FLOOR KOORDINATNI SISTEM
+
+Pronašli smo da referentni root može izgledati ispravno u BVH prostoru, a staviti
+MuJoCo stopala iznad ili ispod poda. Poravnali smo konačnu retargetovanu geometriju
+sa stvarnim simulator floor-om.
+
+4. DISKONTINUITET NA LOOP SPOJU
+
+Pronašli smo skokove poze, root-a ili derivacije između poslednjeg i prvog
+frejma. Uveli smo versioned strict/bounded closure, kontinuirane krive i eksplicitnu
+wrap delta semantiku.
+
+5. ROOT KOJI BEŽI OD NOGU
+
+Pronašli smo treadmill problem: horizontalni root motion može biti brži od
+retargetovanih nogu i kontakata. Skalirali smo samu XY putanju na 0.35 i zatim
+iz nje ponovo izračunali konzistentne brzine.
+
+6. GUBITAK SUPPORT ANCHOR-A
+
+Pronašli smo da finalno root zaključavanje odbacuje prethodno stance stopalo
+tokom transfera težine. U consistent_v6 smo sačuvali contact history kroz handoff.
+
+7. REWARD KOJI DOZVOLJAVA PHASE FREE-RIDING
+
+Pronašli smo da temporal best-match može nagraditi stanje koje liči na neki
+referentni frejm, iako fazni sat traži drugi. Prešli smo na ocenjivanje tačnog
+wall-clock frejma.
+
+8. PPO TERMINAL/AUTORESET METADATA
+
+Pronašli smo da terminalna tranzicija može biti izgubljena ili prepisana reset
+stanjem. Sačuvali smo terminated/truncated informaciju kroz PPO autoreset.
+
+9. EVALUATOR KOJI NE RESTAURIRA ISTI SVET
+
+Pronašli smo da checkpoint može biti pokrenut sa novim default konfiguracijama i
+time izgledati kao drugi model. Evaluator sada fail-closed restaurira sačuvani
+EnvConfig, action/observation potpis i XML semantiku.
+
+10. PREKRATKI EKSPERIMENTI I POGREŠAN ZAKLJUČAK
+
+Pronašli smo da 1M koraka nije dovoljan da procenimo ovu veliku politiku. Prvi
+pun horizont dobili smo tek oko 25.29M kumulativnih koraka, a najbolji model oko
+30.69M. Zato ćemo ubuduće odvojiti smoke test, learning-signal test i pravi
+budžetirani eksperiment.
+
+NAŠE PRAVILO ZA ČIŠĆENJE
+------------------------
+
+Mi ćemo brisati stare dijagnostičke artefakte tek kada sačuvamo test ili jasnu
+invarijantu koja sprečava povratak svake od ovih grešaka. Nećemo mešati
+„ne koristimo više” sa „više nam nije potrebna zaštita od regresije”.
+
