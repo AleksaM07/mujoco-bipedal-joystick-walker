@@ -1,3 +1,5 @@
+ISTORIJSKA BELEŠKA — Čuvamo tadašnje stanje; aktuelni rezultat pratimo u README.md u korenu projekta.
+
 Commits
 596c242 feat: align MJX-Warp training defaults and DeepMimic reward
 ed09cf2 feat: align MJX-Warp training defaults and DeepMimic reward

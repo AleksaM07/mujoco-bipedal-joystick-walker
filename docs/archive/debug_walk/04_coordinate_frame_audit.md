@@ -1,3 +1,5 @@
+> Ovaj istorijski dokument čuvamo u arhivi. Aktuelno stanje pratimo u [glavnom README-u](../../../README.md).
+
 # Coordinate Frame Audit
 
 ## BVH Conversion

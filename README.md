@@ -1,140 +1,75 @@
-# MuJoCo Bipedal Joystick Walker
+# Humanoid koji je naučio da hoda
 
-Reinforcement-learning pipeline for joystick-controlled walking on a generated
-MuJoCo human biomechanics model.
+Mi treniramo humanoida u MuJoCo simulatoru pomoću PPO-a i BVH reference.
+Na grani **`recovery/project-v2-imitation`** imamo prvi vizuelno potvrđen hod:
+checkpoint **`000025681920`**, `consistent_v6`, jedan ciklus `02_01.bvh` i 18 akcija.
+Trenutno učimo imitaciju sa modelom bez aktivnih ruku. Joystick, ustajanje i
+izbegavanje projektila ostaju naši naredni zadaci.
 
-The project trains PPO policies on a generated MuJoCo human biomechanics model
-and evaluates checkpoints with the active MJX-Warp / DeepMimic-style pipeline.
-Old Berkeley comparison tooling is archived under `legacy/`.
+## Odavde krećemo
 
-## What This Project Shows
-
-- PPO training works on the generated humanoid model.
-- Checkpoints can be resumed, evaluated, and compared.
-- The generated biomechanics model is harder: reward, contacts, actuators, joint
-  limits, and XML variants matter a lot.
-- High reward alone is not trusted; the analysis also checks falls, command
-  tracking, posture, foot/contact behavior, action smoothness, and actuator load.
-
-## Main Files
-
-| File | Purpose |
+| Kada želimo… | Otvaramo… |
 | --- | --- |
-| `train.py` | PPO training entry point. |
-| `evaluate.py` | Load and visualize/evaluate checkpoints. |
-| `biomechanics_env.py` | RL environment, observations, rewards, contacts. |
-| `biomechanics_model.py` | Generated MuJoCo model/XML construction. |
-| `bvh_reference.py` | BVH walking reference support. |
-| `legacy/` | Archived Berkeley baseline and old analysis notebook/scripts. |
-| `generated_models/` | Classic and training XML variants. |
+| Da vidimo uspeh | [Četiri videa](prezentacija/1st_success/videos/) |
+| Da razumemo šta smo popravili | [1ST_SUCCESS.txt](prezentacija/1st_success/1ST_SUCCESS.txt) i [preciziranja](prezentacija/1st_success/PROVERA_I_ISPRAVKE.txt) |
+| Da pokažemo rezultat | [Graf 10 prekretnica](prezentacija/1st_success/10_NAJBITNIJIH_STVARI.png) |
+| Da pokrenemo evaluaciju ili trening | [Komande i okruženja](docs/WORKFLOW.md) |
+| Da razumemo fajlove | [Mapa repository-ja](docs/REPOSITORY.md) |
+| Da nastavimo istraživanje | [Naš plan](docs/ROADMAP.md) |
+| Da pronađemo staru dijagnostiku | [Istorijska arhiva](docs/archive/README.md) |
+| Da vratimo staru granu | [Arhiva grana](docs/BRANCHES.md) |
 
-## Setup
+## Uspešan model pokrećemo na Windowsu
 
-```powershell
-python -m uv sync
+Iz korena projekta, u Git Bash-u ili PowerShell-u, koristimo postojeće Windows
+okruženje (jedan red):
+
+```bash
+./.venv-win/Scripts/python.exe scripts/evaluate_first_success.py
 ```
 
-## Common Commands
+Ovom komandom učitavamo kopiju checkpoint-a, XML-a i BVH-a iz `prezentacija/`.
+Za samostalnu proveru arhive bez simulacije koristimo:
 
-```powershell
-python -m uv run python train.py --help
-python -m uv run python evaluate.py --help
+```bash
+./.venv-win/Scripts/python.exe tools/verify_success_archive.py --require-tracked
 ```
 
-Quick CPU smoke test:
+Detalje instalacije, snimanja, headless provere i WSL treninga držimo u
+[WORKFLOW.md](docs/WORKFLOW.md). Linux `.venv` i Windows `.venv-win` koristimo
+odvojeno. Našu trenutnu `uv` konfiguraciju sa CUDA zavisnostima koristimo za Linux;
+još nemamo proverenu instalaciju iz tog lockfile-a na čistom Windows računaru.
 
-```powershell
-python -m uv run python train.py --debug-run --device cpu --allow-cpu --bare --no-checkpoints --timesteps 1000 --num-envs 4 --num-evals 0 --episode-length 20 --batch-size 4
+## Šta smo izmerili
+
+Na najboljoj trening evaluaciji dobili smo reward **1396.087**, prosek
+**500/500 koraka** i sva četiri evaluaciona sveta do horizonta. Naknadno smo
+snimili četiri deterministička rollout-a sa seedovima 11, 22, 33 i 44: svaki je
+završio 500 koraka, odnosno 10 sekundi, bez prijavljenog pada.
+
+Pod „93.1% kvaliteta” podrazumevamo normalizovani reward ovog zadatka. Prirodnost
+hoda smo vizuelno potvrdili; tim procentom ne merimo biomehaničku tačnost.
+Ovim testovima još ne dokazujemo proizvoljno dugu stabilnost, upravljanje do
+ciljne tačke ili otpornost na guranje. Referentni XY pomak od oko 1.41 m/ciklus
+ne poistovećujemo sa izmerenom putanjom politike.
+
+Mi čuvamo rezultat u [prezentacija/1st_success/](prezentacija/1st_success/):
+kompletan checkpoint, konfiguraciju, XML/BVH, log, videe i SHA-256 manifest.
+Najbolji checkpoint razlikujemo od poslednjeg checkpoint-a završenog run-a.
+
+## Kako organizujemo rad
+
+Mi zadržavamo `train.py` i `evaluate.py` kao glavne ulaze. Runtime module držimo
+u korenu radi postojećih import-a i kompatibilnosti. Svakodnevne komande držimo
+u `scripts/`, dijagnostiku u `tools/`, a regresione testove u `tests/`.
+Stare izveštaje čuvamo u `docs/archive/`; ne čitamo ih kao aktuelni status.
+
+Mi testiramo iz postojećeg okruženja bez instaliranja dodatnih paketa:
+
+```bash
+./.venv-win/Scripts/python.exe -m unittest discover -s tests -v
 ```
 
-## Legacy Best-Checkpoint Analysis
-
-The old notebook under `legacy/` selected the best logged checkpoint from each
-run under `runs/successful`, ran fixed command scenarios, and exported:
-
-- `selected_checkpoints.csv`
-- `training_history.csv`
-- `rollout_steps.csv`
-- `episode_metrics.csv`
-- `trial_metrics.csv`
-- `policy_metrics.csv`
-- `actuator_metrics.csv`
-
-Archived top in-distribution policies:
-
-| Rank | Policy | Type | Composite | Survival | Tracking RMSE | Torso Up |
-| ---: | --- | --- | ---: | ---: | ---: | ---: |
-| 1 | `P08_v16_standard_bvh` | biomechanics | 0.7490 | 1.0000 | 0.1618 | 0.9416 |
-| 2 | `P09_berkeley_flat` | berkeley | 0.6092 | 0.9502 | 0.5778 | 0.9888 |
-| 3 | `P04_v16_forward_bvh` | biomechanics | 0.6043 | 0.9307 | 0.2604 | 0.9414 |
-
-Composite score combines survival, command tracking, upright posture, and action
-smoothness. It is more useful than raw training reward for cross-run comparison.
-
-## Classic XML vs `trainfast_v19`
-
-`trainfast_v19` keeps the same basic humanoid structure, but changes the model
-to be more suitable for locomotion training.
-
-| Metric | Classic | `trainfast_v19` |
-| --- | ---: | ---: |
-| Bodies | 16 | 16 |
-| Joints | 34 | 34 |
-| Geoms | 17 | 19 |
-| Position actuators | 18 | 18 |
-| Changed joint definitions | baseline | 29 |
-| Changed actuator definitions | baseline | 18 |
-
-Important `v19` changes:
-
-- adds `left_foot_sole` and `right_foot_sole` box contacts,
-- marks pelvis/thigh/shank contacts as illegal guardrails,
-- filters non-foot contacts,
-- tightens many joint ranges,
-- adds damping/stiffness/friction/armature,
-- replaces broad actuator ranges with joint-specific `ctrlrange`, `kp`, and
-  `forcerange`.
-
-Short version: same humanoid, stricter and more training-friendly physics.
-
-## Reference/Learning Summary
-
-Reviewed references:
-
-- Gymnasium Humanoid,
-- MuJoCo,
-- Unitree RL MuJoCo/Gym/Lab projects,
-- HumanoidBench,
-- CMU/CGSpeed BVH motion data,
-- DeepMimic/DRLoco/LocoMuJoCo/GMR-style imitation projects.
-
-Main lessons:
-
-- velocity tracking alone does not guarantee natural walking,
-- real foot/contact metrics are necessary,
-- BVH imitation should eventually track root, feet, velocities, and body targets,
-- domain randomization should come after a stable base gait,
-- high reward with sliding is a reward loophole, not success.
-
-## Model Evolution Summary
-
-- Early versions proved the generated model can be trained, but gait quality was
-  poor.
-- Later versions unlocked/stabilized trunk control and moved to 18 actuators.
-- BVH/reference gait was added to push the policy toward human-like motion.
-- Contact-aware anti-slip, swing/stance checks, and foot/root reference terms
-  were added after sliding was observed.
-- `trainfast_v17-v19` added stricter joint/action priors and contact guardrails.
-
-## Practical Conclusion
-
-The project is a working PPO locomotion pipeline, not a claim that human walking
-is fully solved.
-
-Best framing:
-
-- Legacy Berkeley baseline: archived tuned locomotion benchmark.
-- Generated biomechanics model: harder custom model successfully trained, but
-  still limited by gait/contact quality.
-- Next research step: stronger contact-aware imitation or full-body retargeted
-  motion data.
+Naše test klase su kompatibilne i sa pytest-om. U postojeći Windows venv još
+nismo instalirali pytest. Reference i izvore pratimo u [REFERENCES.md](REFERENCES.md)
+i [registry.yaml](references/registry.yaml).

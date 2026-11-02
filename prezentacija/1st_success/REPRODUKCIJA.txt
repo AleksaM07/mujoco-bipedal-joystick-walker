@@ -6,7 +6,10 @@ klipom. Kod pokrećemo sa grane recovery/project-v2-imitation, iz repository roo
 
 Windows PowerShell ili Git Bash komanda za interaktivni viewer:
 
-.venv-win\Scripts\python.exe evaluate.py --checkpoint "prezentacija/1st_success/final_model_000025681920" --device cpu
+./.venv-win/Scripts/python.exe scripts/evaluate_first_success.py
+
+Mi ovim wrapper-om eksplicitno biramo i XML i BVH kopije iz arhive, tako da
+kasnija izmena radnih asseta u korenu ne promeni naš sačuvani rezultat.
 
 Mi očekujemo da evaluator prijavi:
 
@@ -21,7 +24,7 @@ Mi očekujemo da evaluator prijavi:
 
 Komanda za novi 10-sekundni snimak:
 
-.venv-win\Scripts\python.exe evaluate.py --checkpoint "prezentacija/1st_success/final_model_000025681920" --device cpu --seed 55 --record-video "prezentacija/1st_success/videos/1st_success_seed_55.mp4" --record-steps 500 --record-width 1280 --record-height 720
+./.venv-win/Scripts/python.exe scripts/evaluate_first_success.py --seed 55 --record-video "videos/1st_success_seed_55.mp4" --record-steps 500 --record-width 1280 --record-height 720
 
 Mi ne proglašavamo reprodukciju uspešnom samo zato što se checkpoint učitao.
 Proveravamo da rollout stigne do 500/500 bez terminalnog pada i da vizuelno pravi

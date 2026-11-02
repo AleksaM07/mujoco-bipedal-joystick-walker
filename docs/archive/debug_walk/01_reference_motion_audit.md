@@ -1,3 +1,5 @@
+> Ovaj istorijski dokument čuvamo u arhivi. Aktuelno stanje pratimo u [glavnom README-u](../../../README.md).
+
 # Reference Motion Audit
 
 ## Finding 1 - Default BVH Library Is Mostly Clamp Clips

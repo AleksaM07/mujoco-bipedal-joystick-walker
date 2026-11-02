@@ -36,3 +36,6 @@ generated_models/ i BVH_walking_animation/
 REPRODUKCIJA.txt
     Naše kratko uputstvo za ponovno pokretanje i proveru arhiviranog checkpoint-a.
 
+SHA256_MANIFEST.json i PROVERA_I_ISPRAVKE.txt
+    Mi proveravamo integritet payload-a i preciziramo granice ranijih zaključaka.
+

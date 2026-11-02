@@ -1,3 +1,5 @@
+> Ovaj istorijski dokument čuvamo u arhivi. Aktuelno stanje pratimo u [glavnom README-u](../../../README.md).
+
 # Final Walk Failure Audit
 
 Date: 2026-08-15
