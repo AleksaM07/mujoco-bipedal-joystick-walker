@@ -53,7 +53,7 @@ Thumbs.db
 .temp/*
 .tmp_*/
 temp_/
-recovery/
+/recovery/
 
 # Miscellaneous
 .agents/
