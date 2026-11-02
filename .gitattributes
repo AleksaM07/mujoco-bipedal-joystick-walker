@@ -5,3 +5,6 @@
 *.xml text eol=lf
 *.json text eol=lf
 *.sh text eol=lf
+
+# Preserve the frozen archive byte-for-byte, including Orbax and hashed assets.
+prezentacija/1st_success/** -text

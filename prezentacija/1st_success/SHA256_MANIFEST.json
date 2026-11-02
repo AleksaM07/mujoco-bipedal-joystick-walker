@@ -1,0 +1,100 @@
+{
+  "format_version": 1,
+  "date": "2026-11-02",
+  "source_commit": "e915b420da64321a6f73fb786b4f0f807602c1ef",
+  "checkpoint": "000025681920",
+  "files": {
+    "BVH_walking_animation/cmuconvert-max-01-09/02/02_01.bvh": {
+      "bytes": 246122,
+      "sha256": "6c958f1fe020b2d3c6380daa2fea24f58ca01959bc218454adc9220d54157ccd"
+    },
+    "config.json": {
+      "bytes": 3916,
+      "sha256": "92d3c7fd59717c60a7541afc4d58f9bfe395ce6e256e09c29e2eceee10e59e89"
+    },
+    "final_model_000025681920/_CHECKPOINT_METADATA": {
+      "bytes": 258,
+      "sha256": "32a04c716a8f3421a5d4debf75de841a1b55dc4b4ceccef28f99c87f6c8f2f6d"
+    },
+    "final_model_000025681920/_METADATA": {
+      "bytes": 5798,
+      "sha256": "f70eac5972b85cfc61848802c59fb105cfc6b6b56e91fc60088315a1bc75fc7a"
+    },
+    "final_model_000025681920/_sharding": {
+      "bytes": 4595,
+      "sha256": "2b7e6558c558840503cb5aad9ba2d95e73c5a8d0823ea73819f349389bbefe6c"
+    },
+    "final_model_000025681920/array_metadatas/process_0": {
+      "bytes": 2731,
+      "sha256": "764b065dd526ed8daf3b57c897dc12d7da86058bdcde7e45ae2a76d984132994"
+    },
+    "final_model_000025681920/d/a078149b250867895e9673fa94648d62": {
+      "bytes": 947,
+      "sha256": "e937f31c7ea63fe419094979b1d235ada02c1cbf68a65a9bfd409f311e17953d"
+    },
+    "final_model_000025681920/manifest.ocdbt": {
+      "bytes": 116,
+      "sha256": "f57160ee80b9323b22341a18a441b3f0dacc74c21cd0afc28feb9b4899c05cd0"
+    },
+    "final_model_000025681920/ocdbt.process_0/d/25a42d0818229dc1b70de8afa22591b9": {
+      "bytes": 4931,
+      "sha256": "ffb48751040af7f73ef69703c83cf8799e1919443d8cb28ec715390c3f978f57"
+    },
+    "final_model_000025681920/ocdbt.process_0/d/4bbf7f3a8957a59a19497d5f2d1ebb11": {
+      "bytes": 4338,
+      "sha256": "c74dfacd4b5fd5b6089748073faf2faceffbf21a8a452c72879b5c39265190d1"
+    },
+    "final_model_000025681920/ocdbt.process_0/d/69fcb1f4168285558542ca1c1e28459d": {
+      "bytes": 11755520,
+      "sha256": "8f6e315f8a34e517a2833ac456a8e22b124ac15233aeb83f1abb296dce307b17"
+    },
+    "final_model_000025681920/ocdbt.process_0/d/d66ef2415c98f0dd37924835bed2e83f": {
+      "bytes": 205,
+      "sha256": "7a9fa4363c8e71b199b945d249af204644a4993dc5a67f9e27551f33f77f3b0e"
+    },
+    "final_model_000025681920/ocdbt.process_0/manifest.ocdbt": {
+      "bytes": 257,
+      "sha256": "cf565bc19cb06de2cc640df22569e80d01bb1cd05b01099ddfff9a6d2fac2c36"
+    },
+    "final_model_000025681920/ppo_network_config.json": {
+      "bytes": 869,
+      "sha256": "0a6040a34b80c2d611e61793ee085e4548d4868e31ef68fd40244ded0b646ff0"
+    },
+    "generated_models/human_male_180cm_75kg_standard_trainfast_v21_noarms.xml": {
+      "bytes": 30061,
+      "sha256": "125b4b1285e44ea7ddd53f2b8713dcab2300079e95c825c4139c639589de4c87"
+    },
+    "source_assets/02_01.bvh": {
+      "bytes": 246122,
+      "sha256": "6c958f1fe020b2d3c6380daa2fea24f58ca01959bc218454adc9220d54157ccd"
+    },
+    "source_assets/human_male_180cm_75kg_standard_trainfast_v21_noarms.xml": {
+      "bytes": 30061,
+      "sha256": "125b4b1285e44ea7ddd53f2b8713dcab2300079e95c825c4139c639589de4c87"
+    },
+    "train.log": {
+      "bytes": 183828,
+      "sha256": "09790fedb8ebc03bb2a8d9dd80d850e5e1795e17a720e51f4c0a6b9daa4f475d"
+    },
+    "videos/1st_success_seed_11.mp4": {
+      "bytes": 1175575,
+      "sha256": "15f814117c04c7b4ff89d03ffdd6415e30133295f87ab9c2bdf19ce8cb3467a4"
+    },
+    "videos/1st_success_seed_22.mp4": {
+      "bytes": 1159581,
+      "sha256": "193e251dcd34fb71312df9b1fe0a4d67ba5f8febe7d247ab66484270318e536d"
+    },
+    "videos/1st_success_seed_33.mp4": {
+      "bytes": 1169314,
+      "sha256": "f9b8308f1dea2db228c27343dde2969d5da26c832d3e3010c451ddb55bcb9378"
+    },
+    "videos/1st_success_seed_44.mp4": {
+      "bytes": 1151261,
+      "sha256": "0ce81011c8dad9f68f901c76eb32f77dc1aac718a5ae210949e3aa6a720d7f1e"
+    },
+    "xml_manifest.json": {
+      "bytes": 197,
+      "sha256": "10a39fb53756b4d38b3c41f274f6aa251683af8e1d2b5691cc5939ba3debd26e"
+    }
+  }
+}
