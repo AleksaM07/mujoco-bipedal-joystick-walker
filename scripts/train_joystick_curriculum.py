@@ -21,7 +21,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 SOURCE = PROJECT_ROOT / "prezentacija/2nd_success_stiff_arms/model_000010035200"
-WARMSTART = PROJECT_ROOT / "artifacts/joystick_curriculum_v2_warmstart"
+WARMSTART = PROJECT_ROOT / "artifacts/joystick_curriculum_v3_warmstart"
 # Keep forward walking within a single clip's plausible range. Reverse, stop
 # and strafing require later reference/task work and are deliberately absent.
 LEVELS = (
@@ -227,7 +227,7 @@ def main() -> None:
     parser.add_argument("--num-envs", type=int, choices=[32, 64, 128, 256], default=64)
     parser.add_argument("--speed-center", type=float, default=1.1)
     parser.add_argument("--campaign", type=Path, default=PROJECT_ROOT / "artifacts" /
-                        ("joystick_v2_" + datetime.now().strftime("%Y%m%d_%H%M%S")))
+                        ("joystick_v3_" + datetime.now().strftime("%Y%m%d_%H%M%S")))
     parser.add_argument("--worker", choices=["train", "audit"])
     parser.add_argument("--block", type=int, default=1)
     parser.add_argument("--level", type=int, choices=range(len(LEVELS)), default=0)
