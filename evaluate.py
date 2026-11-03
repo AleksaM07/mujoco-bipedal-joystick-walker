@@ -1073,7 +1073,10 @@ def main():
     )
     command_x = args.command_x
     if command_x is None:
-        command_x = DEFAULT_WALK_COMMAND_X if command_profile == "walk" else 0.0
+        if command_profile == "joystick_curriculum":
+            command_x = float(run_env_value(run_config, "joystick_speed_center", EnvConfig.joystick_speed_center))
+        else:
+            command_x = DEFAULT_WALK_COMMAND_X if command_profile == "walk" else 0.0
     init_qpos_file = (
         str(args.init_qpos_file)
         if args.init_qpos_file is not None

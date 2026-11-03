@@ -676,6 +676,11 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         action_scale=0.5,
         action_smoothing=0.2,
         command_profile="standard",
+        joystick_speed_center=1.1,
+        joystick_speed_radius=0.05,
+        joystick_yaw_limit=0.0,
+        joystick_reward_weight=0.2,
+        arm_reference_mode="legacy",
         # Preserve historical checkpoint semantics unless recovery is explicit.
         recovery_physics_version="legacy",
         reference_motion_speed_scale=1.0,
@@ -878,6 +883,12 @@ class EnvConfig:
     # "standard" je pun joystick zadatak: napred/nazad, lateralno i yaw.
     # "forward" ostaje dostupan samo kao bootstrap curriculum.
     command_profile: str = "standard"
+    # Explicit opt-in curriculum; legacy profiles/rewards remain reproducible.
+    joystick_speed_center: float = 1.1
+    joystick_speed_radius: float = 0.05
+    joystick_yaw_limit: float = 0.0
+    joystick_reward_weight: float = 0.2
+    arm_reference_mode: str = "legacy"
 
     # New measurements/time semantics are opt-in: old policies must keep their
     # original observation distribution when evaluated without a migration.

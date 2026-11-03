@@ -292,6 +292,17 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 "consistent_v3, consistent_v4, consistent_v5 or consistent_v6."
             )
         motion_speed = float(self._config.get("reference_motion_speed_scale", 1.0))
+        if self._config.get("deepmimic_reward_mode") == "command":
+            if self._config.get("reference_gait") not in ("bvh", "smpl"):
+                raise ValueError("Command imitation requires a motion reference.")
+            center = float(self._config.joystick_speed_center)
+            radius = float(self._config.joystick_speed_radius)
+            yaw = float(self._config.joystick_yaw_limit)
+            weight = float(self._config.joystick_reward_weight)
+            if not all(np.isfinite(v) for v in (center, radius, yaw, weight)):
+                raise ValueError("Joystick curriculum values must be finite.")
+            if not (center > radius >= 0 and yaw >= 0 and 0 <= weight <= 1):
+                raise ValueError("Invalid forward joystick curriculum bounds.")
         if not np.isfinite(motion_speed) or motion_speed <= 0.0:
             raise ValueError(
                 "reference_motion_speed_scale must be finite and positive."
@@ -806,6 +817,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             if reference_gait == "bvh" and self._strict_bvh_ik_targets
             else {}
         )
+        if reference_gait == "bvh":
+            loader_options["arm_reference_mode"] = self._config.arm_reference_mode
         references = loader(
             tuple(resolve_project_path(path) for path in reference_gait_files),
             self._actuator_joint_names,
@@ -2465,6 +2478,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "terminated": jp.array(0.0),
             "truncated": jp.array(0.0),
         }
+        if self._config.get("deepmimic_reward_mode") == "command":
+            metrics.update(self._command_metrics(data, info))
         return mjx_env.State(
             data,
             obs,
@@ -2670,6 +2685,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         )
         metrics["truncated"] = done.astype(reward.dtype) * info["truncation"]
         info["last_foot_xy"] = self._foot_xy(data)
+        if self._config.get("deepmimic_reward_mode") == "command":
+            metrics.update(self._command_metrics(data, info))
 
         return state.replace(
             data=data,
@@ -2737,6 +2754,16 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
 
     def sample_command(self, rng: jax.Array) -> jax.Array:
         """Uzorkuje ciljnu brzinu: napred/nazad, levo/desno, yaw."""
+        if self._config.command_profile == "joystick_curriculum":
+            speed_key, yaw_key = jax.random.split(rng)
+            center = self._config.joystick_speed_center
+            radius = self._config.joystick_speed_radius
+            yaw_limit = self._config.joystick_yaw_limit
+            return jp.array([
+                jax.random.uniform(speed_key, (), minval=center-radius, maxval=center+radius),
+                0.0,
+                jax.random.uniform(yaw_key, (), minval=-yaw_limit, maxval=yaw_limit),
+            ], dtype=jp.float32)
         if self._config.command_profile in ("forward_slow", "forward", "walk"):
             x_key, zero_key = jax.random.split(rng, 2)
             command_range = (
@@ -3041,6 +3068,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         info: dict,
     ) -> jax.Array:
         """Nagrada za joystick hod: prati command vektor, stabilnost je uslov."""
+        if self._config.get("deepmimic_reward_mode") == "command":
+            return self._get_command_imitation_reward(data, info)
         # REF: PROJECT-COMMAND-TRACKING-SPLIT
         # TYPE: ENGINEERING_DEFAULT
         local_angvel = self._local_root_angvel(data)
@@ -3450,6 +3479,40 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             return jp.array(0.0)
         deepmimic = self._get_bvh_deepmimic_reward(data, info)
         return deepmimic["velocity"]
+
+    def _command_metrics(self, data: mjx.Data, info: dict) -> dict[str, jax.Array]:
+        """Measure response separately from the imitation score."""
+        measured = self._measured_command(data)
+        error = measured - info["command"]
+        return {
+            "command_x": info["command"][0],
+            "command_yaw": info["command"][2],
+            "measured_x": measured[0],
+            "measured_yaw": measured[2],
+            "command_lin_error": jp.linalg.norm(error[:2]),
+            "command_yaw_error": jp.abs(error[2]),
+        }
+
+    def _get_command_imitation_reward(self, data: mjx.Data, info: dict) -> jax.Array:
+        """Keep the learned gait while replacing clip speed with command tracking.
+
+        All components are bounded. Keeping the old mixed reward's overspeed
+        denominator would punish a walking warm start severely near zero speed.
+        Root-speed imitation is intentionally excluded: it contradicts turns
+        and speed commands that differ from this single forward clip.
+        """
+        imitation = self._get_bvh_deepmimic_reward(data, info)[
+            "total_no_root_velocity"
+        ]
+        tracking = (
+            0.75 * self._get_tracking_lin_reward(data, info)
+            + 0.25 * self._get_tracking_yaw_reward(data, info)
+        )
+        weight = self._config.joystick_reward_weight
+        reward = self.REWARD_MAX * ((1.0 - weight) * imitation + weight * tracking)
+        reward = jp.clip(jp.nan_to_num(reward, nan=0.0), 0.0, self.REWARD_MAX)
+        terminal = jp.where(self._get_physical_fail_done(data), self.FALL_REWARD, 0.0)
+        return jp.where(self._get_done(data, info), terminal, reward)
 
     def _get_bvh_deepmimic_reward(
         self,

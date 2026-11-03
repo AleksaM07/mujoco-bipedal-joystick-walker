@@ -141,6 +141,12 @@ class TrainingProgressLogger:
                 ("eval/episode_command_progress", "progress_step"),
                 ("eval/episode_height", "height_step"),
                 ("eval/episode_torso_up", "torso_step"),
+                ("eval/episode_command_x", "cmd_x_step"),
+                ("eval/episode_command_yaw", "cmd_yaw_step"),
+                ("eval/episode_measured_x", "vx_step"),
+                ("eval/episode_measured_yaw", "yaw_step"),
+                ("eval/episode_command_lin_error", "cmd_lin_mae"),
+                ("eval/episode_command_yaw_error", "cmd_yaw_mae"),
             )
             for key, label in per_step_metrics:
                 value = metrics.get(key)
@@ -1447,6 +1453,11 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         "warp_graph_mode": env_config.warp_graph_mode,
         "enable_erfi": enable_erfi,
         "command_profile": env_config.command_profile,
+        "joystick_speed_center": env_config.joystick_speed_center,
+        "joystick_speed_radius": env_config.joystick_speed_radius,
+        "joystick_yaw_limit": env_config.joystick_yaw_limit,
+        "joystick_reward_weight": env_config.joystick_reward_weight,
+        "arm_reference_mode": env_config.arm_reference_mode,
         "recovery_physics_version": env_config.recovery_physics_version,
         "reference_motion_speed_scale": env_config.reference_motion_speed_scale,
         "reference_loop_closure": env_config.reference_loop_closure,
@@ -2454,6 +2465,11 @@ def main() -> None:
         description="MuJoCo Playground/Brax PPO trening."
     )
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--joystick-speed-center", type=float, default=EnvConfig.joystick_speed_center)
+    parser.add_argument("--joystick-speed-radius", type=float, default=EnvConfig.joystick_speed_radius)
+    parser.add_argument("--joystick-yaw-limit", type=float, default=EnvConfig.joystick_yaw_limit)
+    parser.add_argument("--joystick-reward-weight", type=float, default=EnvConfig.joystick_reward_weight)
+    parser.add_argument("--arm-reference-mode", choices=["legacy", "cmu_wrist"], default="legacy")
     parser.add_argument("--device", choices=["gpu", "cpu"], default="gpu")
     parser.add_argument("--allow-cpu", action="store_true")
     parser.add_argument(
@@ -2481,6 +2497,7 @@ def main() -> None:
             "steer",
             "standard_easy",
             "standard",
+            "joystick_curriculum",
         ],
         default="standard",
         help=(
@@ -2684,7 +2701,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--deepmimic-reward-mode",
-        choices=["pure", "mixed"],
+        choices=["pure", "mixed", "command"],
         default=EnvConfig.deepmimic_reward_mode,
         help=(
             "pure koristi MimicKit/DeepMimic imitation-only reward; mixed "
@@ -2971,6 +2988,11 @@ def main() -> None:
         playground_impl=args.playground_impl,
         physics_backend=args.physics_backend,
         command_profile=args.command_profile,
+        joystick_speed_center=args.joystick_speed_center,
+        joystick_speed_radius=args.joystick_speed_radius,
+        joystick_yaw_limit=args.joystick_yaw_limit,
+        joystick_reward_weight=args.joystick_reward_weight,
+        arm_reference_mode=args.arm_reference_mode,
         recovery_physics_version=args.recovery_physics_version,
         reference_motion_speed_scale=args.reference_motion_speed_scale,
         reference_loop_closure=args.reference_loop_closure,
