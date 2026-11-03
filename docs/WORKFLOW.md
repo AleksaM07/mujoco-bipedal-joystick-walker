@@ -94,6 +94,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start_arms_tracker_v
 Ovo je 26 kontrolisanih DOF-ova. Stabilni model bez arm aktuatora ima 18 DOF-ova;
 vrat nije policy akcija ni u jednoj od ove dve varijante.
 
+## Joystick curriculum posle drugog uspeha
+
+Sačuvao sam potvrđeni 26-DOF hod u `prezentacija/2nd_success_stiff_arms`.
+Pokrećem ga preko `scripts/evaluate_second_success.py`. Novi 30M curriculum
+pokrećem PowerShell launcherom `scripts/start_joystick_curriculum_v2.ps1`.
+Koristim tri bloka sa proverom očuvanog hoda i odgovora na komande pre
+povećanja težine. Detalje i ograničenja čuvam u
+[JOYSTICK_CURRICULUM_V2.md](JOYSTICK_CURRICULUM_V2.md).
+
 ## Naša Python okruženja
 
 Mi čuvamo `pyproject.toml` i `uv.lock` bez promene trening zavisnosti u ovom
