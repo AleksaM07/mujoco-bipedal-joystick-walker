@@ -13,6 +13,12 @@ from config import EnvConfig, default_biomechanics_env_config
 
 
 class SavedConfigTests(unittest.TestCase):
+    def test_saved_curriculum_profile_is_accepted_by_auto_evaluation(self) -> None:
+        profile = evaluate.infer_command_profile(
+            Path("unused"), {"env": {"command_profile": "joystick_curriculum"}}
+        )
+        self.assertEqual(profile, "joystick_curriculum")
+
     def test_training_cli_forwards_v5_and_v6_without_changing_clip_selection(
         self,
     ) -> None:

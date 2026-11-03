@@ -189,6 +189,7 @@ def infer_command_profile(checkpoint_path: Path, run_config: dict | None) -> str
         "steer",
         "standard_easy",
         "standard",
+        "joystick_curriculum",
     }:
         return profile
     if profile is not None:
@@ -967,6 +968,7 @@ def main():
             "steer",
             "standard_easy",
             "standard",
+            "joystick_curriculum",
         ],
         default="auto",
     )
