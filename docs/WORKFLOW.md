@@ -79,6 +79,21 @@ ruke, isti `02_01.bvh` ciklus i manji learning rate `5e-5` radi zaštite naučen
 hoda. PPO zadržava uspešne vrednosti `unroll=10`, `minibatches=4` i
 `updates_per_batch=2`; ne preuzima novije globalne default-e.
 
+## Izolacioni arms tracker bez joysticka
+
+Pošto prvi zajednički arms+joystick run nije naučio stabilan hod, odvajamo dve
+promene. `scripts/start_arms_tracker_v1.ps1` koristi isti 26-DOF warm-start i
+aktivne shoulder/elbow aktuatore, ali `deepmimic_reward_mode=pure` prisiljava
+joystick komandu na nulu i uklanja task reward. Tako merimo samo da li politika
+može da zadrži hod dok uči BVH pokret ruku.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start_arms_tracker_v1.ps1 -NumEnvs 64 -Timesteps 30000000
+```
+
+Ovo je 26 kontrolisanih DOF-ova. Stabilni model bez arm aktuatora ima 18 DOF-ova;
+vrat nije policy akcija ni u jednoj od ove dve varijante.
+
 ## Naša Python okruženja
 
 Mi čuvamo `pyproject.toml` i `uv.lock` bez promene trening zavisnosti u ovom
