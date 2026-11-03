@@ -38,6 +38,7 @@ from config import (
     KEY_D,
     KEY_DOWN,
     KEY_E,
+    KEY_J,
     KEY_LEFT,
     KEY_NUMPAD_2,
     KEY_NUMPAD_4,
@@ -64,11 +65,22 @@ class JoystickController:
     """Cita tastaturu iz MuJoCo viewer-a i menja command vektor politike."""
 
     def __init__(
-        self, command: np.ndarray, step: float, command_enabled: bool = True
+        self,
+        command: np.ndarray,
+        step: float,
+        command_enabled: bool = True,
+        autonomous_command: np.ndarray | None = None,
     ):
         self.command = command
         self.step = step
         self.command_enabled = command_enabled
+        self.joystick_active = command_enabled
+        self.manual_command = command.copy()
+        self.autonomous_command = (
+            np.asarray(autonomous_command, dtype=np.float32).copy()
+            if autonomous_command is not None
+            else np.array([DEFAULT_WALK_COMMAND_X, 0.0, 0.0], dtype=np.float32)
+        )
         self.paused = False
 
     def key_callback(self, keycode: int) -> None:
@@ -78,6 +90,23 @@ class JoystickController:
             print(f"paused={self.paused}", flush=True)
             return
         if not self.command_enabled:
+            return
+        if keycode == KEY_J:
+            self.joystick_active = not self.joystick_active
+            if self.joystick_active:
+                self.command[:] = self.manual_command
+            else:
+                self.manual_command[:] = self.command
+                self.command[:] = self.autonomous_command
+            print(
+                "joystick="
+                f"{'on' if self.joystick_active else 'off'} | "
+                f"command x={self.command[0]:.2f} "
+                f"y={self.command[1]:.2f} yaw={self.command[2]:.2f}",
+                flush=True,
+            )
+            return
+        if not self.joystick_active:
             return
         if keycode in (KEY_UP, KEY_W, KEY_NUMPAD_8):
             self.command[0] += self.step
@@ -102,6 +131,7 @@ class JoystickController:
             return
 
         clip_command(self.command)
+        self.manual_command[:] = self.command
         print(
             "command "
             f"x={self.command[0]:.2f} "

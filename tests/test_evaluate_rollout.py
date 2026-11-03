@@ -14,7 +14,7 @@ import numpy as np
 from mujoco_playground._src import mjx_env
 
 import evaluate
-from config import COMMAND_OBS_END, COMMAND_OBS_START, KEY_SPACE, KEY_UP
+from config import COMMAND_OBS_END, COMMAND_OBS_START, KEY_J, KEY_SPACE, KEY_UP
 
 
 class ToyData(NamedTuple):
@@ -144,6 +144,25 @@ class EvaluationRolloutTests(unittest.TestCase):
             controller.key_callback(KEY_SPACE)
         np.testing.assert_array_equal(controller.command, np.zeros(3))
         self.assertTrue(controller.paused)
+
+    def test_joystick_can_toggle_between_manual_and_autonomous_walk(self) -> None:
+        command = np.array([0.8, 0.1, -0.2], dtype=np.float32)
+        controller = evaluate.JoystickController(
+            command,
+            0.05,
+            autonomous_command=np.array([1.1, 0.0, 0.0], dtype=np.float32),
+        )
+        with redirect_stdout(io.StringIO()):
+            controller.key_callback(KEY_J)
+            controller.key_callback(KEY_UP)
+        np.testing.assert_allclose(command, [1.1, 0.0, 0.0])
+        self.assertFalse(controller.joystick_active)
+
+        with redirect_stdout(io.StringIO()):
+            controller.key_callback(KEY_J)
+            controller.key_callback(KEY_UP)
+        np.testing.assert_allclose(command, [0.85, 0.1, -0.2])
+        self.assertTrue(controller.joystick_active)
 
     def test_inspect_enforces_episode_limit_without_counting_it_as_fall(self) -> None:
         output = io.StringIO()

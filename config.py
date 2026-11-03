@@ -32,6 +32,7 @@ KEY_UP: Final = 265
 KEY_A: Final = 65
 KEY_D: Final = 68
 KEY_E: Final = 69
+KEY_J: Final = 74
 KEY_Q: Final = 81
 KEY_S: Final = 83
 KEY_W: Final = 87
