@@ -175,6 +175,7 @@ class BvhMotionLibrary:
         initial_root_quat: np.ndarray,
         *,
         strict_ik_targets: bool = False,
+        arm_reference_mode: str = "legacy",
     ) -> "BvhMotionLibrary":
         clips: list[MotionClip] = []
         for source_path in expand_motion_paths(paths):
@@ -192,6 +193,7 @@ class BvhMotionLibrary:
                     initial_root_pos=initial_root_pos,
                     initial_root_quat=initial_root_quat,
                     strict_ik_targets=strict_ik_targets,
+                    arm_reference_mode=arm_reference_mode,
                 )
                 for segment in segments
             ]
@@ -285,11 +287,14 @@ def load_bvh_references(
     initial_root_quat: np.ndarray | None = None,
     *,
     strict_ik_targets: bool = False,
+    arm_reference_mode: str = "legacy",
 ) -> BvhReferenceBatch:
     """Load BVH/list paths into a padded reference batch.
 
     Strict IK resolution uses supported toe aliases and rejects missing feet.
     The default retains historical preprocessing for existing checkpoints.
+    ``cmu_wrist`` opts into arm targets for CMU wrist/hand aliases; ``legacy``
+    preserves the original exact-name lookup, including its missing-arm fallback.
     """
     initial_root_pos = (
         np.asarray(initial_root_pos, dtype=np.float32)
@@ -310,6 +315,7 @@ def load_bvh_references(
         initial_root_pos=initial_root_pos,
         initial_root_quat=initial_root_quat,
         strict_ik_targets=strict_ik_targets,
+        arm_reference_mode=arm_reference_mode,
     )
     return library.to_reference_batch()
 
@@ -342,6 +348,7 @@ def _retarget_segment(
     initial_root_quat: np.ndarray,
     *,
     strict_ik_targets: bool = False,
+    arm_reference_mode: str = "legacy",
 ) -> MotionClip:
     segment_bvh = bvh.slice(segment)
     targets = np.tile(default_ctrl, (segment_bvh.frames, 1)).astype(np.float32)
@@ -447,6 +454,7 @@ def _retarget_segment(
         segment_bvh,
         actuator_joint_names,
         default_ctrl,
+        arm_reference_mode=arm_reference_mode,
     ).items():
         assign_target(joint_name, values)
 
@@ -508,6 +516,8 @@ def _bvh_arm_swing_targets(
     bvh: ParsedBvh,
     actuator_joint_names: tuple[str, ...],
     default_ctrl: np.ndarray,
+    *,
+    arm_reference_mode: str = "legacy",
 ) -> dict[str, np.ndarray]:
     """Map BVH hand forward/back motion to a soft, natural arm swing.
 
@@ -516,13 +526,34 @@ def _bvh_arm_swing_targets(
     robust part of the signal instead: each hand's forward displacement relative
     to the hips drives shoulder_z, while elbows keep a small relaxed bend.
     """
-    required = {"LeftHand", "RightHand", bvh.root_name}
-    if not required.issubset(bvh.joints):
-        return {}
+    if arm_reference_mode == "legacy":
+        left_name, right_name = "LeftHand", "RightHand"
+        if not {left_name, right_name, bvh.root_name}.issubset(bvh.joints):
+            return {}
+    elif arm_reference_mode == "cmu_wrist":
+        if not any(
+            "shoulder" in name or "elbow" in name for name in actuator_joint_names
+        ):
+            return {}
+        left_name = next(
+            (name for name in ("LeftHand", "LeftWrist", "lhand") if name in bvh.joints),
+            None,
+        )
+        right_name = next(
+            (name for name in ("RightHand", "RightWrist", "rhand") if name in bvh.joints),
+            None,
+        )
+        if left_name is None or right_name is None or bvh.root_name not in bvh.joints:
+            raise ValueError(
+                "cmu_wrist arm references require left and right hand/wrist joints "
+                "and the BVH root; refusing silent neutral arm targets."
+            )
+    else:
+        raise ValueError(f"Unsupported arm_reference_mode: {arm_reference_mode!r}")
     positions = _global_joint_positions(bvh)
     root = positions[bvh.root_name]
-    left_hand = _bvh_positions_to_mujoco(positions["LeftHand"] - root)
-    right_hand = _bvh_positions_to_mujoco(positions["RightHand"] - root)
+    left_hand = _bvh_positions_to_mujoco(positions[left_name] - root)
+    right_hand = _bvh_positions_to_mujoco(positions[right_name] - root)
 
     def centered_forward(values: np.ndarray) -> np.ndarray:
         forward = values[:, 0]
@@ -534,6 +565,9 @@ def _bvh_arm_swing_targets(
     swing_gain = 1.45
     max_swing = 0.42
     elbow_bend = 0.32
+    # In the current arms XML, positive shoulder_z and elbow_z move either hand
+    # forward (+X). Both sides therefore use the same sign. The constant elbow
+    # bend remains a heuristic; this is not full shoulder/elbow mocap retargeting.
     targets: dict[str, np.ndarray] = {}
     for joint_name, swing in (
         ("left_shoulder_z", left_swing),
