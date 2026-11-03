@@ -18,19 +18,17 @@ from tests import test_deepmimic_reward_contract as reward_contract
 
 
 class JoystickCurriculumTests(unittest.TestCase):
-    def test_commands_stay_in_a_narrow_forward_range(self):
+    def test_curriculum_samples_separated_endpoint_commands(self):
         env = BiomechanicsJoystickEnv.__new__(BiomechanicsJoystickEnv)
         env._config = config_dict.ConfigDict(dict(
             command_profile="joystick_curriculum", joystick_speed_center=.5,
-            joystick_speed_radius=.05, joystick_yaw_limit=.1,
+            joystick_speed_radius=.2, joystick_yaw_limit=.1,
         ))
         samples = np.asarray(jax.jit(jax.vmap(env.sample_command))(
             jax.random.split(jax.random.PRNGKey(1), 1000)))
-        self.assertTrue(np.all((samples[:, 0] >= .45) & (samples[:, 0] <= .55)))
+        np.testing.assert_allclose(np.unique(samples[:, 0]), [.3, .7], atol=1e-6)
         np.testing.assert_array_equal(samples[:, 1], 0.)
-        self.assertTrue(np.all(np.abs(samples[:, 2]) <= .1))
-        self.assertLess(samples[:, 2].min(), -.05)
-        self.assertGreater(samples[:, 2].max(), .05)
+        np.testing.assert_allclose(np.unique(samples[:, 2]), [-.1, .1], atol=1e-6)
 
     def test_command_reward_is_bounded_and_ignores_bvh_root_speed(self):
         fixture = reward_contract.DeepMimicRewardContractTests()
@@ -83,7 +81,9 @@ class JoystickCurriculumTests(unittest.TestCase):
 
     def test_high_reward_walker_ignoring_commands_does_not_advance(self):
         rows = []
-        for command in (.45, .55):
+        low = .5 - .25
+        high = .5 + .25
+        for command in (low, high):
             for seed in (11, 22):
                 rows.append(dict(seed=seed, command=[command, 0., 0.], length=500,
                                  survived=True, pose=.99, linear_mae=.05, yaw_mae=0.,

@@ -2760,9 +2760,9 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             radius = self._config.joystick_speed_radius
             yaw_limit = self._config.joystick_yaw_limit
             return jp.array([
-                jax.random.uniform(speed_key, (), minval=center-radius, maxval=center+radius),
+                center + jp.where(jax.random.bernoulli(speed_key), radius, -radius),
                 0.0,
-                jax.random.uniform(yaw_key, (), minval=-yaw_limit, maxval=yaw_limit),
+                jp.where(jax.random.bernoulli(yaw_key), yaw_limit, -yaw_limit),
             ], dtype=jp.float32)
         if self._config.command_profile in ("forward_slow", "forward", "walk"):
             x_key, zero_key = jax.random.split(rng, 2)

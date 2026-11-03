@@ -25,9 +25,9 @@ WARMSTART = PROJECT_ROOT / "artifacts/joystick_curriculum_v2_warmstart"
 # Keep forward walking within a single clip's plausible range. Reverse, stop
 # and strafing require later reference/task work and are deliberately absent.
 LEVELS = (
-    {"speed_radius": 0.05, "yaw_limit": 0.0, "reward_weight": 0.20},
-    {"speed_radius": 0.10, "yaw_limit": 0.10, "reward_weight": 0.30},
-    {"speed_radius": 0.15, "yaw_limit": 0.25, "reward_weight": 0.40},
+    {"speed_radius": 0.25, "yaw_limit": 0.0, "reward_weight": 0.45},
+    {"speed_radius": 0.30, "yaw_limit": 0.15, "reward_weight": 0.50},
+    {"speed_radius": 0.35, "yaw_limit": 0.30, "reward_weight": 0.55},
 )
 
 
@@ -53,8 +53,8 @@ def promotion_gate(rows: list[dict], level: int, speed_center: float) -> dict:
                               for row in rows) <= 0.15,
         "yaw_error": fmean(abs(row["measured"][2] - row["command"][2])
                            for row in rows) <= 0.15,
-        "speed_response": speed_response >= 0.02,
-        "yaw_response": yaw_limit == 0 or yaw_response >= 0.03,
+        "speed_response": speed_response >= 0.15,
+        "yaw_response": yaw_limit == 0 or yaw_response >= 0.08,
     }
     return {"passed": all(checks.values()), "checks": checks,
             "speed_response": speed_response, "yaw_response": yaw_response,
@@ -111,6 +111,8 @@ def train_block(args) -> None:
     env.joystick_speed_radius = level["speed_radius"]
     env.joystick_yaw_limit = level["yaw_limit"]
     env.joystick_reward_weight = level["reward_weight"]
+    env.tracking_sigma = 0.06
+    env.tracking_yaw_sigma = 0.05
     env.arm_reference_mode = "legacy"
     training = TrainConfig(**saved["train"])
     training.num_timesteps = args.timesteps
@@ -145,7 +147,7 @@ def audit_block(args) -> None:
     commands = [[args.speed_center - radius, 0.0, 0.0],
                 [args.speed_center + radius, 0.0, 0.0]]
     rows = measure_rollouts(env, policy, commands, [11, 22])
-    gate = promotion_gate(rows, 0, args.speed_center)
+    gate = promotion_gate(rows, args.level, args.speed_center)
     yaw_rows = []
     if yaw > 0:
         yaw_rows = measure_rollouts(env, policy,
@@ -154,7 +156,7 @@ def audit_block(args) -> None:
         pairs = zip(yaw_rows[:2], yaw_rows[2:], strict=True)
         response = sum(b["measured"][2] - a["measured"][2] for a, b in pairs) / 2
         gate["yaw_response"] = response
-        gate["checks"]["yaw_response"] = response >= 0.03
+        gate["checks"]["yaw_response"] = response >= 0.08
         gate["checks"]["turn_survival"] = all(
             row["survived"] and row["length"] == 500 for row in yaw_rows)
         gate["checks"]["turn_pose"] = min(row["pose"] for row in yaw_rows) >= 0.95
