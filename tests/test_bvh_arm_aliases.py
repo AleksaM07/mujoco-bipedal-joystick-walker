@@ -7,6 +7,7 @@ import unittest
 import mujoco
 import numpy as np
 
+from biomechanics_env import BiomechanicsJoystickEnv
 from bvh_reference import (
     BvhMotionLibrary,
     MotionSegment,
@@ -45,6 +46,9 @@ class BvhArmAliasTests(unittest.TestCase):
         cls.legacy = BvhMotionLibrary.from_bvh_paths(**cls.loader_args)
         cls.corrected = BvhMotionLibrary.from_bvh_paths(
             **cls.loader_args, arm_reference_mode="cmu_wrist"
+        )
+        cls.ik_corrected = BvhMotionLibrary.from_bvh_paths(
+            **cls.loader_args, arm_reference_mode="cmu_wrist_ik"
         )
         cls.source = _parse_bvh(SOURCE_PATH).slice(MotionSegment(79, 213))
 
@@ -94,6 +98,63 @@ class BvhArmAliasTests(unittest.TestCase):
         np.testing.assert_array_equal(
             batch.qpos_targets, self.corrected.to_reference_batch().qpos_targets
         )
+
+    def test_wrist_ik_mode_exposes_real_3d_hand_targets(self) -> None:
+        heuristic = self.corrected.to_reference_batch()
+        fitted = self.ik_corrected.to_reference_batch()
+        self.assertEqual(
+            fitted.ik_target_names,
+            (
+                "metatarsal_midpoint_right",
+                "metatarsal_midpoint_left",
+                "right_hand",
+                "left_hand",
+            ),
+        )
+        self.assertEqual(fitted.ik_target_positions.shape[2], 4)
+        np.testing.assert_array_equal(
+            fitted.ik_target_positions[:, :, :2],
+            heuristic.ik_target_positions,
+        )
+        for index in (2, 3):
+            hand_path = fitted.ik_target_positions[1, :, index]
+            self.assertGreater(np.ptp(hand_path[:, 0]), 0.1)
+            self.assertGreater(np.ptp(hand_path[:, 2]), 0.05)
+
+    def test_host_ik_uses_multiple_shoulder_axes_for_wrist_paths(self) -> None:
+        batch = self.ik_corrected.to_reference_batch()
+        clip_id = 1
+        count = int(batch.frame_counts[clip_id])
+        frame_ids = np.linspace(0, count - 1, 12, dtype=int)
+        qpos = batch.qpos_targets[clip_id : clip_id + 1, frame_ids]
+        targets = batch.ik_target_positions[clip_id : clip_id + 1, frame_ids]
+        roots = batch.root_pos_targets[clip_id : clip_id + 1, frame_ids]
+        quaternions = batch.root_quat_targets[clip_id : clip_id + 1, frame_ids]
+
+        env = BiomechanicsJoystickEnv.__new__(BiomechanicsJoystickEnv)
+        env._mj_model = self.model
+        joint_ids = self.model.actuator_trnid[:, 0]
+        env._actuator_joint_names = self.names
+        env._actuator_qpos_indices_np = self.model.jnt_qposadr[joint_ids]
+        env._actuator_dof_indices_np = self.model.jnt_dofadr[joint_ids]
+        env._init_q_np = self.model.qpos0.copy()
+        env._actuator_ctrl_lower_limits_np = self.model.actuator_ctrlrange[:, 0]
+        env._actuator_ctrl_upper_limits_np = self.model.actuator_ctrlrange[:, 1]
+        env._strict_bvh_ik_targets = True
+
+        fitted = env._fit_reference_ik_once(
+            qpos,
+            targets,
+            batch.ik_target_names,
+            roots,
+            quaternions,
+            np.array([len(frame_ids)], dtype=np.int32),
+        )
+        for side in ("left", "right"):
+            shoulder_x = self.names.index(f"{side}_shoulder_x")
+            shoulder_y = self.names.index(f"{side}_shoulder_y")
+            self.assertGreater(np.ptp(fitted[0, :, shoulder_x]), 0.02)
+            self.assertGreater(np.ptp(fitted[0, :, shoulder_y]), 0.02)
 
     def test_missing_alias_fails_for_active_arms_instead_of_silent_static_target(self) -> None:
         joints = dict(self.source.joints)

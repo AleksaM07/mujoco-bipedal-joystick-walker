@@ -55,6 +55,11 @@ BVH_IK_SOURCE_ALIASES = (
     ("LeftToeBase", "LeftToe"),
 )
 
+BVH_ARM_IK_TARGET_MAP = (
+    ("right_hand", ("RightHand", "RightWrist", "rhand")),
+    ("left_hand", ("LeftHand", "LeftWrist", "lhand")),
+)
+
 # Marina/CMU ``cmuconvert-max`` BVH files use small skeleton units, not
 # centimeters. The neutral source height is about 25 units, so 0.07 maps it to
 # a 1.75 m human and keeps root travel in normal walking-speed range.
@@ -158,10 +163,17 @@ class BvhReferenceBatch:
 class BvhMotionLibrary:
     """Small MimicKit-style motion library specialized for this BVH source."""
 
-    def __init__(self, clips: tuple[MotionClip, ...]) -> None:
+    def __init__(
+        self,
+        clips: tuple[MotionClip, ...],
+        ik_target_names: tuple[str, ...] | None = None,
+    ) -> None:
         if not clips:
             raise ValueError("Potrebna je bar jedna validna BVH motion referenca.")
         self.clips = clips
+        self.ik_target_names = ik_target_names or tuple(
+            name for name, _ in BVH_IK_TARGET_MAP
+        )
 
     @classmethod
     def from_bvh_paths(
@@ -198,7 +210,10 @@ class BvhMotionLibrary:
                 for segment in segments
             ]
             clips.extend(_select_motion_clips_for_bvh(candidate_clips))
-        return cls(tuple(clips))
+        ik_target_names = tuple(name for name, _ in BVH_IK_TARGET_MAP)
+        if arm_reference_mode == "cmu_wrist_ik":
+            ik_target_names += tuple(name for name, _ in BVH_ARM_IK_TARGET_MAP)
+        return cls(tuple(clips), ik_target_names)
 
     def to_reference_batch(self) -> BvhReferenceBatch:
         max_frames = max(clip.frame_count for clip in self.clips)
@@ -272,7 +287,7 @@ class BvhMotionLibrary:
             source_start_frames=source_start_frames,
             source_end_frames=source_end_frames,
             support_feet=tuple(clip.support_foot for clip in self.clips),
-            ik_target_names=tuple(name for name, _ in BVH_IK_TARGET_MAP),
+            ik_target_names=self.ik_target_names,
             ik_target_positions=ik_target_positions,
         )
 
@@ -293,8 +308,9 @@ def load_bvh_references(
 
     Strict IK resolution uses supported toe aliases and rejects missing feet.
     The default retains historical preprocessing for existing checkpoints.
-    ``cmu_wrist`` opts into arm targets for CMU wrist/hand aliases; ``legacy``
-    preserves the original exact-name lookup, including its missing-arm fallback.
+    ``cmu_wrist`` opts into heuristic arm swing for CMU wrist/hand aliases.
+    ``cmu_wrist_ik`` additionally fits the real 3D wrists through host IK.
+    ``legacy`` preserves the historical missing-arm fallback.
     """
     initial_root_pos = (
         np.asarray(initial_root_pos, dtype=np.float32)
@@ -474,6 +490,7 @@ def _retarget_segment(
         raw_root_origin,
         initial_root_pos,
         strict_ik_targets=strict_ik_targets,
+        arm_reference_mode=arm_reference_mode,
     )
     qvel_targets = _target_velocities(targets, segment_bvh.frame_time)
     root_vel_targets = _target_velocities(root_pos, segment_bvh.frame_time)
@@ -530,7 +547,7 @@ def _bvh_arm_swing_targets(
         left_name, right_name = "LeftHand", "RightHand"
         if not {left_name, right_name, bvh.root_name}.issubset(bvh.joints):
             return {}
-    elif arm_reference_mode == "cmu_wrist":
+    elif arm_reference_mode in {"cmu_wrist", "cmu_wrist_ik"}:
         if not any(
             "shoulder" in name or "elbow" in name for name in actuator_joint_names
         ):
@@ -1318,8 +1335,9 @@ def _bvh_ik_target_positions(
     initial_root_pos: np.ndarray,
     *,
     strict_ik_targets: bool = False,
+    arm_reference_mode: str = "legacy",
 ) -> np.ndarray:
-    """Transform toes to simulator space with opt-in strict source resolution."""
+    """Transform feet and optional wrists to aligned simulator-space targets."""
     global_positions = _global_joint_positions(bvh)
     if strict_ik_targets:
         joint_names = _resolve_bvh_ik_joint_names(bvh)
@@ -1332,6 +1350,22 @@ def _bvh_ik_target_positions(
             ],
             axis=1,
         )
+    if arm_reference_mode == "cmu_wrist_ik":
+        arm_names: list[str] = []
+        for marker_name, aliases in BVH_ARM_IK_TARGET_MAP:
+            source_name = _first_existing_joint(bvh, aliases)
+            if source_name is None:
+                raise ValueError(
+                    f"Missing BVH IK source for {marker_name}; expected one of "
+                    f"{aliases}. Available joints: {tuple(bvh.joints)}"
+                )
+            arm_names.append(source_name)
+        arm_positions = np.stack(
+            [global_positions[name] for name in arm_names], axis=1
+        )
+        selected = np.concatenate([selected, arm_positions], axis=1)
+    elif arm_reference_mode not in {"legacy", "cmu_wrist"}:
+        raise ValueError(f"Unsupported arm_reference_mode: {arm_reference_mode!r}")
     mujoco_positions = _bvh_positions_to_mujoco(selected)
     mujoco_positions -= raw_root_origin[None, None, :]
     mujoco_positions = (

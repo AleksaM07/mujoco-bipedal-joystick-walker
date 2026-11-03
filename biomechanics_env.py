@@ -1545,7 +1545,9 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             if "pelvis" in marker_name:
                 weight = 2.0
             elif "hand" in marker_name:
-                weight = 0.15
+                # Wrist targets must move the three shoulder axes away from
+                # the neutral seed instead of leaving visibly rigid arms.
+                weight = 0.60
             elif "head" in marker_name:
                 weight = 0.7
             try:

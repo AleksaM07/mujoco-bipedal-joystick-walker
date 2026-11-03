@@ -48,6 +48,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.set_defaults(arm_actuators=False)
     parser.add_argument(
+        "--arm-reference-mode",
+        choices=["legacy", "cmu_wrist", "cmu_wrist_ik"],
+        default="legacy",
+        help="Arm target mapping used by the retargeted reference preview.",
+    )
+    parser.add_argument(
         "--reference-loop-mode",
         choices=["auto", "wrap", "clamp"],
         default="auto",
@@ -618,6 +624,7 @@ def make_env(args: argparse.Namespace) -> BiomechanicsJoystickEnv:
         "physics_backend": "mjx_jax",
         "reference_gait": "bvh",
         "arm_actuators": args.arm_actuators,
+        "arm_reference_mode": args.arm_reference_mode,
         "reference_gait_file": default_reference_files(args),
         "reference_loop_mode": args.reference_loop_mode,
         "reference_target_observation": False,
