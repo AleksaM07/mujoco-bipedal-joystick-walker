@@ -14,6 +14,7 @@ Tacno sacuvani rezultat
 
 - Checkpoint: 1,003,520 koraka iz arm-IK v3 run-a.
 - Video: arms_ik_v3_best1m_seed11_quad.mp4.
+- Poredjenje: arms_ik_v3_best1m_vs_raw_bvh_moving_side_by_side.mp4.
 - Referenca: CMU 02_01.bvh, originalni clip 1, frameovi 79-213.
 - Model: 26 aktivnih DOF-ova, ukljucujuci osam zglobova ruku.
 - Arm retarget: shoulder + elbow + wrist, skaliran na proporcije host kostura.
@@ -27,6 +28,32 @@ snimka. Originalni BVH menja geometrijsko savijanje lakta za oko 56.8 stepeni
 na levoj i 45.0 stepeni na desnoj ruci. Trenutna host IK referenca prenosi samo
 oko 7.4 stepena levo i 7.1 stepen desno. Dakle najveci deo elbow-flexion signala
 nestaje pre nego sto ga RL politika uopste vidi.
+
+Ni hod jos nije potpuno prirodan
+---------------------------------
+
+Side-by-side sa originalnim sirovim BVH-om pokazuje da je hod subjektivno oko
+80% prirodnosti reference. Ovo nije samo problem duzine RL treninga:
+
+1. Root XY kretanje reference je skalirano na 0.35, pa host dobija samo 35%
+   originalne horizontalne translacije.
+2. Zglobovi van izabranog sagitalnog skupa blendovani su na 0.35, pa se gubi
+   65% lateralnog i rotacionog pokreta kukova, karlice i trupa.
+3. Action smoothing je 0.2: svaki korak prima 20% nove akcije i zadrzava 80%
+   prethodne, sto potiskuje brze i ostre promene iz mocap-a.
+4. Stance-foot lock namerno menja originalnu kinematiku da bi stopalo ostalo
+   nosivo i stabilno u fizici.
+5. DeepMimic key-body mete trenutno su samo dva metatarzalna markera stopala;
+   kolena, sake, laktovi, grudni kos i glava nisu key-body mete.
+6. CMU izvor ima 31 skeletnu tacku sa vratom, wristovima, prstima i toe
+   zglobovima. Host ima 26 aktuatora, bez aktivnih wrist, finger, toe i neck
+   zglobova, pa identicna silueta nije fizicki reprezentabilna.
+7. BVH je kinematicki snimak, dok politika mora istovremeno da postuje masu,
+   kontakte, trenje, PD limite i balans. Reward zato prihvata stabilan
+   kompromis koji nije savrsena kopija svakog frejma.
+
+Ovih 80% je vizuelna procena, ne nova formalna metrika. Numericki rollout je
+veoma stabilan, ali stabilnost i prirodnost nisu ista stvar.
 
 Zakljucak i sledeci korak
 ------------------------
