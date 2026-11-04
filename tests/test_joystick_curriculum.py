@@ -64,7 +64,8 @@ class JoystickCurriculumTests(unittest.TestCase):
         config = EnvConfig(command_profile="joystick_curriculum",
                            deepmimic_reward_mode="command", joystick_speed_center=.4,
                            joystick_speed_radius=.03, joystick_yaw_limit=.12,
-                           joystick_reward_weight=.3, arm_reference_mode="cmu_wrist")
+                           joystick_reward_weight=.3, tracking_sigma=.06,
+                           tracking_yaw_sigma=.05, arm_reference_mode="cmu_wrist")
         restored = evaluate.restore_saved_env_config({"env": asdict(config)})
         self.assertEqual(config, restored)
         for module in (evaluate, train):
@@ -73,7 +74,7 @@ class JoystickCurriculumTests(unittest.TestCase):
             forwarded = constructor.call_args.kwargs["config_overrides"]
             for key in ("command_profile", "deepmimic_reward_mode", "joystick_speed_center",
                         "joystick_speed_radius", "joystick_yaw_limit", "joystick_reward_weight",
-                        "arm_reference_mode"):
+                        "tracking_sigma", "tracking_yaw_sigma", "arm_reference_mode"):
                 self.assertEqual(forwarded[key], getattr(config, key))
         legacy = evaluate.restore_saved_env_config({"env": {"deepmimic_reward_mode": "pure"}})
         self.assertEqual(legacy.arm_reference_mode, "legacy")

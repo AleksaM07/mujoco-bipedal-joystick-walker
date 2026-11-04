@@ -889,6 +889,8 @@ class EnvConfig:
     joystick_speed_radius: float = 0.05
     joystick_yaw_limit: float = 0.0
     joystick_reward_weight: float = 0.2
+    tracking_sigma: float = 0.25
+    tracking_yaw_sigma: float = 0.35
     arm_reference_mode: str = "legacy"
 
     # New measurements/time semantics are opt-in: old policies must keep their

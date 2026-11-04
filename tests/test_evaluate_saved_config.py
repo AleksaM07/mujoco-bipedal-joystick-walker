@@ -13,6 +13,13 @@ from config import EnvConfig, default_biomechanics_env_config
 
 
 class SavedConfigTests(unittest.TestCase):
+    def test_saved_command_tracking_sigmas_restore_without_semantic_loss(self) -> None:
+        restored = evaluate.restore_saved_env_config(
+            {"env": {"tracking_sigma": 0.06, "tracking_yaw_sigma": 0.05}}
+        )
+        self.assertEqual(restored.tracking_sigma, 0.06)
+        self.assertEqual(restored.tracking_yaw_sigma, 0.05)
+
     def test_saved_curriculum_profile_is_accepted_by_auto_evaluation(self) -> None:
         profile = evaluate.infer_command_profile(
             Path("unused"), {"env": {"command_profile": "joystick_curriculum"}}

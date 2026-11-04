@@ -1457,6 +1457,8 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         "joystick_speed_radius": env_config.joystick_speed_radius,
         "joystick_yaw_limit": env_config.joystick_yaw_limit,
         "joystick_reward_weight": env_config.joystick_reward_weight,
+        "tracking_sigma": env_config.tracking_sigma,
+        "tracking_yaw_sigma": env_config.tracking_yaw_sigma,
         "arm_reference_mode": env_config.arm_reference_mode,
         "recovery_physics_version": env_config.recovery_physics_version,
         "reference_motion_speed_scale": env_config.reference_motion_speed_scale,
