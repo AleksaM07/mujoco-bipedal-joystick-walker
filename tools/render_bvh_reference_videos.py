@@ -59,6 +59,12 @@ def parse_args() -> argparse.Namespace:
         help="Arm target mapping used by the retargeted reference preview.",
     )
     parser.add_argument(
+        "--reference-stability-arm-alpha",
+        type=float,
+        default=0.75,
+        help="Arm-reference blend used by the environment (1.0 keeps full motion).",
+    )
+    parser.add_argument(
         "--reference-loop-mode",
         choices=["auto", "wrap", "clamp"],
         default="auto",
@@ -630,6 +636,7 @@ def make_env(args: argparse.Namespace) -> BiomechanicsJoystickEnv:
         "reference_gait": "bvh",
         "arm_actuators": args.arm_actuators,
         "arm_reference_mode": args.arm_reference_mode,
+        "reference_stability_arm_alpha": args.reference_stability_arm_alpha,
         "reference_gait_file": default_reference_files(args),
         "reference_loop_mode": args.reference_loop_mode,
         "reference_target_observation": False,
