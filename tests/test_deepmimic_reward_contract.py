@@ -94,6 +94,27 @@ class DeepMimicRewardContractTests(unittest.TestCase):
                 self.assertLess(float(reward[name]), float(previous[name]))
             previous = reward
 
+    def test_opt_in_arm_objective_focuses_arm_dofs_without_changing_layout(self) -> None:
+        self.env._actuator_qpos_indices = jp.arange(26)
+        self.env._actuator_dof_indices = jp.arange(26)
+        self.env._arm_actuator_mask = jp.arange(26) >= 18
+        self.reference["qpos"] = jp.zeros(26)
+        self.reference["qvel"] = jp.zeros(26)
+        self.data.qpos = jp.zeros(26).at[18].set(1.0)
+        self.data.qvel = jp.zeros(26)
+
+        self.env._config["deepmimic_arm_reward_weight"] = 0.0
+        historical = self.score()
+        self.env._config["deepmimic_arm_reward_weight"] = 1.0
+        arm_focused = self.score()
+        self.assertAlmostEqual(float(arm_focused["arm_pose_error"]), 1.0 / 8.0)
+        self.assertLess(float(arm_focused["total"]), float(historical["total"]))
+
+        self.data.qpos = jp.zeros(26).at[0].set(1.0)
+        leg_error = self.score()
+        self.assertEqual(float(leg_error["arm_pose_error"]), 0.0)
+        self.assertGreater(float(leg_error["total"]), float(arm_focused["total"]))
+
     def test_root_xy_translation_is_reported_but_not_penalized(self) -> None:
         baseline = self.score()
         translation = jp.array([3.0, 4.0, 0.0])

@@ -715,6 +715,7 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         reference_residual_scale=1.0,
         reference_replay_target_step=0,
         deepmimic_root_velocity_weight_scale=1.0,
+        deepmimic_arm_reward_weight=0.0,
         # Keep finite clips away from the terminal edge during random reset.
         # This prevents short clamp snippets from ending a few control steps
         # after reset before the controller can learn a gait segment.
@@ -924,6 +925,8 @@ class EnvConfig:
     bvh_target_observation_steps: tuple[int, ...] = (0, 1, 2, 3)
     reference_replay_target_step: int = 0
     deepmimic_root_velocity_weight_scale: float = 1.0
+    # Zero keeps historical locomotion rewards byte-for-byte equivalent.
+    deepmimic_arm_reward_weight: float = 0.0
     reference_reset_min_steps_remaining: int = 25
     reference_min_motion_length: float = 0.8
     reference_loop_mode: str = "auto"

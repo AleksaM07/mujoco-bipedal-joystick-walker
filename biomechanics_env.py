@@ -292,6 +292,13 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 "consistent_v3, consistent_v4, consistent_v5 or consistent_v6."
             )
         motion_speed = float(self._config.get("reference_motion_speed_scale", 1.0))
+        arm_reward_weight = float(
+            self._config.get("deepmimic_arm_reward_weight", 0.0)
+        )
+        if not np.isfinite(arm_reward_weight) or arm_reward_weight < 0.0:
+            raise ValueError(
+                "deepmimic_arm_reward_weight must be finite and nonnegative."
+            )
         if self._config.get("deepmimic_reward_mode") == "command":
             if self._config.get("reference_gait") not in ("bvh", "smpl"):
                 raise ValueError("Command imitation requires a motion reference.")
@@ -434,6 +441,10 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             }
         self._reference_gait_mask = jp.array([
             joint_name in reference_gait_names
+            for joint_name in actuator_joint_names
+        ])
+        self._arm_actuator_mask = jp.array([
+            joint_name in ARM_ACTUATED_JOINTS
             for joint_name in actuator_joint_names
         ])
         self._reference_gait_sin_offsets = jp.array([
@@ -3564,6 +3575,24 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
 
         pose_error = jp.mean(jp.square(qpos - ref_qpos))
         velocity_error = jp.mean(jp.square(qvel - ref_qvel))
+        arm_mask = getattr(
+            self,
+            "_arm_actuator_mask",
+            jp.zeros_like(qpos, dtype=bool),
+        ).astype(qpos.dtype)
+        arm_count = jp.sum(arm_mask)
+        arm_pose_error = jp.where(
+            arm_count > 0,
+            jp.sum(jp.square(qpos - ref_qpos) * arm_mask)
+            / jp.maximum(arm_count, 1.0),
+            0.0,
+        )
+        arm_velocity_error = jp.where(
+            arm_count > 0,
+            jp.sum(jp.square(qvel - ref_qvel) * arm_mask)
+            / jp.maximum(arm_count, 1.0),
+            0.0,
+        )
 
         sim_heading = self._heading_world_to_local_from_quat(root_quat)
         ref_heading = self._heading_world_to_local_from_quat(ref_root_quat)
@@ -3604,6 +3633,11 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         # Matches MimicKit's weighted pose/vel/root_pose/root_vel/key_pos split.
         pose_reward = jp.exp(-self.DEEPMIMIC_POSE_SCALE * pose_error)
         velocity_reward = jp.exp(-self.DEEPMIMIC_VELOCITY_SCALE * velocity_error)
+        arm_pose_reward = jp.exp(-self.DEEPMIMIC_POSE_SCALE * arm_pose_error)
+        arm_velocity_reward = jp.exp(
+            -self.DEEPMIMIC_VELOCITY_SCALE * arm_velocity_error
+        )
+        arm_reward = 0.75 * arm_pose_reward + 0.25 * arm_velocity_reward
         root_pose_reward = jp.exp(-self.DEEPMIMIC_ROOT_POSE_SCALE * root_pose_error)
         root_velocity_reward = jp.exp(
             -self.DEEPMIMIC_ROOT_VELOCITY_SCALE * root_velocity_error
@@ -3629,6 +3663,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             + root_velocity_weight * root_velocity_reward
             + self.DEEPMIMIC_KEY_POSITION_WEIGHT * key_position_reward
         ) / max(total_weight, 1e-6)
+        arm_weight = float(self._config.get("deepmimic_arm_reward_weight", 0.0))
+        total_reward = (total_reward + arm_weight * arm_reward) / (1.0 + arm_weight)
         no_root_velocity_weight = (
             self.DEEPMIMIC_POSE_WEIGHT
             + self.DEEPMIMIC_VELOCITY_WEIGHT
@@ -3641,11 +3677,17 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             + self.DEEPMIMIC_ROOT_POSE_WEIGHT * root_pose_reward
             + self.DEEPMIMIC_KEY_POSITION_WEIGHT * key_position_reward
         ) / max(no_root_velocity_weight, 1e-6)
+        total_no_root_velocity = (
+            total_no_root_velocity + arm_weight * arm_reward
+        ) / (1.0 + arm_weight)
         return {
             "total": total_reward,
             "total_no_root_velocity": total_no_root_velocity,
             "pose": pose_reward,
             "velocity": velocity_reward,
+            "arm": arm_reward,
+            "arm_pose": arm_pose_reward,
+            "arm_velocity": arm_velocity_reward,
             "end_effector": key_position_reward,
             "root": root_pose_reward,
             "com": root_velocity_reward,
@@ -3654,6 +3696,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "key_position": key_position_reward,
             "pose_error": pose_error,
             "velocity_error": velocity_error,
+            "arm_pose_error": arm_pose_error,
+            "arm_velocity_error": arm_velocity_error,
             "root_xy_error": root_xy_error,
             "root_height_error": root_height_error,
             "root_vel_error": root_vel_error_norm,

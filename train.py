@@ -1478,6 +1478,7 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         "deepmimic_root_velocity_weight_scale": (
             env_config.deepmimic_root_velocity_weight_scale
         ),
+        "deepmimic_arm_reward_weight": env_config.deepmimic_arm_reward_weight,
         "reference_reset_min_steps_remaining": (
             env_config.reference_reset_min_steps_remaining
         ),
@@ -2706,6 +2707,15 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--deepmimic-arm-reward-weight",
+        type=float,
+        default=EnvConfig.deepmimic_arm_reward_weight,
+        help=(
+            "Additional normalized arm pose/velocity imitation weight. "
+            "Zero preserves the historical full-body reward."
+        ),
+    )
+    parser.add_argument(
         "--deepmimic-reward-mode",
         choices=["pure", "mixed", "command"],
         default=EnvConfig.deepmimic_reward_mode,
@@ -3023,6 +3033,7 @@ def main() -> None:
         deepmimic_root_velocity_weight_scale=(
             args.deepmimic_root_velocity_weight_scale
         ),
+        deepmimic_arm_reward_weight=args.deepmimic_arm_reward_weight,
         reference_target_observation=(
             args.reference_gait in ("bvh", "smpl")
             and EnvConfig.reference_target_observation
