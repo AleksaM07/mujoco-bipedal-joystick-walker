@@ -12,6 +12,7 @@ from bvh_reference import (
     BvhMotionLibrary,
     MotionSegment,
     _bvh_arm_swing_targets,
+    _bvh_elbow_flexion_target,
     _parse_bvh,
     load_bvh_references,
 )
@@ -51,6 +52,11 @@ class BvhArmAliasTests(unittest.TestCase):
             **cls.loader_args, arm_reference_mode="cmu_wrist_ik"
         )
         cls.full_arm_ik = BvhMotionLibrary.from_bvh_paths(
+            **cls.loader_args,
+            arm_reference_mode="cmu_elbow_wrist_ik",
+            reference_elbow_flexion_alpha=1.0,
+        )
+        cls.compat_full_arm_ik = BvhMotionLibrary.from_bvh_paths(
             **cls.loader_args, arm_reference_mode="cmu_elbow_wrist_ik"
         )
         cls.source = _parse_bvh(SOURCE_PATH).slice(MotionSegment(79, 213))
@@ -207,6 +213,32 @@ class BvhArmAliasTests(unittest.TestCase):
         for side in ("left", "right"):
             elbow = self.names.index(f"{side}_elbow_z")
             self.assertGreater(np.ptp(fitted[0, :, elbow]), 0.03)
+
+    def test_full_arm_seed_preserves_source_elbow_flexion(self) -> None:
+        batch = self.full_arm_ik.to_reference_batch()
+        clip_id = 1
+        count = int(batch.frame_counts[clip_id])
+
+        for side in ("left", "right"):
+            elbow = self.names.index(f"{side}_elbow_z")
+            expected = _bvh_elbow_flexion_target(self.source, side)
+            actual = batch.qpos_targets[clip_id, :count, elbow]
+            np.testing.assert_allclose(actual, expected, atol=1e-6)
+            self.assertGreater(np.ptp(actual), np.deg2rad(40.0))
+
+    def test_default_full_arm_seed_preserves_archived_constant_elbows(self) -> None:
+        batch = self.compat_full_arm_ik.to_reference_batch()
+        for side in ("left", "right"):
+            elbow = self.names.index(f"{side}_elbow_z")
+            np.testing.assert_allclose(batch.qpos_targets[:, :, elbow], 0.32)
+
+    def test_elbow_flexion_alpha_is_bounded(self) -> None:
+        with self.assertRaisesRegex(ValueError, "must be in"):
+            BvhMotionLibrary.from_bvh_paths(
+                **self.loader_args,
+                arm_reference_mode="cmu_elbow_wrist_ik",
+                reference_elbow_flexion_alpha=1.1,
+            )
 
     def test_full_arm_targets_use_host_segment_lengths(self) -> None:
         batch = self.full_arm_ik.to_reference_batch()

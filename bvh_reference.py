@@ -200,6 +200,7 @@ class BvhMotionLibrary:
         *,
         strict_ik_targets: bool = False,
         arm_reference_mode: str = "legacy",
+        reference_elbow_flexion_alpha: float = 0.0,
     ) -> "BvhMotionLibrary":
         clips: list[MotionClip] = []
         for source_path in expand_motion_paths(paths):
@@ -218,6 +219,7 @@ class BvhMotionLibrary:
                     initial_root_quat=initial_root_quat,
                     strict_ik_targets=strict_ik_targets,
                     arm_reference_mode=arm_reference_mode,
+                    reference_elbow_flexion_alpha=reference_elbow_flexion_alpha,
                 )
                 for segment in segments
             ]
@@ -317,6 +319,7 @@ def load_bvh_references(
     *,
     strict_ik_targets: bool = False,
     arm_reference_mode: str = "legacy",
+    reference_elbow_flexion_alpha: float = 0.0,
 ) -> BvhReferenceBatch:
     """Load BVH/list paths into a padded reference batch.
 
@@ -348,6 +351,7 @@ def load_bvh_references(
         initial_root_quat=initial_root_quat,
         strict_ik_targets=strict_ik_targets,
         arm_reference_mode=arm_reference_mode,
+        reference_elbow_flexion_alpha=reference_elbow_flexion_alpha,
     )
     return library.to_reference_batch()
 
@@ -381,6 +385,7 @@ def _retarget_segment(
     *,
     strict_ik_targets: bool = False,
     arm_reference_mode: str = "legacy",
+    reference_elbow_flexion_alpha: float = 0.0,
 ) -> MotionClip:
     segment_bvh = bvh.slice(segment)
     targets = np.tile(default_ctrl, (segment_bvh.frames, 1)).astype(np.float32)
@@ -487,6 +492,7 @@ def _retarget_segment(
         actuator_joint_names,
         default_ctrl,
         arm_reference_mode=arm_reference_mode,
+        reference_elbow_flexion_alpha=reference_elbow_flexion_alpha,
     ).items():
         assign_target(joint_name, values)
 
@@ -551,6 +557,7 @@ def _bvh_arm_swing_targets(
     default_ctrl: np.ndarray,
     *,
     arm_reference_mode: str = "legacy",
+    reference_elbow_flexion_alpha: float = 0.0,
 ) -> dict[str, np.ndarray]:
     """Map BVH hand forward/back motion to a soft, natural arm swing.
 
@@ -559,6 +566,11 @@ def _bvh_arm_swing_targets(
     robust part of the signal instead: each hand's forward displacement relative
     to the hips drives shoulder_z, while elbows keep a small relaxed bend.
     """
+    if (
+        not np.isfinite(reference_elbow_flexion_alpha)
+        or not 0.0 <= reference_elbow_flexion_alpha <= 1.0
+    ):
+        raise ValueError("reference_elbow_flexion_alpha must be in [0, 1].")
     if arm_reference_mode == "legacy":
         left_name, right_name = "LeftHand", "RightHand"
         if not {left_name, right_name, bvh.root_name}.issubset(bvh.joints):
@@ -622,12 +634,72 @@ def _bvh_arm_swing_targets(
         if joint_name not in actuator_joint_names:
             continue
         index = actuator_joint_names.index(joint_name)
-        targets[joint_name] = np.full(
-            bvh.frames,
-            float(default_ctrl[index]) + elbow_bend,
-            dtype=np.float32,
-        )
+        if arm_reference_mode == "cmu_elbow_wrist_ik":
+            side = joint_name.removesuffix("_elbow_z")
+            constant = np.full(
+                bvh.frames,
+                float(default_ctrl[index]) + elbow_bend,
+                dtype=np.float32,
+            )
+            geometric = _bvh_elbow_flexion_target(bvh, side)
+            targets[joint_name] = (
+                constant
+                + reference_elbow_flexion_alpha * (geometric - constant)
+            ).astype(np.float32)
+        else:
+            targets[joint_name] = np.full(
+                bvh.frames,
+                float(default_ctrl[index]) + elbow_bend,
+                dtype=np.float32,
+            )
     return targets
+
+
+def _bvh_elbow_flexion_target(bvh: ParsedBvh, side: str) -> np.ndarray:
+    """Return geometric source elbow flexion for the positive host hinge.
+
+    The arms XML uses a positive ``elbow_z`` hinge whose zero pose is straight.
+    Euler channels are not portable between the CMU skeleton and this host, but
+    the angle between shoulder-to-elbow and elbow-to-wrist vectors is.  Use that
+    invariant angle as the full-chain IK seed so pose and temporal
+    regularization preserve the source flexion instead of pulling every frame
+    toward the historical constant 0.32-radian bend.
+    """
+    aliases = {
+        "left": (
+            ("LeftShoulder", "LeftArm"),
+            ("LeftElbow", "LeftForeArm", "LeftLowerArm"),
+            ("LeftHand", "LeftWrist", "lhand"),
+        ),
+        "right": (
+            ("RightShoulder", "RightArm"),
+            ("RightElbow", "RightForeArm", "RightLowerArm"),
+            ("RightHand", "RightWrist", "rhand"),
+        ),
+    }
+    if side not in aliases:
+        raise ValueError(f"Unsupported arm side: {side!r}")
+
+    resolved = tuple(_first_existing_joint(bvh, names) for names in aliases[side])
+    if any(name is None for name in resolved):
+        raise ValueError(
+            f"Missing BVH {side} arm-chain joint for geometric elbow flexion; "
+            f"resolved {resolved}."
+        )
+    shoulder_name, elbow_name, wrist_name = resolved
+    positions = _global_joint_positions(bvh)
+    upper_arm = positions[elbow_name] - positions[shoulder_name]
+    forearm = positions[wrist_name] - positions[elbow_name]
+    upper_norm = np.linalg.norm(upper_arm, axis=1)
+    forearm_norm = np.linalg.norm(forearm, axis=1)
+    if np.any(upper_norm < 1e-8) or np.any(forearm_norm < 1e-8):
+        raise ValueError(f"Degenerate BVH {side} arm segment in elbow flexion target.")
+
+    cosine = np.sum(upper_arm * forearm, axis=1) / (upper_norm * forearm_norm)
+    flexion = np.arccos(np.clip(cosine, -1.0, 1.0)).astype(np.float32)
+    if not np.isfinite(flexion).all():
+        raise ValueError(f"Non-finite BVH {side} elbow flexion target.")
+    return flexion
 
 
 def _quat_angular_velocities(quats: np.ndarray, frame_time: float) -> np.ndarray:

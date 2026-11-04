@@ -830,6 +830,9 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         )
         if reference_gait == "bvh":
             loader_options["arm_reference_mode"] = self._config.arm_reference_mode
+            loader_options["reference_elbow_flexion_alpha"] = float(
+                self._config.get("reference_elbow_flexion_alpha", 0.0)
+            )
         references = loader(
             tuple(resolve_project_path(path) for path in reference_gait_files),
             self._actuator_joint_names,
@@ -2494,6 +2497,9 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "reference_velocity": initial_reference_velocity,
             "deepmimic_pose": initial_deepmimic["pose"],
             "deepmimic_velocity": initial_deepmimic["velocity"],
+            "deepmimic_arm": initial_deepmimic["arm"],
+            "deepmimic_arm_pose": initial_deepmimic["arm_pose"],
+            "deepmimic_arm_velocity": initial_deepmimic["arm_velocity"],
             "deepmimic_total_no_root_velocity": initial_deepmimic[
                 "total_no_root_velocity"
             ],
@@ -2505,6 +2511,10 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             "deepmimic_key_position": initial_deepmimic["key_position"],
             "deepmimic_pose_error": initial_deepmimic["pose_error"],
             "deepmimic_velocity_error": initial_deepmimic["velocity_error"],
+            "deepmimic_arm_pose_error": initial_deepmimic["arm_pose_error"],
+            "deepmimic_arm_velocity_error": initial_deepmimic[
+                "arm_velocity_error"
+            ],
             "deepmimic_root_xy_error": initial_deepmimic["root_xy_error"],
             "deepmimic_root_height_error": initial_deepmimic["root_height_error"],
             "deepmimic_root_vel_error": initial_deepmimic["root_vel_error"],
@@ -2702,6 +2712,9 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         metrics["reference_velocity"] = reference_velocity
         metrics["deepmimic_pose"] = deepmimic["pose"]
         metrics["deepmimic_velocity"] = deepmimic["velocity"]
+        metrics["deepmimic_arm"] = deepmimic["arm"]
+        metrics["deepmimic_arm_pose"] = deepmimic["arm_pose"]
+        metrics["deepmimic_arm_velocity"] = deepmimic["arm_velocity"]
         metrics["deepmimic_total_no_root_velocity"] = deepmimic[
             "total_no_root_velocity"
         ]
@@ -2713,6 +2726,10 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         metrics["deepmimic_key_position"] = deepmimic["key_position"]
         metrics["deepmimic_pose_error"] = deepmimic["pose_error"]
         metrics["deepmimic_velocity_error"] = deepmimic["velocity_error"]
+        metrics["deepmimic_arm_pose_error"] = deepmimic["arm_pose_error"]
+        metrics["deepmimic_arm_velocity_error"] = deepmimic[
+            "arm_velocity_error"
+        ]
         metrics["deepmimic_root_xy_error"] = deepmimic["root_xy_error"]
         metrics["deepmimic_root_height_error"] = deepmimic["root_height_error"]
         metrics["deepmimic_root_vel_error"] = deepmimic["root_vel_error"]

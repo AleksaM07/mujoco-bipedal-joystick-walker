@@ -682,6 +682,7 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         joystick_yaw_limit=0.0,
         joystick_reward_weight=0.2,
         arm_reference_mode="legacy",
+        reference_elbow_flexion_alpha=0.0,
         # Preserve historical checkpoint semantics unless recovery is explicit.
         recovery_physics_version="legacy",
         reference_motion_speed_scale=1.0,
@@ -893,6 +894,9 @@ class EnvConfig:
     tracking_sigma: float = 0.25
     tracking_yaw_sigma: float = 0.35
     arm_reference_mode: str = "legacy"
+    # Zero reproduces archived full-arm checkpoints whose elbow seed was a
+    # constant 0.32 rad. New elbow curricula opt into geometric BVH flexion.
+    reference_elbow_flexion_alpha: float = 0.0
 
     # New measurements/time semantics are opt-in: old policies must keep their
     # original observation distribution when evaluated without a migration.

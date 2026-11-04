@@ -29,12 +29,15 @@ def main() -> None:
     parser.add_argument("--timesteps", type=int, default=10_000_000)
     parser.add_argument("--num-envs", type=int, choices=[32, 64, 128, 256], default=64)
     parser.add_argument("--arm-reward-weight", type=float, default=1.0)
+    parser.add_argument("--elbow-flexion-alpha", type=float, default=1.0)
     parser.add_argument("--run-tag", default="arms_ik_v3_elbow_wrist_10m")
     args = parser.parse_args()
     if args.timesteps <= 0:
         parser.error("--timesteps must be positive.")
     if not 0.0 < args.arm_reward_weight <= 4.0:
         parser.error("--arm-reward-weight must be in (0, 4].")
+    if not 0.0 <= args.elbow_flexion_alpha <= 1.0:
+        parser.error("--elbow-flexion-alpha must be in [0, 1].")
 
     configure_stdout_encoding()
     jax.config.update("jax_default_device", jax.devices("gpu")[0])
@@ -46,6 +49,7 @@ def main() -> None:
     env.deepmimic_reward_mode = "pure"
     env.command_profile = "walk"
     env.arm_reference_mode = "cmu_elbow_wrist_ik"
+    env.reference_elbow_flexion_alpha = args.elbow_flexion_alpha
     env.deepmimic_arm_reward_weight = args.arm_reward_weight
     # The previous transfer attenuated every arm target by 25%, even after IK.
     # Keep the locomotion stability prior unchanged but preserve the full arm

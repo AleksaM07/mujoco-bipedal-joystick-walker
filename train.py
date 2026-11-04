@@ -1460,6 +1460,9 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         "tracking_sigma": env_config.tracking_sigma,
         "tracking_yaw_sigma": env_config.tracking_yaw_sigma,
         "arm_reference_mode": env_config.arm_reference_mode,
+        "reference_elbow_flexion_alpha": (
+            env_config.reference_elbow_flexion_alpha
+        ),
         "recovery_physics_version": env_config.recovery_physics_version,
         "reference_motion_speed_scale": env_config.reference_motion_speed_scale,
         "reference_loop_closure": env_config.reference_loop_closure,
@@ -2482,6 +2485,15 @@ def main() -> None:
         ],
         default="legacy",
     )
+    parser.add_argument(
+        "--reference-elbow-flexion-alpha",
+        type=float,
+        default=EnvConfig.reference_elbow_flexion_alpha,
+        help=(
+            "Blend from archived constant elbow targets (0) to geometric BVH "
+            "elbow flexion (1)."
+        ),
+    )
     parser.add_argument("--device", choices=["gpu", "cpu"], default="gpu")
     parser.add_argument("--allow-cpu", action="store_true")
     parser.add_argument(
@@ -3014,6 +3026,7 @@ def main() -> None:
         joystick_yaw_limit=args.joystick_yaw_limit,
         joystick_reward_weight=args.joystick_reward_weight,
         arm_reference_mode=args.arm_reference_mode,
+        reference_elbow_flexion_alpha=args.reference_elbow_flexion_alpha,
         recovery_physics_version=args.recovery_physics_version,
         reference_motion_speed_scale=args.reference_motion_speed_scale,
         reference_loop_closure=args.reference_loop_closure,
