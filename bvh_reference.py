@@ -60,6 +60,18 @@ BVH_ARM_IK_TARGET_MAP = (
     ("left_hand", ("LeftHand", "LeftWrist", "lhand")),
 )
 
+# A wrist position alone supplies three constraints for a host arm with four
+# actuated coordinates (three shoulder axes plus one elbow axis).  Preserve the
+# wrist-only mode for old experiment configs, but make the full-chain mode track
+# the source elbow as the host forearm origin as well.
+BVH_FULL_ARM_IK_TARGET_MAP = (
+    ("right_upper_arm", ("RightShoulder", "RightArm")),
+    ("left_upper_arm", ("LeftShoulder", "LeftArm")),
+    ("right_forearm", ("RightElbow", "RightForeArm", "RightLowerArm")),
+    ("left_forearm", ("LeftElbow", "LeftForeArm", "LeftLowerArm")),
+    *BVH_ARM_IK_TARGET_MAP,
+)
+
 # Marina/CMU ``cmuconvert-max`` BVH files use small skeleton units, not
 # centimeters. The neutral source height is about 25 units, so 0.07 maps it to
 # a 1.75 m human and keeps root travel in normal walking-speed range.
@@ -213,6 +225,8 @@ class BvhMotionLibrary:
         ik_target_names = tuple(name for name, _ in BVH_IK_TARGET_MAP)
         if arm_reference_mode == "cmu_wrist_ik":
             ik_target_names += tuple(name for name, _ in BVH_ARM_IK_TARGET_MAP)
+        elif arm_reference_mode == "cmu_elbow_wrist_ik":
+            ik_target_names += tuple(name for name, _ in BVH_FULL_ARM_IK_TARGET_MAP)
         return cls(tuple(clips), ik_target_names)
 
     def to_reference_batch(self) -> BvhReferenceBatch:
@@ -310,6 +324,8 @@ def load_bvh_references(
     The default retains historical preprocessing for existing checkpoints.
     ``cmu_wrist`` opts into heuristic arm swing for CMU wrist/hand aliases.
     ``cmu_wrist_ik`` additionally fits the real 3D wrists through host IK.
+    ``cmu_elbow_wrist_ik`` constrains both elbows and wrists, removing the
+    wrist-only arm's underdetermined degree of freedom.
     ``legacy`` preserves the historical missing-arm fallback.
     """
     initial_root_pos = (
@@ -547,7 +563,11 @@ def _bvh_arm_swing_targets(
         left_name, right_name = "LeftHand", "RightHand"
         if not {left_name, right_name, bvh.root_name}.issubset(bvh.joints):
             return {}
-    elif arm_reference_mode in {"cmu_wrist", "cmu_wrist_ik"}:
+    elif arm_reference_mode in {
+        "cmu_wrist",
+        "cmu_wrist_ik",
+        "cmu_elbow_wrist_ik",
+    }:
         if not any(
             "shoulder" in name or "elbow" in name for name in actuator_joint_names
         ):
@@ -1337,7 +1357,7 @@ def _bvh_ik_target_positions(
     strict_ik_targets: bool = False,
     arm_reference_mode: str = "legacy",
 ) -> np.ndarray:
-    """Transform feet and optional wrists to aligned simulator-space targets."""
+    """Transform feet and optional arm-chain points to simulator-space targets."""
     global_positions = _global_joint_positions(bvh)
     if strict_ik_targets:
         joint_names = _resolve_bvh_ik_joint_names(bvh)
@@ -1350,9 +1370,14 @@ def _bvh_ik_target_positions(
             ],
             axis=1,
         )
-    if arm_reference_mode == "cmu_wrist_ik":
+    if arm_reference_mode in {"cmu_wrist_ik", "cmu_elbow_wrist_ik"}:
+        arm_target_map = (
+            BVH_FULL_ARM_IK_TARGET_MAP
+            if arm_reference_mode == "cmu_elbow_wrist_ik"
+            else BVH_ARM_IK_TARGET_MAP
+        )
         arm_names: list[str] = []
-        for marker_name, aliases in BVH_ARM_IK_TARGET_MAP:
+        for marker_name, aliases in arm_target_map:
             source_name = _first_existing_joint(bvh, aliases)
             if source_name is None:
                 raise ValueError(

@@ -49,7 +49,12 @@ def parse_args() -> argparse.Namespace:
     parser.set_defaults(arm_actuators=False)
     parser.add_argument(
         "--arm-reference-mode",
-        choices=["legacy", "cmu_wrist", "cmu_wrist_ik"],
+        choices=[
+            "legacy",
+            "cmu_wrist",
+            "cmu_wrist_ik",
+            "cmu_elbow_wrist_ik",
+        ],
         default="legacy",
         help="Arm target mapping used by the retargeted reference preview.",
     )

@@ -50,6 +50,9 @@ class BvhArmAliasTests(unittest.TestCase):
         cls.ik_corrected = BvhMotionLibrary.from_bvh_paths(
             **cls.loader_args, arm_reference_mode="cmu_wrist_ik"
         )
+        cls.full_arm_ik = BvhMotionLibrary.from_bvh_paths(
+            **cls.loader_args, arm_reference_mode="cmu_elbow_wrist_ik"
+        )
         cls.source = _parse_bvh(SOURCE_PATH).slice(MotionSegment(79, 213))
 
     def test_historical_default_keeps_zero_arm_targets(self) -> None:
@@ -155,6 +158,95 @@ class BvhArmAliasTests(unittest.TestCase):
             shoulder_y = self.names.index(f"{side}_shoulder_y")
             self.assertGreater(np.ptp(fitted[0, :, shoulder_x]), 0.02)
             self.assertGreater(np.ptp(fitted[0, :, shoulder_y]), 0.02)
+
+    def test_full_arm_ik_exposes_elbows_and_wrists(self) -> None:
+        batch = self.full_arm_ik.to_reference_batch()
+        self.assertEqual(
+            batch.ik_target_names,
+            (
+                "metatarsal_midpoint_right",
+                "metatarsal_midpoint_left",
+                "right_upper_arm",
+                "left_upper_arm",
+                "right_forearm",
+                "left_forearm",
+                "right_hand",
+                "left_hand",
+            ),
+        )
+        self.assertEqual(batch.ik_target_positions.shape[2], 8)
+        for index in range(2, 8):
+            path = batch.ik_target_positions[1, :, index]
+            self.assertGreater(np.ptp(path[:, 0]), 0.05)
+
+    def test_full_arm_ik_drives_elbows_instead_of_constant_seed(self) -> None:
+        batch = self.full_arm_ik.to_reference_batch()
+        clip_id = 1
+        count = int(batch.frame_counts[clip_id])
+        frame_ids = np.linspace(0, count - 1, 16, dtype=int)
+
+        env = BiomechanicsJoystickEnv.__new__(BiomechanicsJoystickEnv)
+        env._mj_model = self.model
+        joint_ids = self.model.actuator_trnid[:, 0]
+        env._actuator_joint_names = self.names
+        env._actuator_qpos_indices_np = self.model.jnt_qposadr[joint_ids]
+        env._actuator_dof_indices_np = self.model.jnt_dofadr[joint_ids]
+        env._init_q_np = self.model.qpos0.copy()
+        env._actuator_ctrl_lower_limits_np = self.model.actuator_ctrlrange[:, 0]
+        env._actuator_ctrl_upper_limits_np = self.model.actuator_ctrlrange[:, 1]
+        env._strict_bvh_ik_targets = True
+
+        fitted = env._fit_reference_ik_once(
+            batch.qpos_targets[clip_id : clip_id + 1, frame_ids],
+            batch.ik_target_positions[clip_id : clip_id + 1, frame_ids],
+            batch.ik_target_names,
+            batch.root_pos_targets[clip_id : clip_id + 1, frame_ids],
+            batch.root_quat_targets[clip_id : clip_id + 1, frame_ids],
+            np.array([len(frame_ids)], dtype=np.int32),
+        )
+        for side in ("left", "right"):
+            elbow = self.names.index(f"{side}_elbow_z")
+            self.assertGreater(np.ptp(fitted[0, :, elbow]), 0.03)
+
+    def test_full_arm_targets_use_host_segment_lengths(self) -> None:
+        batch = self.full_arm_ik.to_reference_batch()
+        env = BiomechanicsJoystickEnv.__new__(BiomechanicsJoystickEnv)
+        env._mj_model = self.model
+        joint_ids = self.model.actuator_trnid[:, 0]
+        env._actuator_joint_names = self.names
+        env._actuator_qpos_indices_np = self.model.jnt_qposadr[joint_ids]
+        env._actuator_dof_indices_np = self.model.jnt_dofadr[joint_ids]
+
+        data = mujoco.MjData(self.model)
+        mujoco.mj_forward(self.model, data)
+        marker_specs = env._resolve_host_ik_markers(batch.ik_target_names)
+        source = batch.ik_target_positions[1, 0]
+        adjusted = env._retarget_arm_chain_positions(data, marker_specs, source)
+        indices = {
+            name: index for index, name in enumerate(batch.ik_target_names)
+        }
+        for side in ("left", "right"):
+            shoulder = indices[f"{side}_upper_arm"]
+            elbow = indices[f"{side}_forearm"]
+            hand = indices[f"{side}_hand"]
+            host_upper = np.linalg.norm(
+                data.xpos[self.model.body(f"{side}_forearm").id]
+                - data.xpos[self.model.body(f"{side}_upper_arm").id]
+            )
+            host_forearm = np.linalg.norm(
+                data.xpos[self.model.body(f"{side}_hand").id]
+                - data.xpos[self.model.body(f"{side}_forearm").id]
+            )
+            self.assertAlmostEqual(
+                float(np.linalg.norm(adjusted[elbow] - adjusted[shoulder])),
+                float(host_upper),
+                places=7,
+            )
+            self.assertAlmostEqual(
+                float(np.linalg.norm(adjusted[hand] - adjusted[elbow])),
+                float(host_forearm),
+                places=7,
+            )
 
     def test_missing_alias_fails_for_active_arms_instead_of_silent_static_target(self) -> None:
         joints = dict(self.source.joints)

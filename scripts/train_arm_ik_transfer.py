@@ -1,4 +1,4 @@
-"""Transfer the frozen 26-DOF walking policy to the 3D wrist-IK reference."""
+"""Transfer the frozen 26-DOF walker to a full elbow-and-wrist IK reference."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def main() -> None:
     parser.add_argument("--timesteps", type=int, default=10_000_000)
     parser.add_argument("--num-envs", type=int, choices=[32, 64, 128, 256], default=64)
     parser.add_argument("--arm-reward-weight", type=float, default=1.0)
-    parser.add_argument("--run-tag", default="arms_ik_v2_single_clip_10m")
+    parser.add_argument("--run-tag", default="arms_ik_v3_elbow_wrist_10m")
     args = parser.parse_args()
     if args.timesteps <= 0:
         parser.error("--timesteps must be positive.")
@@ -45,8 +45,12 @@ def main() -> None:
         raise ValueError("Arm IK transfer requires the archived 26-DOF arms model.")
     env.deepmimic_reward_mode = "pure"
     env.command_profile = "walk"
-    env.arm_reference_mode = "cmu_wrist_ik"
+    env.arm_reference_mode = "cmu_elbow_wrist_ik"
     env.deepmimic_arm_reward_weight = args.arm_reward_weight
+    # The previous transfer attenuated every arm target by 25%, even after IK.
+    # Keep the locomotion stability prior unchanged but preserve the full arm
+    # motion now that the reference constrains the complete kinematic chain.
+    env.reference_stability_arm_alpha = 1.0
 
     training = TrainConfig(**saved["train"])
     training.num_timesteps = args.timesteps

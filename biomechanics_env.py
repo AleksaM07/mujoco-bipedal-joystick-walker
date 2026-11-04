@@ -1383,14 +1383,16 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                     data.qvel[:] = 0.0
                     mujoco.mj_forward(self._mj_model, data)
 
+                    frame_targets = self._retarget_arm_chain_positions(
+                        data,
+                        marker_specs,
+                        ik_target_positions[clip_id, frame_id],
+                    )
+
                     residuals: list[np.ndarray] = []
                     jacobian_rows: list[np.ndarray] = []
                     for target_index, marker in enumerate(marker_specs):
-                        target_pos = ik_target_positions[
-                            clip_id,
-                            frame_id,
-                            target_index,
-                        ].copy()
+                        target_pos = frame_targets[target_index].copy()
                         if marker["is_foot"]:
                             target_pos[2] = max(
                                 target_pos[2],
@@ -1613,6 +1615,70 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
         else:
             mujoco.mj_jacBody(self._mj_model, data, jacp, jacr, marker_id)
         return jacp[:, self._actuator_dof_indices_np]
+
+    def _retarget_arm_chain_positions(
+        self,
+        data: mujoco.MjData,
+        marker_specs: list[dict[str, object]],
+        target_positions: np.ndarray,
+    ) -> np.ndarray:
+        """Map source arm directions onto the host model's segment lengths.
+
+        CMU and simulator arms have similar total reach but different upper- and
+        lower-arm proportions. Tracking their absolute elbow coordinates makes
+        the host abduct its shoulders to compensate. Full-chain IK therefore
+        preserves source directions while using the host's shoulder anchor and
+        actual rigid-segment lengths.
+        """
+        marker_indices = {
+            str(marker["name"]): index
+            for index, marker in enumerate(marker_specs)
+        }
+        adjusted = np.asarray(target_positions, dtype=np.float64).copy()
+        for side in ("right", "left"):
+            names = (
+                f"{side}_upper_arm",
+                f"{side}_forearm",
+                f"{side}_hand",
+            )
+            if not all(name in marker_indices for name in names):
+                continue
+            shoulder_index, elbow_index, hand_index = (
+                marker_indices[name] for name in names
+            )
+            source_shoulder = adjusted[shoulder_index].copy()
+            source_elbow = adjusted[elbow_index].copy()
+            source_hand = adjusted[hand_index].copy()
+            upper_direction = source_elbow - source_shoulder
+            forearm_direction = source_hand - source_elbow
+            upper_norm = float(np.linalg.norm(upper_direction))
+            forearm_norm = float(np.linalg.norm(forearm_direction))
+            if upper_norm < 1e-8 or forearm_norm < 1e-8:
+                continue
+
+            host_shoulder = self._host_marker_position(
+                data,
+                marker_specs[shoulder_index],
+            )
+            host_elbow = self._host_marker_position(
+                data,
+                marker_specs[elbow_index],
+            )
+            host_hand = self._host_marker_position(
+                data,
+                marker_specs[hand_index],
+            )
+            upper_length = float(np.linalg.norm(host_elbow - host_shoulder))
+            forearm_length = float(np.linalg.norm(host_hand - host_elbow))
+            adjusted[shoulder_index] = host_shoulder
+            adjusted[elbow_index] = (
+                host_shoulder + upper_length * upper_direction / upper_norm
+            )
+            adjusted[hand_index] = (
+                adjusted[elbow_index]
+                + forearm_length * forearm_direction / forearm_norm
+            )
+        return adjusted
 
     def _reference_qvel_from_qpos_targets(
         self,

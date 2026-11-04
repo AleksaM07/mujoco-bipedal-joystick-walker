@@ -2474,7 +2474,12 @@ def main() -> None:
     parser.add_argument("--joystick-reward-weight", type=float, default=EnvConfig.joystick_reward_weight)
     parser.add_argument(
         "--arm-reference-mode",
-        choices=["legacy", "cmu_wrist", "cmu_wrist_ik"],
+        choices=[
+            "legacy",
+            "cmu_wrist",
+            "cmu_wrist_ik",
+            "cmu_elbow_wrist_ik",
+        ],
         default="legacy",
     )
     parser.add_argument("--device", choices=["gpu", "cpu"], default="gpu")
