@@ -28,6 +28,7 @@ from bvh_reference import (  # noqa: E402
 
 
 SKELETON_LINKS = (
+    # Common HTR/Marina naming.
     ("Hips", "Spine"),
     ("Spine", "Spine1"),
     ("Spine1", "Neck"),
@@ -48,6 +49,43 @@ SKELETON_LINKS = (
     ("RightUpLeg", "RightLeg"),
     ("RightLeg", "RightFoot"),
     ("RightFoot", "RightToeBase"),
+    # CMU cmuconvert-max naming used by the trained 02_01 reference.
+    ("Hips", "lowerback"),
+    ("lowerback", "Chest"),
+    ("Chest", "Chest2"),
+    ("Chest2", "lowerneck"),
+    ("lowerneck", "Neck"),
+    ("Chest2", "LeftCollar"),
+    ("LeftCollar", "LeftShoulder"),
+    ("LeftShoulder", "LeftElbow"),
+    ("LeftElbow", "LeftWrist"),
+    ("LeftWrist", "lhand"),
+    ("Chest2", "RightCollar"),
+    ("RightCollar", "RightShoulder"),
+    ("RightShoulder", "RightElbow"),
+    ("RightElbow", "RightWrist"),
+    ("RightWrist", "rhand"),
+    ("Hips", "LeftHip"),
+    ("LeftHip", "LeftKnee"),
+    ("LeftKnee", "LeftAnkle"),
+    ("LeftAnkle", "LeftToe"),
+    ("Hips", "RightHip"),
+    ("RightHip", "RightKnee"),
+    ("RightKnee", "RightAnkle"),
+    ("RightAnkle", "RightToe"),
+)
+
+KEY_JOINTS = (
+    "Hips",
+    "Head",
+    "LeftFoot",
+    "RightFoot",
+    "LeftHand",
+    "RightHand",
+    "LeftAnkle",
+    "RightAnkle",
+    "lhand",
+    "rhand",
 )
 
 
@@ -236,7 +274,7 @@ def render_segment(
                 is_right = child.startswith("Right") or parent.startswith("Right")
                 color = (40, 100, 220) if is_left else (220, 80, 60) if is_right else (35, 35, 35)
                 draw_line(image, projected[parent], projected[child], color, thickness=3)
-            for name in ("Hips", "Head", "LeftFoot", "RightFoot", "LeftHand", "RightHand"):
+            for name in KEY_JOINTS:
                 if name in projected:
                     draw_point(image, projected[name], (20, 20, 20), radius=4)
 
