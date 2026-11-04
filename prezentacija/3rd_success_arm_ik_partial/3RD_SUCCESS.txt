@@ -1,0 +1,53 @@
+3RD SUCCESS - STABILAN HOD SA DELIMICNO POBOLJSANIM RUKAMA
+==========================================================
+
+Sta sam postigao
+----------------
+
+Sacuvao sam treci potvrdeni uspeh projekta: robot je zadrzao stabilan i
+prirodan hod iz prethodnog modela, a ruke sada dobijaju pokret iz CMU BVH
+reference umesto da budu potpuno neutralne. U oba sacuvana snimka checkpoint
+4,014,080 zavrsava svih 500 koraka bez pada. Rezultat je mali, ali stvaran
+napredak u odnosu na drugi uspeh: ramena se pomeraju u vise osa i ruke prate
+ritam hoda.
+
+Sta sam promenio
+----------------
+
+1. Nastavio sam trening iz modela drugog uspeha, nisam ponovo ucio hod od nule.
+2. Ukljucio sam 26-DOF model sa osam aktivnih zglobova ruku.
+3. Dodao sam CMU wrist IK retargeting za polozaj leve i desne sake.
+4. Dodao sam poseban DeepMimic reward za pozu i brzinu zglobova ruku.
+5. Zadrzao sam pure imitation rezim bez joystick komandi da bih izolovao ruke.
+6. Koristio sam jednu proverenu hodajucu BVH sekvencu i mali learning rate.
+
+Vazno ogranicenje
+-----------------
+
+Ovo nije finalno resenje za ruke. Ruke su jos uvek vidljivo krute. Trenutni IK
+prati samo zglob sake, a ne i lakat. Jedna ruka ima tri ose ramena i jednu osu
+lakta, dok polozaj sake daje samo tri uslova. Zato postoji jedan neodreden
+stepen slobode, a regularizacija bira glatku pozu blizu seeda sa skoro stalnim
+laktom. Pored toga, stability prior zadrzava samo 75% arm reference, a action
+smoothing od 0.2 dodatno usporava promenu komande.
+
+Sledeci ispravan korak
+----------------------
+
+Sledeca verzija mora istovremeno da prati CMU lakat i zglob sake. Time se
+odreduje polozaj cele ruke pre RL treninga. Tek kada kinematicki preview izgleda
+prirodno, treba nastaviti model novim kratkim transfer run-om. Ne treba leciti
+losu ili nedovoljno odredenu referencu duzim RL treningom.
+
+Tacno sacuvani artefakti
+------------------------
+
+- model_000004014080: checkpoint prikazan u oba videa
+- videos/*seed11_quad.mp4: potvrden rollout, 500/500 koraka
+- videos/*seed22_quad.mp4: nezavisni potvrden rollout, 500/500 koraka
+- config.json: konfiguracija originalnog run-a
+- xml_manifest.json i generated_models/: tacan MuJoCo model
+- BVH_walking_animation/: tacna BVH referenca
+- train.log: stanje treninga u trenutku arhiviranja
+
+Oznaka rezultata: SUCCESS, ali PARTIAL - hod je odlican, ruke nisu zavrsene.

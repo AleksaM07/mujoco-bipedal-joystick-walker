@@ -9,3 +9,4 @@
 # Preserve the frozen archive byte-for-byte, including Orbax and hashed assets.
 prezentacija/1st_success/** -text
 prezentacija/2nd_success_stiff_arms/** -text
+prezentacija/3rd_success_arm_ik_partial/** -text

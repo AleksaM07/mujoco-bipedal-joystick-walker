@@ -69,3 +69,5 @@ master_rad/*
 !prezentacija/2nd_success_stiff_arms/train.log
 !prezentacija/2nd_success_stiff_arms/record_seed22.stdout.log
 !prezentacija/2nd_success_stiff_arms/record_seed22.stderr.log
+!prezentacija/3rd_success_arm_ik_partial/videos/*.mp4
+!prezentacija/3rd_success_arm_ik_partial/train.log
