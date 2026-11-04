@@ -1,0 +1,41 @@
+4TH SUCCESS - BOLJE RUKE, ALI LAKTOVI JOS NISU GOTOVI
+=====================================================
+
+Status
+------
+
+Ovo cuvam kao cetvrti uspeh, ali ne kao finalni rezultat. Hod je stabilan i
+prirodan, ramena vise nisu neprirodno rasirena, a ruke su blize telu i prate
+ritam koraka. Pregledani seed 11 rollout zavrsava svih 500 koraka bez pada,
+sa rewardom 1464.202 i quality rezultatom 97.6%.
+
+Tacno sacuvani rezultat
+-----------------------
+
+- Checkpoint: 1,003,520 koraka iz arm-IK v3 run-a.
+- Video: arms_ik_v3_best1m_seed11_quad.mp4.
+- Referenca: CMU 02_01.bvh, originalni clip 1, frameovi 79-213.
+- Model: 26 aktivnih DOF-ova, ukljucujuci osam zglobova ruku.
+- Arm retarget: shoulder + elbow + wrist, skaliran na proporcije host kostura.
+- Rezultat videa: 500/500 koraka, bez terminalnog pada.
+
+Sta jos nije dobro
+------------------
+
+Laktovi su i dalje previse zamrznuti. Ovo nije samo subjektivan utisak sa
+snimka. Originalni BVH menja geometrijsko savijanje lakta za oko 56.8 stepeni
+na levoj i 45.0 stepeni na desnoj ruci. Trenutna host IK referenca prenosi samo
+oko 7.4 stepena levo i 7.1 stepen desno. Dakle najveci deo elbow-flexion signala
+nestaje pre nego sto ga RL politika uopste vidi.
+
+Zakljucak i sledeci korak
+------------------------
+
+Ne treba ponovo uciti hod niti nasumicno povecavati trajanje treninga. Sledeci
+korak je izolovana popravka elbow retargetinga: direktno izracunati BVH elbow
+flexion iz shoulder-elbow-wrist geometrije, mapirati ga na znak i opseg host
+elbow_z zgloba i zatim ponovo resiti samo shoulder orijentaciju prema laktu i
+saci. Pre sledeceg RL run-a zahtevam da kinematicki preview zadrzi znatno veci
+deo originalnog opsega lakta.
+
+Oznaka rezultata: SUCCESS, ALI NOT FINAL.
