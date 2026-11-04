@@ -1,0 +1,3022 @@
+{
+  "schema_version": 1,
+  "purpose": "Kinematic reference ablation; not PPO or dynamic-walk proof.",
+  "config_path": "C:\\Users\\aleks\\Desktop\\Aleksie kerefeke\\master\\RS projekat - RL politika ucenja joystick\\mujoco-bipedal-joystick-walker\\prezentacija\\4th_success_better_arms_stiff_elbows\\config.json",
+  "config_sha256": "3bac00adbf5908437fc6f41578a7952e925d1384e0a37008568d807683cc73ec",
+  "source_sha256": {
+    "bvh_reference.py": "314c69b3dfdaa8965422d5b2cb2743e5cfcb9c1242b6013ea8980b2ed780f1bd",
+    "biomechanics_env.py": "3b5521637466a4c5076c5de9e3d8269585a6f0313836792f9e923daaf8a89576",
+    "tools/audit_natural_walk_ablations.py": "646ff53beb048d0c744e1a0ddf07dffbcfe3a7835c933de6eee16c177d8e5fdb"
+  },
+  "action_smoothing_note": "action_smoothing does not alter the kinematic reference and must be tested later with matched policy rollouts.",
+  "variants": [
+    {
+      "name": "current",
+      "overrides": {},
+      "source_frames": {
+        "start": 79,
+        "end": 213,
+        "count": 134
+      },
+      "source_elbow_ranges_deg": {
+        "left": 56.75044631958008,
+        "right": 45.03013229370117
+      },
+      "curve_preparation_error": null,
+      "stages": [
+        {
+          "stage": "raw_mapped_pose",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            1.6320914030075073,
+            -0.0958644449710846,
+            0.025634050369262695
+          ],
+          "root_net_xy_m": 1.634904384613037
+        },
+        {
+          "stage": "initial_floor_alignment",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            -0.34466755390167236,
+            -0.07774204015731812,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 0.3533264100551605
+        },
+        {
+          "stage": "normalized_ik_input",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            -0.34466755390167236,
+            -0.07774204015731812,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 0.3533264100551605
+        },
+        {
+          "stage": "ik_solution",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.833603382110596,
+            "abdomen_y": 2.7101407051086426,
+            "abdomen_z": 5.204469203948975,
+            "pelvis_x": 7.467846870422363,
+            "pelvis_y": 2.1174070835113525,
+            "pelvis_z": 6.97998046875,
+            "left_hip_x": 10.96594524383545,
+            "left_hip_y": 17.790821075439453,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 17.641141891479492,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 15.75018310546875,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 18.198970794677734,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34882736206055,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            -0.34466755390167236,
+            -0.07774204015731812,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 0.3533264100551605
+        },
+        {
+          "stage": "stability_prior",
+          "joint_ranges_deg": {
+            "abdomen_x": 2.391761064529419,
+            "abdomen_y": 0.9485492706298828,
+            "abdomen_z": 1.8215641975402832,
+            "pelvis_x": 2.613746404647827,
+            "pelvis_y": 0.7410925030708313,
+            "pelvis_z": 2.4429931640625,
+            "left_hip_x": 10.965944290161133,
+            "left_hip_y": 6.226787567138672,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 6.174399375915527,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 5.512563705444336,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 6.369640350341797,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34882736206055,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            -0.34466755390167236,
+            -0.07774204015731812,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 0.3533264100551605
+        },
+        {
+          "stage": "final_floor_alignment",
+          "joint_ranges_deg": {
+            "abdomen_x": 2.391761064529419,
+            "abdomen_y": 0.9485492706298828,
+            "abdomen_z": 1.8215641975402832,
+            "pelvis_x": 2.613746404647827,
+            "pelvis_y": 0.7410925030708313,
+            "pelvis_z": 2.4429931640625,
+            "left_hip_x": 10.965944290161133,
+            "left_hip_y": 6.226787567138672,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 6.174399375915527,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 5.512563705444336,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 6.369640350341797,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34882736206055,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            1.4072601795196533,
+            -0.09742789715528488,
+            -0.0012346506118774414
+          ],
+          "root_net_xy_m": 1.4106286764144897
+        },
+        {
+          "stage": "prepared_curve_nodes",
+          "joint_ranges_deg": {
+            "abdomen_x": 2.4057366847991943,
+            "abdomen_y": 0.9566842913627625,
+            "abdomen_z": 1.763446569442749,
+            "pelvis_x": 2.6634469032287598,
+            "pelvis_y": 0.64738529920578,
+            "pelvis_z": 2.4429931640625,
+            "left_hip_x": 12.128866195678711,
+            "left_hip_y": 6.2747721672058105,
+            "left_hip_z": 30.48687171936035,
+            "left_knee_z": 69.54364013671875,
+            "left_ankle_y": 29.483083724975586,
+            "left_ankle_z": 6.121235370635986,
+            "right_hip_x": 15.799155235290527,
+            "right_hip_y": 5.640813827514648,
+            "right_hip_z": 39.10985565185547,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 34.37931823730469,
+            "right_ankle_z": 6.436010837554932,
+            "left_shoulder_x": 9.326096534729004,
+            "left_shoulder_y": 15.903162002563477,
+            "left_shoulder_z": 29.983442306518555,
+            "left_elbow_z": 54.42857360839844,
+            "right_shoulder_x": 11.764171600341797,
+            "right_shoulder_y": 19.764612197875977,
+            "right_shoulder_z": 43.21360778808594,
+            "right_elbow_z": 44.84722900390625
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 54.42857360839844,
+              "retention_ratio": 0.9590862651880053
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 44.84722900390625,
+              "retention_ratio": 0.9959382022552817
+            }
+          },
+          "root_net_xyz_m": [
+            1.4072601795196533,
+            -0.09742789715528488,
+            0.0
+          ],
+          "root_net_xy_m": 1.4106286764144897
+        }
+      ],
+      "gates": {
+        "left": {
+          "seed_retention_at_least_95pct": true,
+          "ik_retention_at_least_70pct": true,
+          "final_retention_at_least_70pct": true,
+          "pass": true
+        },
+        "right": {
+          "seed_retention_at_least_95pct": true,
+          "ik_retention_at_least_70pct": true,
+          "final_retention_at_least_70pct": true,
+          "pass": true
+        }
+      },
+      "pass": true
+    },
+    {
+      "name": "root_xy_060",
+      "overrides": {
+        "reference_root_xy_scale": 0.6
+      },
+      "source_frames": {
+        "start": 79,
+        "end": 213,
+        "count": 134
+      },
+      "source_elbow_ranges_deg": {
+        "left": 56.75044631958008,
+        "right": 45.03013229370117
+      },
+      "curve_preparation_error": null,
+      "stages": [
+        {
+          "stage": "raw_mapped_pose",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            1.6320914030075073,
+            -0.0958644449710846,
+            0.025634050369262695
+          ],
+          "root_net_xy_m": 1.634904384613037
+        },
+        {
+          "stage": "initial_floor_alignment",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            -0.34466755390167236,
+            -0.07774204015731812,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 0.3533264100551605
+        },
+        {
+          "stage": "normalized_ik_input",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            -0.34466755390167236,
+            -0.07774204015731812,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 0.3533264100551605
+        },
+        {
+          "stage": "ik_solution",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.833603382110596,
+            "abdomen_y": 2.7101407051086426,
+            "abdomen_z": 5.204469203948975,
+            "pelvis_x": 7.467846870422363,
+            "pelvis_y": 2.1174070835113525,
+            "pelvis_z": 6.97998046875,
+            "left_hip_x": 10.96594524383545,
+            "left_hip_y": 17.790821075439453,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 17.641141891479492,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 15.75018310546875,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 18.198970794677734,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34882736206055,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            -0.34466755390167236,
+            -0.07774204015731812,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 0.3533264100551605
+        },
+        {
+          "stage": "stability_prior",
+          "joint_ranges_deg": {
+            "abdomen_x": 2.391761064529419,
+            "abdomen_y": 0.9485492706298828,
+            "abdomen_z": 1.8215641975402832,
+            "pelvis_x": 2.613746404647827,
+            "pelvis_y": 0.7410925030708313,
+            "pelvis_z": 2.4429931640625,
+            "left_hip_x": 10.965944290161133,
+            "left_hip_y": 6.226787567138672,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 6.174399375915527,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 5.512563705444336,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 6.369640350341797,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34882736206055,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            -0.34466755390167236,
+            -0.07774204015731812,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 0.3533264100551605
+        },
+        {
+          "stage": "final_floor_alignment",
+          "joint_ranges_deg": {
+            "abdomen_x": 2.391761064529419,
+            "abdomen_y": 0.9485492706298828,
+            "abdomen_z": 1.8215641975402832,
+            "pelvis_x": 2.613746404647827,
+            "pelvis_y": 0.7410925030708313,
+            "pelvis_z": 2.4429931640625,
+            "left_hip_x": 10.965944290161133,
+            "left_hip_y": 6.226787567138672,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 6.174399375915527,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 5.512563705444336,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 6.369640350341797,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34882736206055,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            1.4072601795196533,
+            -0.09742789715528488,
+            -0.0012346506118774414
+          ],
+          "root_net_xy_m": 1.4106286764144897
+        },
+        {
+          "stage": "prepared_curve_nodes",
+          "joint_ranges_deg": {
+            "abdomen_x": 2.4057366847991943,
+            "abdomen_y": 0.9566842913627625,
+            "abdomen_z": 1.763446569442749,
+            "pelvis_x": 2.6634469032287598,
+            "pelvis_y": 0.64738529920578,
+            "pelvis_z": 2.4429931640625,
+            "left_hip_x": 12.128866195678711,
+            "left_hip_y": 6.2747721672058105,
+            "left_hip_z": 30.48687171936035,
+            "left_knee_z": 69.54364013671875,
+            "left_ankle_y": 29.483083724975586,
+            "left_ankle_z": 6.121235370635986,
+            "right_hip_x": 15.799155235290527,
+            "right_hip_y": 5.640813827514648,
+            "right_hip_z": 39.10985565185547,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 34.37931823730469,
+            "right_ankle_z": 6.436010837554932,
+            "left_shoulder_x": 9.326096534729004,
+            "left_shoulder_y": 15.903162002563477,
+            "left_shoulder_z": 29.983442306518555,
+            "left_elbow_z": 54.42857360839844,
+            "right_shoulder_x": 11.764171600341797,
+            "right_shoulder_y": 19.764612197875977,
+            "right_shoulder_z": 43.21360778808594,
+            "right_elbow_z": 44.84722900390625
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 54.42857360839844,
+              "retention_ratio": 0.9590862651880053
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 44.84722900390625,
+              "retention_ratio": 0.9959382022552817
+            }
+          },
+          "root_net_xyz_m": [
+            1.4072601795196533,
+            -0.09742789715528488,
+            0.0
+          ],
+          "root_net_xy_m": 1.4106286764144897
+        }
+      ],
+      "gates": {
+        "left": {
+          "seed_retention_at_least_95pct": true,
+          "ik_retention_at_least_70pct": true,
+          "final_retention_at_least_70pct": true,
+          "pass": true
+        },
+        "right": {
+          "seed_retention_at_least_95pct": true,
+          "ik_retention_at_least_70pct": true,
+          "final_retention_at_least_70pct": true,
+          "pass": true
+        }
+      },
+      "pass": true
+    },
+    {
+      "name": "root_xy_100",
+      "overrides": {
+        "reference_root_xy_scale": 1.0
+      },
+      "source_frames": {
+        "start": 79,
+        "end": 213,
+        "count": 134
+      },
+      "source_elbow_ranges_deg": {
+        "left": 56.75044631958008,
+        "right": 45.03013229370117
+      },
+      "curve_preparation_error": null,
+      "stages": [
+        {
+          "stage": "raw_mapped_pose",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            1.6320914030075073,
+            -0.0958644449710846,
+            0.025634050369262695
+          ],
+          "root_net_xy_m": 1.634904384613037
+        },
+        {
+          "stage": "initial_floor_alignment",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            -0.34466755390167236,
+            -0.07774204015731812,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 0.3533264100551605
+        },
+        {
+          "stage": "normalized_ik_input",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            -0.34466755390167236,
+            -0.07774204015731812,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 0.3533264100551605
+        },
+        {
+          "stage": "ik_solution",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.833603382110596,
+            "abdomen_y": 2.7101407051086426,
+            "abdomen_z": 5.204469203948975,
+            "pelvis_x": 7.467846870422363,
+            "pelvis_y": 2.1174070835113525,
+            "pelvis_z": 6.97998046875,
+            "left_hip_x": 10.96594524383545,
+            "left_hip_y": 17.790821075439453,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 17.641141891479492,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 15.75018310546875,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 18.198970794677734,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34882736206055,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            -0.34466755390167236,
+            -0.07774204015731812,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 0.3533264100551605
+        },
+        {
+          "stage": "stability_prior",
+          "joint_ranges_deg": {
+            "abdomen_x": 2.391761064529419,
+            "abdomen_y": 0.9485492706298828,
+            "abdomen_z": 1.8215641975402832,
+            "pelvis_x": 2.613746404647827,
+            "pelvis_y": 0.7410925030708313,
+            "pelvis_z": 2.4429931640625,
+            "left_hip_x": 10.965944290161133,
+            "left_hip_y": 6.226787567138672,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 6.174399375915527,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 5.512563705444336,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 6.369640350341797,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34882736206055,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            -0.34466755390167236,
+            -0.07774204015731812,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 0.3533264100551605
+        },
+        {
+          "stage": "final_floor_alignment",
+          "joint_ranges_deg": {
+            "abdomen_x": 2.391761064529419,
+            "abdomen_y": 0.9485492706298828,
+            "abdomen_z": 1.8215641975402832,
+            "pelvis_x": 2.613746404647827,
+            "pelvis_y": 0.7410925030708313,
+            "pelvis_z": 2.4429931640625,
+            "left_hip_x": 10.965944290161133,
+            "left_hip_y": 6.226787567138672,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 6.174399375915527,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 5.512563705444336,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 6.369640350341797,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34882736206055,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            1.4072601795196533,
+            -0.09742789715528488,
+            -0.0012346506118774414
+          ],
+          "root_net_xy_m": 1.4106286764144897
+        },
+        {
+          "stage": "prepared_curve_nodes",
+          "joint_ranges_deg": {
+            "abdomen_x": 2.4057366847991943,
+            "abdomen_y": 0.9566842913627625,
+            "abdomen_z": 1.763446569442749,
+            "pelvis_x": 2.6634469032287598,
+            "pelvis_y": 0.64738529920578,
+            "pelvis_z": 2.4429931640625,
+            "left_hip_x": 12.128866195678711,
+            "left_hip_y": 6.2747721672058105,
+            "left_hip_z": 30.48687171936035,
+            "left_knee_z": 69.54364013671875,
+            "left_ankle_y": 29.483083724975586,
+            "left_ankle_z": 6.121235370635986,
+            "right_hip_x": 15.799155235290527,
+            "right_hip_y": 5.640813827514648,
+            "right_hip_z": 39.10985565185547,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 34.37931823730469,
+            "right_ankle_z": 6.436010837554932,
+            "left_shoulder_x": 9.326096534729004,
+            "left_shoulder_y": 15.903162002563477,
+            "left_shoulder_z": 29.983442306518555,
+            "left_elbow_z": 54.42857360839844,
+            "right_shoulder_x": 11.764171600341797,
+            "right_shoulder_y": 19.764612197875977,
+            "right_shoulder_z": 43.21360778808594,
+            "right_elbow_z": 44.84722900390625
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 54.42857360839844,
+              "retention_ratio": 0.9590862651880053
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 44.84722900390625,
+              "retention_ratio": 0.9959382022552817
+            }
+          },
+          "root_net_xyz_m": [
+            1.4072601795196533,
+            -0.09742789715528488,
+            0.0
+          ],
+          "root_net_xy_m": 1.4106286764144897
+        }
+      ],
+      "gates": {
+        "left": {
+          "seed_retention_at_least_95pct": true,
+          "ik_retention_at_least_70pct": true,
+          "final_retention_at_least_70pct": true,
+          "pass": true
+        },
+        "right": {
+          "seed_retention_at_least_95pct": true,
+          "ik_retention_at_least_70pct": true,
+          "final_retention_at_least_70pct": true,
+          "pass": true
+        }
+      },
+      "pass": true
+    },
+    {
+      "name": "lateral_060",
+      "overrides": {
+        "reference_stability_other_alpha": 0.6
+      },
+      "source_frames": {
+        "start": 79,
+        "end": 213,
+        "count": 134
+      },
+      "source_elbow_ranges_deg": {
+        "left": 56.75044631958008,
+        "right": 45.03013229370117
+      },
+      "curve_preparation_error": null,
+      "stages": [
+        {
+          "stage": "raw_mapped_pose",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            1.6320914030075073,
+            -0.0958644449710846,
+            0.025634050369262695
+          ],
+          "root_net_xy_m": 1.634904384613037
+        },
+        {
+          "stage": "initial_floor_alignment",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            -0.34466755390167236,
+            -0.07774204015731812,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 0.3533264100551605
+        },
+        {
+          "stage": "normalized_ik_input",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            -0.34466755390167236,
+            -0.07774204015731812,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 0.3533264100551605
+        },
+        {
+          "stage": "ik_solution",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.833603382110596,
+            "abdomen_y": 2.7101407051086426,
+            "abdomen_z": 5.204469203948975,
+            "pelvis_x": 7.467846870422363,
+            "pelvis_y": 2.1174070835113525,
+            "pelvis_z": 6.97998046875,
+            "left_hip_x": 10.96594524383545,
+            "left_hip_y": 17.790821075439453,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 17.641141891479492,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 15.75018310546875,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 18.198970794677734,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34882736206055,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            -0.34466755390167236,
+            -0.07774204015731812,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 0.3533264100551605
+        },
+        {
+          "stage": "stability_prior",
+          "joint_ranges_deg": {
+            "abdomen_x": 4.100162506103516,
+            "abdomen_y": 1.626084566116333,
+            "abdomen_z": 3.122681140899658,
+            "pelvis_x": 4.480708599090576,
+            "pelvis_y": 1.270444393157959,
+            "pelvis_z": 4.187988758087158,
+            "left_hip_x": 10.965944290161133,
+            "left_hip_y": 10.674493789672852,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 10.584685325622559,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 9.45011043548584,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 10.919384002685547,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34882736206055,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            -0.34466755390167236,
+            -0.07774204015731812,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 0.3533264100551605
+        },
+        {
+          "stage": "final_floor_alignment",
+          "joint_ranges_deg": {
+            "abdomen_x": 4.100162506103516,
+            "abdomen_y": 1.626084566116333,
+            "abdomen_z": 3.122681140899658,
+            "pelvis_x": 4.480708599090576,
+            "pelvis_y": 1.270444393157959,
+            "pelvis_z": 4.187988758087158,
+            "left_hip_x": 10.965944290161133,
+            "left_hip_y": 10.674493789672852,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 10.584685325622559,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 9.45011043548584,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 10.919384002685547,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34882736206055,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            1.407392144203186,
+            -0.07552847266197205,
+            -0.004963397979736328
+          ],
+          "root_net_xy_m": 1.4094173908233643
+        },
+        {
+          "stage": "prepared_curve_nodes",
+          "joint_ranges_deg": {
+            "abdomen_x": 4.124120712280273,
+            "abdomen_y": 1.6400303840637207,
+            "abdomen_z": 3.0230512619018555,
+            "pelvis_x": 4.565908432006836,
+            "pelvis_y": 1.1098034381866455,
+            "pelvis_z": 4.187988758087158,
+            "left_hip_x": 12.128866195678711,
+            "left_hip_y": 10.756752014160156,
+            "left_hip_z": 30.48687171936035,
+            "left_knee_z": 69.54364013671875,
+            "left_ankle_y": 29.483083724975586,
+            "left_ankle_z": 10.493546485900879,
+            "right_hip_x": 15.799155235290527,
+            "right_hip_y": 9.669967651367188,
+            "right_hip_z": 39.10985565185547,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 34.37931823730469,
+            "right_ankle_z": 11.033162117004395,
+            "left_shoulder_x": 9.326096534729004,
+            "left_shoulder_y": 15.903162002563477,
+            "left_shoulder_z": 29.983442306518555,
+            "left_elbow_z": 54.42857360839844,
+            "right_shoulder_x": 11.764171600341797,
+            "right_shoulder_y": 19.764612197875977,
+            "right_shoulder_z": 43.21360778808594,
+            "right_elbow_z": 44.84722900390625
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 54.42857360839844,
+              "retention_ratio": 0.9590862651880053
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 44.84722900390625,
+              "retention_ratio": 0.9959382022552817
+            }
+          },
+          "root_net_xyz_m": [
+            1.407392144203186,
+            -0.07552847266197205,
+            0.0
+          ],
+          "root_net_xy_m": 1.4094173908233643
+        }
+      ],
+      "gates": {
+        "left": {
+          "seed_retention_at_least_95pct": true,
+          "ik_retention_at_least_70pct": true,
+          "final_retention_at_least_70pct": true,
+          "pass": true
+        },
+        "right": {
+          "seed_retention_at_least_95pct": true,
+          "ik_retention_at_least_70pct": true,
+          "final_retention_at_least_70pct": true,
+          "pass": true
+        }
+      },
+      "pass": true
+    },
+    {
+      "name": "lateral_100",
+      "overrides": {
+        "reference_stability_other_alpha": 1.0
+      },
+      "source_frames": {
+        "start": 79,
+        "end": 213,
+        "count": 134
+      },
+      "source_elbow_ranges_deg": {
+        "left": 56.75044631958008,
+        "right": 45.03013229370117
+      },
+      "curve_preparation_error": null,
+      "stages": [
+        {
+          "stage": "raw_mapped_pose",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            1.6320914030075073,
+            -0.0958644449710846,
+            0.025634050369262695
+          ],
+          "root_net_xy_m": 1.634904384613037
+        },
+        {
+          "stage": "initial_floor_alignment",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            -0.34466755390167236,
+            -0.07774204015731812,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 0.3533264100551605
+        },
+        {
+          "stage": "normalized_ik_input",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            -0.34466755390167236,
+            -0.07774204015731812,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 0.3533264100551605
+        },
+        {
+          "stage": "ik_solution",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.833603382110596,
+            "abdomen_y": 2.7101407051086426,
+            "abdomen_z": 5.204469203948975,
+            "pelvis_x": 7.467846870422363,
+            "pelvis_y": 2.1174070835113525,
+            "pelvis_z": 6.97998046875,
+            "left_hip_x": 10.96594524383545,
+            "left_hip_y": 17.790821075439453,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 17.641141891479492,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 15.75018310546875,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 18.198970794677734,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34882736206055,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            -0.34466755390167236,
+            -0.07774204015731812,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 0.3533264100551605
+        },
+        {
+          "stage": "stability_prior",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.833603382110596,
+            "abdomen_y": 2.7101407051086426,
+            "abdomen_z": 5.204469203948975,
+            "pelvis_x": 7.467846870422363,
+            "pelvis_y": 2.1174070835113525,
+            "pelvis_z": 6.97998046875,
+            "left_hip_x": 10.965944290161133,
+            "left_hip_y": 17.790821075439453,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 17.641141891479492,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 15.75018310546875,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 18.198970794677734,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34882736206055,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            -0.34466755390167236,
+            -0.07774204015731812,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 0.3533264100551605
+        },
+        {
+          "stage": "final_floor_alignment",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.833603382110596,
+            "abdomen_y": 2.7101407051086426,
+            "abdomen_z": 5.204469203948975,
+            "pelvis_x": 7.467846870422363,
+            "pelvis_y": 2.1174070835113525,
+            "pelvis_z": 6.97998046875,
+            "left_hip_x": 10.965944290161133,
+            "left_hip_y": 17.790821075439453,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 17.641141891479492,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 15.75018310546875,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 18.198970794677734,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34882736206055,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            1.3968406915664673,
+            -0.03241335228085518,
+            -0.005438446998596191
+          ],
+          "root_net_xy_m": 1.3972166776657104
+        },
+        {
+          "stage": "prepared_curve_nodes",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.873534202575684,
+            "abdomen_y": 2.7333836555480957,
+            "abdomen_z": 5.038418769836426,
+            "pelvis_x": 7.6098480224609375,
+            "pelvis_y": 1.8496723175048828,
+            "pelvis_z": 6.97998046875,
+            "left_hip_x": 12.128866195678711,
+            "left_hip_y": 17.927921295166016,
+            "left_hip_z": 30.48687171936035,
+            "left_knee_z": 69.54364013671875,
+            "left_ankle_y": 29.483083724975586,
+            "left_ankle_z": 17.489242553710938,
+            "right_hip_x": 15.799155235290527,
+            "right_hip_y": 16.11661148071289,
+            "right_hip_z": 39.10985565185547,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 34.37931823730469,
+            "right_ankle_z": 18.3330135345459,
+            "left_shoulder_x": 9.326096534729004,
+            "left_shoulder_y": 15.903162002563477,
+            "left_shoulder_z": 29.983442306518555,
+            "left_elbow_z": 54.42857360839844,
+            "right_shoulder_x": 11.764171600341797,
+            "right_shoulder_y": 19.764612197875977,
+            "right_shoulder_z": 43.21360778808594,
+            "right_elbow_z": 44.84722900390625
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 54.42857360839844,
+              "retention_ratio": 0.9590862651880053
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 44.84722900390625,
+              "retention_ratio": 0.9959382022552817
+            }
+          },
+          "root_net_xyz_m": [
+            1.3968406915664673,
+            -0.03241335228085518,
+            0.0
+          ],
+          "root_net_xy_m": 1.3972166776657104
+        }
+      ],
+      "gates": {
+        "left": {
+          "seed_retention_at_least_95pct": true,
+          "ik_retention_at_least_70pct": true,
+          "final_retention_at_least_70pct": true,
+          "pass": true
+        },
+        "right": {
+          "seed_retention_at_least_95pct": true,
+          "ik_retention_at_least_70pct": true,
+          "final_retention_at_least_70pct": true,
+          "pass": true
+        }
+      },
+      "pass": true
+    },
+    {
+      "name": "no_stance_lock",
+      "overrides": {
+        "reference_lock_stance_feet": false
+      },
+      "source_frames": {
+        "start": 79,
+        "end": 213,
+        "count": 134
+      },
+      "source_elbow_ranges_deg": {
+        "left": 56.75044631958008,
+        "right": 45.03013229370117
+      },
+      "curve_preparation_error": null,
+      "stages": [
+        {
+          "stage": "raw_mapped_pose",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            1.6320914030075073,
+            -0.0958644449710846,
+            0.025634050369262695
+          ],
+          "root_net_xy_m": 1.634904384613037
+        },
+        {
+          "stage": "initial_floor_alignment",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            1.6320914030075073,
+            -0.0958644449710846,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 1.634904384613037
+        },
+        {
+          "stage": "normalized_ik_input",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            1.6320914030075073,
+            -0.0958644449710846,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 1.634904384613037
+        },
+        {
+          "stage": "ik_solution",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.833603382110596,
+            "abdomen_y": 2.7101407051086426,
+            "abdomen_z": 5.204469203948975,
+            "pelvis_x": 7.467846870422363,
+            "pelvis_y": 2.1174070835113525,
+            "pelvis_z": 6.97998046875,
+            "left_hip_x": 10.96594524383545,
+            "left_hip_y": 17.790821075439453,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 17.641141891479492,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 15.75018310546875,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 18.198970794677734,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34883117675781,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            1.6320914030075073,
+            -0.0958644449710846,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 1.634904384613037
+        },
+        {
+          "stage": "stability_prior",
+          "joint_ranges_deg": {
+            "abdomen_x": 2.391761064529419,
+            "abdomen_y": 0.9485492706298828,
+            "abdomen_z": 1.8215641975402832,
+            "pelvis_x": 2.613746404647827,
+            "pelvis_y": 0.7410925030708313,
+            "pelvis_z": 2.4429931640625,
+            "left_hip_x": 10.965944290161133,
+            "left_hip_y": 6.226787567138672,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 6.174399375915527,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 5.512563705444336,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 6.369640350341797,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34883117675781,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            1.6320914030075073,
+            -0.0958644449710846,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 1.634904384613037
+        },
+        {
+          "stage": "final_floor_alignment",
+          "joint_ranges_deg": {
+            "abdomen_x": 2.391761064529419,
+            "abdomen_y": 0.9485492706298828,
+            "abdomen_z": 1.8215641975402832,
+            "pelvis_x": 2.613746404647827,
+            "pelvis_y": 0.7410925030708313,
+            "pelvis_z": 2.4429931640625,
+            "left_hip_x": 10.965944290161133,
+            "left_hip_y": 6.226787567138672,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 6.174399375915527,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 5.512563705444336,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 6.369640350341797,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34883117675781,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            0.5712319612503052,
+            -0.03355255350470543,
+            -0.0012346506118774414
+          ],
+          "root_net_xy_m": 0.5722165107727051
+        },
+        {
+          "stage": "prepared_curve_nodes",
+          "joint_ranges_deg": {
+            "abdomen_x": 2.4057366847991943,
+            "abdomen_y": 0.9566842913627625,
+            "abdomen_z": 1.763446569442749,
+            "pelvis_x": 2.6634469032287598,
+            "pelvis_y": 0.64738529920578,
+            "pelvis_z": 2.4429931640625,
+            "left_hip_x": 12.128866195678711,
+            "left_hip_y": 6.2747721672058105,
+            "left_hip_z": 30.48687171936035,
+            "left_knee_z": 69.54364013671875,
+            "left_ankle_y": 29.483083724975586,
+            "left_ankle_z": 6.121235370635986,
+            "right_hip_x": 15.799155235290527,
+            "right_hip_y": 5.640813827514648,
+            "right_hip_z": 39.10985565185547,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 34.37931823730469,
+            "right_ankle_z": 6.436010837554932,
+            "left_shoulder_x": 9.326096534729004,
+            "left_shoulder_y": 15.903162002563477,
+            "left_shoulder_z": 29.983442306518555,
+            "left_elbow_z": 54.42857360839844,
+            "right_shoulder_x": 11.764171600341797,
+            "right_shoulder_y": 19.764612197875977,
+            "right_shoulder_z": 43.21360778808594,
+            "right_elbow_z": 44.84722900390625
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 54.42857360839844,
+              "retention_ratio": 0.9590862651880053
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 44.84722900390625,
+              "retention_ratio": 0.9959382022552817
+            }
+          },
+          "root_net_xyz_m": [
+            0.5712319612503052,
+            -0.03355255350470543,
+            0.0
+          ],
+          "root_net_xy_m": 0.5722165107727051
+        }
+      ],
+      "gates": {
+        "left": {
+          "seed_retention_at_least_95pct": true,
+          "ik_retention_at_least_70pct": true,
+          "final_retention_at_least_70pct": true,
+          "pass": true
+        },
+        "right": {
+          "seed_retention_at_least_95pct": true,
+          "ik_retention_at_least_70pct": true,
+          "final_retention_at_least_70pct": true,
+          "pass": true
+        }
+      },
+      "pass": true
+    },
+    {
+      "name": "root_xy_060_no_lock",
+      "overrides": {
+        "reference_root_xy_scale": 0.6,
+        "reference_lock_stance_feet": false
+      },
+      "source_frames": {
+        "start": 79,
+        "end": 213,
+        "count": 134
+      },
+      "source_elbow_ranges_deg": {
+        "left": 56.75044631958008,
+        "right": 45.03013229370117
+      },
+      "curve_preparation_error": null,
+      "stages": [
+        {
+          "stage": "raw_mapped_pose",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            1.6320914030075073,
+            -0.0958644449710846,
+            0.025634050369262695
+          ],
+          "root_net_xy_m": 1.634904384613037
+        },
+        {
+          "stage": "initial_floor_alignment",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            1.6320914030075073,
+            -0.0958644449710846,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 1.634904384613037
+        },
+        {
+          "stage": "normalized_ik_input",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            1.6320914030075073,
+            -0.0958644449710846,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 1.634904384613037
+        },
+        {
+          "stage": "ik_solution",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.833603382110596,
+            "abdomen_y": 2.7101407051086426,
+            "abdomen_z": 5.204469203948975,
+            "pelvis_x": 7.467846870422363,
+            "pelvis_y": 2.1174070835113525,
+            "pelvis_z": 6.97998046875,
+            "left_hip_x": 10.96594524383545,
+            "left_hip_y": 17.790821075439453,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 17.641141891479492,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 15.75018310546875,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 18.198970794677734,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34883117675781,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            1.6320914030075073,
+            -0.0958644449710846,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 1.634904384613037
+        },
+        {
+          "stage": "stability_prior",
+          "joint_ranges_deg": {
+            "abdomen_x": 2.391761064529419,
+            "abdomen_y": 0.9485492706298828,
+            "abdomen_z": 1.8215641975402832,
+            "pelvis_x": 2.613746404647827,
+            "pelvis_y": 0.7410925030708313,
+            "pelvis_z": 2.4429931640625,
+            "left_hip_x": 10.965944290161133,
+            "left_hip_y": 6.226787567138672,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 6.174399375915527,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 5.512563705444336,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 6.369640350341797,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34883117675781,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            1.6320914030075073,
+            -0.0958644449710846,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 1.634904384613037
+        },
+        {
+          "stage": "final_floor_alignment",
+          "joint_ranges_deg": {
+            "abdomen_x": 2.391761064529419,
+            "abdomen_y": 0.9485492706298828,
+            "abdomen_z": 1.8215641975402832,
+            "pelvis_x": 2.613746404647827,
+            "pelvis_y": 0.7410925030708313,
+            "pelvis_z": 2.4429931640625,
+            "left_hip_x": 10.965944290161133,
+            "left_hip_y": 6.226787567138672,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 6.174399375915527,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 5.512563705444336,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 6.369640350341797,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34883117675781,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            0.9792549014091492,
+            -0.057518668472766876,
+            -0.0012346506118774414
+          ],
+          "root_net_xy_m": 0.9809426665306091
+        },
+        {
+          "stage": "prepared_curve_nodes",
+          "joint_ranges_deg": {
+            "abdomen_x": 2.4057366847991943,
+            "abdomen_y": 0.9566842913627625,
+            "abdomen_z": 1.763446569442749,
+            "pelvis_x": 2.6634469032287598,
+            "pelvis_y": 0.64738529920578,
+            "pelvis_z": 2.4429931640625,
+            "left_hip_x": 12.128866195678711,
+            "left_hip_y": 6.2747721672058105,
+            "left_hip_z": 30.48687171936035,
+            "left_knee_z": 69.54364013671875,
+            "left_ankle_y": 29.483083724975586,
+            "left_ankle_z": 6.121235370635986,
+            "right_hip_x": 15.799155235290527,
+            "right_hip_y": 5.640813827514648,
+            "right_hip_z": 39.10985565185547,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 34.37931823730469,
+            "right_ankle_z": 6.436010837554932,
+            "left_shoulder_x": 9.326096534729004,
+            "left_shoulder_y": 15.903162002563477,
+            "left_shoulder_z": 29.983442306518555,
+            "left_elbow_z": 54.42857360839844,
+            "right_shoulder_x": 11.764171600341797,
+            "right_shoulder_y": 19.764612197875977,
+            "right_shoulder_z": 43.21360778808594,
+            "right_elbow_z": 44.84722900390625
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 54.42857360839844,
+              "retention_ratio": 0.9590862651880053
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 44.84722900390625,
+              "retention_ratio": 0.9959382022552817
+            }
+          },
+          "root_net_xyz_m": [
+            0.9792549014091492,
+            -0.057518668472766876,
+            0.0
+          ],
+          "root_net_xy_m": 0.9809426665306091
+        }
+      ],
+      "gates": {
+        "left": {
+          "seed_retention_at_least_95pct": true,
+          "ik_retention_at_least_70pct": true,
+          "final_retention_at_least_70pct": true,
+          "pass": true
+        },
+        "right": {
+          "seed_retention_at_least_95pct": true,
+          "ik_retention_at_least_70pct": true,
+          "final_retention_at_least_70pct": true,
+          "pass": true
+        }
+      },
+      "pass": true
+    },
+    {
+      "name": "root_xy_100_no_lock",
+      "overrides": {
+        "reference_root_xy_scale": 1.0,
+        "reference_lock_stance_feet": false
+      },
+      "source_frames": {
+        "start": 79,
+        "end": 213,
+        "count": 134
+      },
+      "source_elbow_ranges_deg": {
+        "left": 56.75044631958008,
+        "right": 45.03013229370117
+      },
+      "curve_preparation_error": null,
+      "stages": [
+        {
+          "stage": "raw_mapped_pose",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            1.6320914030075073,
+            -0.0958644449710846,
+            0.025634050369262695
+          ],
+          "root_net_xy_m": 1.634904384613037
+        },
+        {
+          "stage": "initial_floor_alignment",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            1.6320914030075073,
+            -0.0958644449710846,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 1.634904384613037
+        },
+        {
+          "stage": "normalized_ik_input",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.988661289215088,
+            "abdomen_y": 2.7862699031829834,
+            "abdomen_z": 5.232077598571777,
+            "pelvis_x": 7.6231303215026855,
+            "pelvis_y": 2.440049171447754,
+            "pelvis_z": 7.005508899688721,
+            "left_hip_x": 13.33579158782959,
+            "left_hip_y": 13.657323837280273,
+            "left_hip_z": 53.483062744140625,
+            "left_knee_z": 57.02037811279297,
+            "left_ankle_y": 28.60496711730957,
+            "left_ankle_z": 17.669719696044922,
+            "right_hip_x": 11.790032386779785,
+            "right_hip_y": 12.184259414672852,
+            "right_hip_z": 34.92290496826172,
+            "right_knee_z": 60.98209762573242,
+            "right_ankle_y": 35.77497863769531,
+            "right_ankle_z": 16.114280700683594,
+            "left_shoulder_x": 0.0,
+            "left_shoulder_y": 0.0,
+            "left_shoulder_z": 28.08987045288086,
+            "left_elbow_z": 56.75044631958008,
+            "right_shoulder_x": 0.0,
+            "right_shoulder_y": 0.0,
+            "right_shoulder_z": 40.86145782470703,
+            "right_elbow_z": 45.03013229370117
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 56.75044631958008,
+              "retention_ratio": 1.0
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 45.03013229370117,
+              "retention_ratio": 1.0
+            }
+          },
+          "root_net_xyz_m": [
+            1.6320914030075073,
+            -0.0958644449710846,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 1.634904384613037
+        },
+        {
+          "stage": "ik_solution",
+          "joint_ranges_deg": {
+            "abdomen_x": 6.833603382110596,
+            "abdomen_y": 2.7101407051086426,
+            "abdomen_z": 5.204469203948975,
+            "pelvis_x": 7.467846870422363,
+            "pelvis_y": 2.1174070835113525,
+            "pelvis_z": 6.97998046875,
+            "left_hip_x": 10.96594524383545,
+            "left_hip_y": 17.790821075439453,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 17.641141891479492,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 15.75018310546875,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 18.198970794677734,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34883117675781,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            1.6320914030075073,
+            -0.0958644449710846,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 1.634904384613037
+        },
+        {
+          "stage": "stability_prior",
+          "joint_ranges_deg": {
+            "abdomen_x": 2.391761064529419,
+            "abdomen_y": 0.9485492706298828,
+            "abdomen_z": 1.8215641975402832,
+            "pelvis_x": 2.613746404647827,
+            "pelvis_y": 0.7410925030708313,
+            "pelvis_z": 2.4429931640625,
+            "left_hip_x": 10.965944290161133,
+            "left_hip_y": 6.226787567138672,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 6.174399375915527,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 5.512563705444336,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 6.369640350341797,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34883117675781,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            1.6320914030075073,
+            -0.0958644449710846,
+            -0.005129337310791016
+          ],
+          "root_net_xy_m": 1.634904384613037
+        },
+        {
+          "stage": "final_floor_alignment",
+          "joint_ranges_deg": {
+            "abdomen_x": 2.391761064529419,
+            "abdomen_y": 0.9485492706298828,
+            "abdomen_z": 1.8215641975402832,
+            "pelvis_x": 2.613746404647827,
+            "pelvis_y": 0.7410925030708313,
+            "pelvis_z": 2.4429931640625,
+            "left_hip_x": 10.965944290161133,
+            "left_hip_y": 6.226787567138672,
+            "left_hip_z": 30.95512580871582,
+            "left_knee_z": 69.06309509277344,
+            "left_ankle_y": 29.208520889282227,
+            "left_ankle_z": 6.174399375915527,
+            "right_hip_x": 15.437292098999023,
+            "right_hip_y": 5.512563705444336,
+            "right_hip_z": 39.072776794433594,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 33.92325973510742,
+            "right_ankle_z": 6.369640350341797,
+            "left_shoulder_x": 9.907798767089844,
+            "left_shoulder_y": 15.598493576049805,
+            "left_shoulder_z": 29.622915267944336,
+            "left_elbow_z": 57.129512786865234,
+            "right_shoulder_x": 11.805424690246582,
+            "right_shoulder_y": 20.35198211669922,
+            "right_shoulder_z": 44.34883117675781,
+            "right_elbow_z": 46.38526153564453
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 57.129512786865234,
+              "retention_ratio": 1.0066795327943416
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 46.38526153564453,
+              "retention_ratio": 1.0300938321278907
+            }
+          },
+          "root_net_xyz_m": [
+            1.6320914030075073,
+            -0.0958644449710846,
+            -0.0012346506118774414
+          ],
+          "root_net_xy_m": 1.634904384613037
+        },
+        {
+          "stage": "prepared_curve_nodes",
+          "joint_ranges_deg": {
+            "abdomen_x": 2.4057366847991943,
+            "abdomen_y": 0.9566842913627625,
+            "abdomen_z": 1.763446569442749,
+            "pelvis_x": 2.6634469032287598,
+            "pelvis_y": 0.64738529920578,
+            "pelvis_z": 2.4429931640625,
+            "left_hip_x": 12.128866195678711,
+            "left_hip_y": 6.2747721672058105,
+            "left_hip_z": 30.48687171936035,
+            "left_knee_z": 69.54364013671875,
+            "left_ankle_y": 29.483083724975586,
+            "left_ankle_z": 6.121235370635986,
+            "right_hip_x": 15.799155235290527,
+            "right_hip_y": 5.640813827514648,
+            "right_hip_z": 39.10985565185547,
+            "right_knee_z": 60.76988220214844,
+            "right_ankle_y": 34.37931823730469,
+            "right_ankle_z": 6.436010837554932,
+            "left_shoulder_x": 9.326096534729004,
+            "left_shoulder_y": 15.903162002563477,
+            "left_shoulder_z": 29.983442306518555,
+            "left_elbow_z": 54.42857360839844,
+            "right_shoulder_x": 11.764171600341797,
+            "right_shoulder_y": 19.764612197875977,
+            "right_shoulder_z": 43.21360778808594,
+            "right_elbow_z": 44.84722900390625
+          },
+          "elbow": {
+            "left": {
+              "source_range_deg": 56.75044631958008,
+              "host_range_deg": 54.42857360839844,
+              "retention_ratio": 0.9590862651880053
+            },
+            "right": {
+              "source_range_deg": 45.03013229370117,
+              "host_range_deg": 44.84722900390625,
+              "retention_ratio": 0.9959382022552817
+            }
+          },
+          "root_net_xyz_m": [
+            1.6320914030075073,
+            -0.0958644449710846,
+            0.0
+          ],
+          "root_net_xy_m": 1.634904384613037
+        }
+      ],
+      "gates": {
+        "left": {
+          "seed_retention_at_least_95pct": true,
+          "ik_retention_at_least_70pct": true,
+          "final_retention_at_least_70pct": true,
+          "pass": true
+        },
+        "right": {
+          "seed_retention_at_least_95pct": true,
+          "ik_retention_at_least_70pct": true,
+          "final_retention_at_least_70pct": true,
+          "pass": true
+        }
+      },
+      "pass": true
+    }
+  ]
+}
