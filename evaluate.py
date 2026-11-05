@@ -1353,6 +1353,7 @@ def make_environment(env_config: EnvConfig):
     """Build the viewer environment without dropping saved action/reset settings."""
     config_overrides = asdict(env_config)
     config_overrides.pop("env_version")
+    skill = config_overrides.pop("locomotion_skill")
     config_overrides["impl"] = config_overrides.pop("playground_impl")
     accurate_physics = config_overrides.pop("accurate_physics")
     config_overrides["enable_erfi"] = False
@@ -1361,7 +1362,14 @@ def make_environment(env_config: EnvConfig):
     for name in ("xml_path", "reference_gait_file", "init_qpos_file"):
         if config_overrides[name] is None:
             config_overrides.pop(name)
-    return BiomechanicsJoystickEnv(
+    if skill not in {"walk", "stand"}:
+        raise ValueError("locomotion_skill must be walk or stand.")
+    environment_class = BiomechanicsJoystickEnv
+    if skill == "stand":
+        from skills.stand import StandEnv
+
+        environment_class = StandEnv
+    return environment_class(
         env_version=env_config.env_version,
         config_overrides=config_overrides,
     )

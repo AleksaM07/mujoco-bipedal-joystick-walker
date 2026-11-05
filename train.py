@@ -1512,7 +1512,14 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         config_overrides["init_qpos_file"] = env_config.init_qpos_file
     if env_config.accurate_physics:
         config_overrides["sim_dt"] = 0.005
-    return BiomechanicsJoystickEnv(
+    if env_config.locomotion_skill not in {"walk", "stand"}:
+        raise ValueError("locomotion_skill must be walk or stand.")
+    environment_class = BiomechanicsJoystickEnv
+    if env_config.locomotion_skill == "stand":
+        from skills.stand import StandEnv
+
+        environment_class = StandEnv
+    return environment_class(
         env_version=env_config.env_version,
         config_overrides=config_overrides,
     )
@@ -2537,6 +2544,12 @@ def main() -> None:
         help="Filtriranje policy akcije pre servo targeta.",
     )
     parser.add_argument(
+        "--locomotion-skill",
+        choices=["walk", "stand"],
+        default="walk",
+        help="Select the existing walker or the experimental stationary tracker.",
+    )
+    parser.add_argument(
         "--reference-gait",
         choices=["none", "sine", "bvh", "smpl"],
         default="bvh",
@@ -3029,6 +3042,7 @@ def main() -> None:
         reference_elbow_flexion_alpha=args.reference_elbow_flexion_alpha,
         recovery_physics_version=args.recovery_physics_version,
         reference_motion_speed_scale=args.reference_motion_speed_scale,
+        locomotion_skill=args.locomotion_skill,
         reference_loop_closure=args.reference_loop_closure,
         reference_gait=args.reference_gait,
         arm_actuators=args.arm_actuators,

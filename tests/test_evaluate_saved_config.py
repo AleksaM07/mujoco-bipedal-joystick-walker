@@ -372,6 +372,7 @@ class SavedConfigTests(unittest.TestCase):
         forwarded = constructor.call_args.kwargs["config_overrides"]
         excluded = {
             "env_version",
+            "locomotion_skill",  # Consumed by the factory to select the env class.
             "playground_impl",
             "accurate_physics",
             "xml_path",
@@ -382,6 +383,20 @@ class SavedConfigTests(unittest.TestCase):
                 self.assertEqual(forwarded[name], value, name)
         self.assertEqual(forwarded["impl"], config.playground_impl)
         self.assertFalse(forwarded["enable_erfi"])
+
+    def test_skill_selection_round_trips_without_changing_old_checkpoints(self) -> None:
+        self.assertEqual(
+            evaluate.restore_saved_env_config({"env": {}}).locomotion_skill, "walk"
+        )
+        saved = {"env": {"locomotion_skill": "stand"}}
+        restored = evaluate.restore_saved_env_config(saved)
+        self.assertEqual(restored.locomotion_skill, "stand")
+        with patch("skills.stand.StandEnv") as constructor:
+            evaluate.make_environment(restored)
+        constructor.assert_called_once()
+        self.assertNotIn(
+            "locomotion_skill", constructor.call_args.kwargs["config_overrides"]
+        )
 
     def test_trainer_forwards_version_and_speed(self) -> None:
         config = EnvConfig(

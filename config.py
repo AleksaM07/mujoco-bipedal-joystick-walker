@@ -873,6 +873,9 @@ class EnvConfig:
     # standard -> flat terrain, hardcore -> rough terrain.
     env_version: str = "standard"
 
+    # Opt-in skills environment; old checkpoints retain their original behavior.
+    locomotion_skill: str = "walk"
+
     # MJX-Warp je primarni backend. MJX-JAX ostaje samo za stare checkpoint-e
     # i male CPU dijagnostike.
     playground_impl: str = "warp"
