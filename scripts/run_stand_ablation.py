@@ -6,6 +6,7 @@ starts. All generated artifacts live in a fresh experiment directory in runs/.
 
 import argparse
 import json
+import math
 import os
 import subprocess
 import sys
@@ -25,13 +26,18 @@ VARIANTS = ("transfer", "scratch")
 
 
 def build_configs(
-    variant: str, timesteps: int, reward_mode: str = "imitation"
+    variant: str,
+    timesteps: int,
+    reward_mode: str = "imitation",
+    learning_rate: float = 2e-5,
 ) -> tuple[EnvConfig, TrainConfig]:
     """Keep archived physics/PPO settings with explicit initialization and reward."""
     if variant not in VARIANTS or timesteps <= 0:
         raise ValueError("Expected transfer/scratch and positive timesteps.")
     if reward_mode not in {"imitation", "balance_v1"}:
         raise ValueError("Expected imitation or balance_v1 stand reward.")
+    if not math.isfinite(learning_rate) or learning_rate <= 0:
+        raise ValueError("learning_rate must be finite and positive.")
     saved = json.loads((ARCHIVE / "config.json").read_text(encoding="utf-8"))
     environment = replace(
         EnvConfig(**saved["env"]),
@@ -60,7 +66,7 @@ def build_configs(
         unroll_length=10,
         num_minibatches=4,
         num_updates_per_batch=2,
-        learning_rate=2e-5,
+        learning_rate=learning_rate,
         training_metrics_steps=50000,
         enable_erfi=False,
         enable_domain_randomization=False,
@@ -71,7 +77,7 @@ def build_configs(
             str(ARCHIVE / "model_000001024000") if variant == "transfer" else None
         ),
         restore_value_fn=variant != "transfer",
-        run_tag=f"stand_{reward_mode}_{variant}_{timesteps}",
+        run_tag=f"stand_{reward_mode}_{variant}_{timesteps}_lr{learning_rate:g}",
         debug_run=False,
     )
     return environment, training
@@ -101,9 +107,11 @@ def checkpoint_rank(report: dict[str, Any]) -> tuple[float, ...]:
 
 def write_report(path: Path, report: dict[str, Any]) -> None:
     """Save the current experiment state after every completed stage."""
-    path.write_text(
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(
         json.dumps(report, indent=2, allow_nan=False) + "\n", encoding="utf-8"
     )
+    temporary.replace(path)
 
 
 def run_command(command: list[str], log_path: Path) -> int:
@@ -129,7 +137,11 @@ def run_command(command: list[str], log_path: Path) -> int:
 
 
 def run_variant(
-    variant: str, output: Path, timesteps: int, reward_mode: str = "imitation"
+    variant: str,
+    output: Path,
+    timesteps: int,
+    reward_mode: str = "imitation",
+    learning_rate: float = 2e-5,
 ) -> dict[str, Any]:
     """Train one variant, then physically check every saved checkpoint."""
     command = [
@@ -143,6 +155,8 @@ def run_variant(
         str(timesteps),
         "--stand-reward-mode",
         reward_mode,
+        "--learning-rate",
+        str(learning_rate),
     ]
     result: dict[str, Any] = {"variant": variant, "training_command": command}
     result["training_exit"] = run_command(command, output / f"{variant}_train.log")
@@ -192,6 +206,7 @@ def main() -> int:
     """Run requested variants sequentially; a failed physical gate remains a result."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--timesteps", type=int, default=1_000_000)
+    parser.add_argument("--learning-rate", type=float, default=2e-5)
     parser.add_argument("--variants", choices=VARIANTS, nargs="+", default=VARIANTS)
     parser.add_argument(
         "--stand-reward-mode", choices=("imitation", "balance_v1"), default="imitation"
@@ -203,6 +218,8 @@ def main() -> int:
     args = parser.parse_args()
     if args.timesteps <= 0:
         parser.error("timesteps must be positive")
+    if not math.isfinite(args.learning_rate) or args.learning_rate <= 0:
+        parser.error("learning-rate must be finite and positive")
     if len(set(args.variants)) != len(args.variants):
         parser.error("variants must be unique")
     output = args.output or RUNS_DIR / (
@@ -213,7 +230,9 @@ def main() -> int:
         parser.error("output must be a fresh directory under runs/")
     plan = {}
     for variant in args.variants:
-        env, training = build_configs(variant, args.timesteps, args.stand_reward_mode)
+        env, training = build_configs(
+            variant, args.timesteps, args.stand_reward_mode, args.learning_rate
+        )
         plan[variant] = {"env": asdict(env), "train": asdict(training)}
     if args.dry_run:
         print(json.dumps({"output": str(output), "plan": plan}, indent=2))
@@ -226,7 +245,7 @@ def main() -> int:
         configure_stdout_encoding()
         jax.config.update("jax_default_device", choose_device("gpu", allow_cpu=False))
         env, training = build_configs(
-            args.worker, args.timesteps, args.stand_reward_mode
+            args.worker, args.timesteps, args.stand_reward_mode, args.learning_rate
         )
         run_training(env, training, output)
         return 0
@@ -239,7 +258,9 @@ def main() -> int:
     }
     write_report(output / "comparison.json", report)
     for variant in args.variants:
-        result = run_variant(variant, output, args.timesteps, args.stand_reward_mode)
+        result = run_variant(
+            variant, output, args.timesteps, args.stand_reward_mode, args.learning_rate
+        )
         report["variants"].append(result)
         write_report(output / "comparison.json", report)
     evaluated = [row for row in report["variants"] if row["status"] == "evaluated"]

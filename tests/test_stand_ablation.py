@@ -65,6 +65,20 @@ class StandAblationTests(unittest.TestCase):
         new_values.pop("run_tag")
         self.assertEqual(old_values, new_values)
 
+    def test_learning_rate_sweep_changes_only_rate_and_label(self) -> None:
+        baseline_env, baseline = build_configs("scratch", 1_000_000, "balance_v1")
+        changed_env, changed = build_configs("scratch", 1_000_000, "balance_v1", 1e-4)
+        self.assertEqual(baseline_env, changed_env)
+        baseline_values, changed_values = asdict(baseline), asdict(changed)
+        self.assertEqual(changed_values.pop("learning_rate"), 1e-4)
+        baseline_values.pop("learning_rate")
+        baseline_values.pop("run_tag")
+        changed_values.pop("run_tag")
+        self.assertEqual(baseline_values, changed_values)
+        for rate in (0, -1, float("nan"), float("inf")):
+            with self.subTest(rate=rate), self.assertRaises(ValueError):
+                build_configs("scratch", 1_000_000, "balance_v1", rate)
+
 
 if __name__ == "__main__":
     unittest.main()
