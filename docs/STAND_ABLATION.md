@@ -149,6 +149,12 @@ Budžet je opet 1M, seed 7, LR `2e-5`, 64 okruženja i `bare` režim. Nema
 istovremene promene discount-a, learning rate-a ili početne poze. Reward između
 verzija nije uporediv kao merilo uspeha; fizički gate ostaje uporediv.
 
+Run je pokrenut 2026-11-05 oko 21:10 UTC iz čistog commita `dc29721`:
+`runs/stand_balance_v1_20261105_2110Z_1m_seed7`. Sačuvani `config.json`
+potvrđuje navedene parametre i `resume_from=null`. Pri beleženju ovog statusa
+worker je pripremao okruženje. Rezultat još nije poznat; proveriti
+`scratch_train.log` i `comparison.json` pre nastavka ili pokretanja drugog run-a.
+
 ## Provera implementacije
 
 Pun unittest suite sa `balance_v1` izmenama završio je sa 387/387 uspešnih

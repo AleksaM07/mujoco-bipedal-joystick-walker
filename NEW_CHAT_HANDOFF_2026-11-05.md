@@ -30,10 +30,25 @@ transfer kandidata potvrđuje pad. Ne nastavljati ka walk→brake→stand ili A�
 Sačuvan izveštaj: `analysis_outputs/skills/stand_ablation_1m_20261105.json`.
 Dijagnoza i naredni kontrolisani test opisani su u `docs/STAND_ABLATION.md`:
 stand reward `balance_v1`, scratch, isti PPO parametri i budžet. Nova
-implementacija prolazi pun suite od 387 testova. Proveriti
-aktuelne procese i noviji run pre pokretanja; ne duplirati eksperiment.
-Korisnik je izričito odobrio push skills grane; commit-i do `807c991` su
-objavljeni. Natural-walk arhiva i joystick grana su netaknute.
+implementacija prolazi pun suite od 387 testova i dodatnu proveru logger-a.
+Rezultati su u commitu `15c777a`, implementacija u `dc29721`.
+Korisnik je izričito odobrio push skills grane; oba commita su objavljena.
+Natural-walk arhiva i joystick grana su netaknute.
+
+**Aktivan naredni eksperiment**, pokrenut 2026-11-05 oko 21:10 UTC:
+
+`runs/stand_balance_v1_20261105_2110Z_1m_seed7`
+
+Pokrenut je iz čistog commita `dc29721`. Sačuvani config potvrđuje scratch bez
+resume-a, `balance_v1`, 1M traženih koraka, seed 7, LR `2e-5`, 64 env-a i bare.
+Pri poslednjoj proveri pripremao je okruženje; nema još fizičkog rezultata.
+Parent/worker su tada imali WSL PID 324/424 (PID proveriti, ne pretpostavljati).
+Log je `scratch_train.log`, zbirni status `comparison.json`. Runner nakon
+treninga sam proverava sve checkpoint-e na četiri seed-a i snima najbolji
+kandidat. **Ne pokretati duplikat**: prvo proveriti procese, log i status.
+Sledeća tačka rada je sačekati/obraditi taj rezultat, pregledati video i
+uporediti fizički gate sa prethodnim scratch-om; reward između verzija nije
+merilo napretka. Ne prelaziti na A→B bez uspešnog stand gate-a.
 
 ## Arhivirani početni handoff
 
@@ -449,7 +464,9 @@ progress, kočenje i dwell. Goal mora biti u policy observation-u; trenutno nije
 
 Natural walking je završen i zaštićen. Fresh-critic transfer, smislen logging
 i nezavisni gate su implementirani. Prvi 1M transfer i 1M scratch su završeni;
-nijedan checkpoint nije prošao stand gate. Sledeći kontrolisani eksperiment je
-scratch `balance_v1`, isti seed 7, LR `2e-5` i budžet 1M. Prvo proveriti procese
-i najnoviji run da se trening ne duplira. Tek nakon uspešnog stand-a počinje
-walk→brake→stand, pa A→B.
+nijedan checkpoint nije prošao stand gate. Kontrolisani scratch `balance_v1`
+eksperiment već je pokrenut u `runs/stand_balance_v1_20261105_2110Z_1m_seed7`.
+Prvo proveriti procese i njegov rezultat da se trening ne duplira. Potom
+pregledati fizički gate i video, uporediti sa prethodnim scratch rezultatom
+i tek na osnovu toga odabrati sledeći eksperiment. Tek nakon uspešnog stand-a
+počinje walk→brake→stand, pa A→B.
