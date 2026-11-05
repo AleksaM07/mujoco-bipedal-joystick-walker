@@ -73,3 +73,5 @@ master_rad/*
 !prezentacija/3rd_success_arm_ik_partial/train.log
 !prezentacija/4th_success_better_arms_stiff_elbows/videos/*.mp4
 !prezentacija/4th_success_better_arms_stiff_elbows/train.log
+!prezentacija/5th_success_final_natural_walk/videos/*.mp4
+!prezentacija/5th_success_final_natural_walk/train.log

@@ -1,0 +1,55 @@
+FINAL SUCCESS — PRIRODAN HOD SA POKRETNIM RUKAMA I LAKTOVIMA
+Datum: 2026-11-05
+
+ŠTA SAM POSTIGAO
+
+Napravio sam stabilnu 26-DOF DeepMimic politiku koja prati jedan očišćen ciklus
+hoda iz CMU 02_01.bvh. Politika završava 500/500 koraka bez fizičkog pada na
+sva četiri fiksna evaluaciona seed-a. Noge, ramena, ruke i laktovi učestvuju u
+pokretu; laktovi više nisu zamrznuti u skoro konstantnom uglu.
+
+Do ovog rezultata nisam došao jednim dugim treningom. Prvo sam popravio vreme,
+koordinatne sisteme, root obradu, loop spoj, reset kinematiku, interpolaciju,
+kontakt stopala, actuator mapiranje i BVH retargeting. Zatim sam sačuvao dobar
+hod i postepeno uvodio ispravljenu fleksiju laktova kroz curriculum:
+
+  0.25 -> 0.50 -> 0.75 -> 1.00 BVH elbow signala
+
+Svaki nivo je treniran 1M koraka i smeo je da pređe na sledeći samo ako prođe
+gate: bez fizičkog pada, puna epizoda, dobar ukupni reward, dobar pose/arm-pose
+score i merljiva fleksija oba lakta.
+
+FINALNI DOKAZI
+
+- finalni eval reward: 1446.7544;
+- zaseban snimljeni rollout reward: 1459.150;
+- trajanje: 500/500 koraka;
+- fizička terminacija: 0/4 proverena seed-a;
+- DeepMimic pose score: približno 0.995;
+- DeepMimic arm-pose score: približno 0.994;
+- leva elbow amplituda: približno 94–100% reference;
+- desna elbow amplituda: približno 92–122% reference;
+- kompletna regresija: 356 testova prolazi.
+
+ŠTA SE NALAZI U ARHIVI
+
+- model_000001024000/: finalni Orbax/Brax checkpoint;
+- config.json: tačna environment i PPO konfiguracija;
+- generated_models/: tačan 26-DOF MuJoCo XML;
+- BVH_walking_animation/: tačna 02_01.bvh referenca;
+- evidence/: status curriculum-a i sva četiri gate izveštaja;
+- videos/final_natural_walk_seed11_quad.mp4: politika iz četiri ugla;
+- videos/final_natural_walk_vs_raw_bvh_side_by_side.mp4: politika i sirovi BVH;
+- train.log i xml_manifest.json: poreklo treninga i modela.
+
+OGRANIČENJE: OVO NIJE A DO B
+
+Ova politika je finalna locomotion/DeepMimic veština, ali nema ciljnu XY tačku.
+Ona ne računa pravac do tačke B, ne koči pred ciljem i nema arrival/dwell success
+kriterijum. A->B treba da bude sledeći, odvojeni task sloj koji će koristiti ovu
+politiku kao već naučenu veštinu hoda. Ne treba ponovo učiti hod od nule.
+
+STATUS
+
+Ovo je zvanično odobren finalni natural-walk success i naslednik četvrtog
+rezultata sa krutim laktovima.

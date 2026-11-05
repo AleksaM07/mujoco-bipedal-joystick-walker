@@ -1,0 +1,85 @@
+{
+  "checkpoint": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/runs/20261105_0358_elbow_curriculum_a100_elbow_curriculum_2_V1_steps-1m_reward-1446p7544_s/checkpoints/000001024000",
+  "alpha": 1.0,
+  "records": [
+    {
+      "seed": 11,
+      "length": 500,
+      "physical_termination": false,
+      "reward_per_step": 2.918299913406372,
+      "deepmimic_pose": 0.9954172968864441,
+      "deepmimic_arm_pose": 0.9939503073692322,
+      "deepmimic_arm_velocity": 0.9939765334129333,
+      "left_elbow_range_deg": 51.45840835571289,
+      "right_elbow_range_deg": 41.403785705566406,
+      "reference_left_elbow_range_deg": 54.427818298339844,
+      "reference_right_elbow_range_deg": 44.84415817260742,
+      "left_elbow_amplitude_ratio": 0.9454432129859924,
+      "right_elbow_amplitude_ratio": 0.9232815504074097
+    },
+    {
+      "seed": 22,
+      "length": 500,
+      "physical_termination": false,
+      "reward_per_step": 2.9183125495910645,
+      "deepmimic_pose": 0.995397686958313,
+      "deepmimic_arm_pose": 0.9938222765922546,
+      "deepmimic_arm_velocity": 0.9936262369155884,
+      "left_elbow_range_deg": 54.2224006652832,
+      "right_elbow_range_deg": 54.79305648803711,
+      "reference_left_elbow_range_deg": 54.427249908447266,
+      "reference_right_elbow_range_deg": 44.846317291259766,
+      "left_elbow_amplitude_ratio": 0.996236264705658,
+      "right_elbow_amplitude_ratio": 1.2217961549758911
+    },
+    {
+      "seed": 33,
+      "length": 500,
+      "physical_termination": false,
+      "reward_per_step": 2.913038492202759,
+      "deepmimic_pose": 0.995402455329895,
+      "deepmimic_arm_pose": 0.9939714074134827,
+      "deepmimic_arm_velocity": 0.9937900304794312,
+      "left_elbow_range_deg": 52.340728759765625,
+      "right_elbow_range_deg": 41.67776107788086,
+      "reference_left_elbow_range_deg": 54.42818832397461,
+      "reference_right_elbow_range_deg": 44.84502029418945,
+      "left_elbow_amplitude_ratio": 0.9616475105285645,
+      "right_elbow_amplitude_ratio": 0.9293732047080994
+    },
+    {
+      "seed": 44,
+      "length": 500,
+      "physical_termination": false,
+      "reward_per_step": 2.9167230129241943,
+      "deepmimic_pose": 0.9954086542129517,
+      "deepmimic_arm_pose": 0.993931770324707,
+      "deepmimic_arm_velocity": 0.9940341711044312,
+      "left_elbow_range_deg": 51.30876922607422,
+      "right_elbow_range_deg": 41.888275146484375,
+      "reference_left_elbow_range_deg": 54.42827606201172,
+      "reference_right_elbow_range_deg": 44.844791412353516,
+      "left_elbow_amplitude_ratio": 0.9426859021186829,
+      "right_elbow_amplitude_ratio": 0.9340721964836121
+    }
+  ],
+  "gate": {
+    "passed": true,
+    "checks": {
+      "no_physical_termination": true,
+      "full_length": true,
+      "reward": true,
+      "pose": true,
+      "arm_pose": true,
+      "left_elbow_motion": true,
+      "right_elbow_motion": true
+    },
+    "thresholds": {
+      "steps": 500,
+      "reward_per_step": 2.6,
+      "deepmimic_pose": 0.9,
+      "deepmimic_arm_pose": 0.7,
+      "elbow_amplitude_ratio": 0.45
+    }
+  }
+}

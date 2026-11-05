@@ -1,0 +1,118 @@
+{
+  "status": "complete",
+  "source_checkpoint": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/prezentacija/4th_success_better_arms_stiff_elbows/model_000001003520",
+  "steps_per_level": 1000000,
+  "num_envs": 64,
+  "learning_rate": 2e-05,
+  "levels": [
+    {
+      "level": 1,
+      "alpha": 0.25,
+      "resume": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/prezentacija/4th_success_better_arms_stiff_elbows/model_000001003520",
+      "status": "passed",
+      "run_dir": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/runs/20261105_0001_elbow_curriculum_a025_elbow_curriculum_2_V1_steps-1m_reward-1450p3297_s",
+      "checkpoint": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/runs/20261105_0001_elbow_curriculum_a025_elbow_curriculum_2_V1_steps-1m_reward-1450p3297_s/checkpoints/000000204800",
+      "gate": {
+        "passed": true,
+        "checks": {
+          "no_physical_termination": true,
+          "full_length": true,
+          "reward": true,
+          "pose": true,
+          "arm_pose": true,
+          "left_elbow_motion": true,
+          "right_elbow_motion": true
+        },
+        "thresholds": {
+          "steps": 500,
+          "reward_per_step": 2.6,
+          "deepmimic_pose": 0.9,
+          "deepmimic_arm_pose": 0.7,
+          "elbow_amplitude_ratio": 0.45
+        }
+      }
+    },
+    {
+      "level": 2,
+      "alpha": 0.5,
+      "resume": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/runs/20261105_0001_elbow_curriculum_a025_elbow_curriculum_2_V1_steps-1m_reward-1450p3297_s/checkpoints/000000204800",
+      "status": "passed",
+      "run_dir": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/runs/20261105_0111_elbow_curriculum_a050_elbow_curriculum_2_V1_steps-1m_reward-1442p9481_s",
+      "checkpoint": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/runs/20261105_0111_elbow_curriculum_a050_elbow_curriculum_2_V1_steps-1m_reward-1442p9481_s/checkpoints/000000204800",
+      "gate": {
+        "passed": true,
+        "checks": {
+          "no_physical_termination": true,
+          "full_length": true,
+          "reward": true,
+          "pose": true,
+          "arm_pose": true,
+          "left_elbow_motion": true,
+          "right_elbow_motion": true
+        },
+        "thresholds": {
+          "steps": 500,
+          "reward_per_step": 2.6,
+          "deepmimic_pose": 0.9,
+          "deepmimic_arm_pose": 0.7,
+          "elbow_amplitude_ratio": 0.45
+        }
+      }
+    },
+    {
+      "level": 3,
+      "alpha": 0.75,
+      "resume": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/runs/20261105_0111_elbow_curriculum_a050_elbow_curriculum_2_V1_steps-1m_reward-1442p9481_s/checkpoints/000000204800",
+      "status": "passed",
+      "run_dir": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/runs/20261105_0235_elbow_curriculum_a075_elbow_curriculum_2_V1_steps-1m_reward-1445p0387_s",
+      "checkpoint": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/runs/20261105_0235_elbow_curriculum_a075_elbow_curriculum_2_V1_steps-1m_reward-1445p0387_s/checkpoints/000000204800",
+      "gate": {
+        "passed": true,
+        "checks": {
+          "no_physical_termination": true,
+          "full_length": true,
+          "reward": true,
+          "pose": true,
+          "arm_pose": true,
+          "left_elbow_motion": true,
+          "right_elbow_motion": true
+        },
+        "thresholds": {
+          "steps": 500,
+          "reward_per_step": 2.6,
+          "deepmimic_pose": 0.9,
+          "deepmimic_arm_pose": 0.7,
+          "elbow_amplitude_ratio": 0.45
+        }
+      }
+    },
+    {
+      "level": 4,
+      "alpha": 1.0,
+      "resume": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/runs/20261105_0235_elbow_curriculum_a075_elbow_curriculum_2_V1_steps-1m_reward-1445p0387_s/checkpoints/000000204800",
+      "status": "passed",
+      "run_dir": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/runs/20261105_0358_elbow_curriculum_a100_elbow_curriculum_2_V1_steps-1m_reward-1446p7544_s",
+      "checkpoint": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/runs/20261105_0358_elbow_curriculum_a100_elbow_curriculum_2_V1_steps-1m_reward-1446p7544_s/checkpoints/000001024000",
+      "gate": {
+        "passed": true,
+        "checks": {
+          "no_physical_termination": true,
+          "full_length": true,
+          "reward": true,
+          "pose": true,
+          "arm_pose": true,
+          "left_elbow_motion": true,
+          "right_elbow_motion": true
+        },
+        "thresholds": {
+          "steps": 500,
+          "reward_per_step": 2.6,
+          "deepmimic_pose": 0.9,
+          "deepmimic_arm_pose": 0.7,
+          "elbow_amplitude_ratio": 0.45
+        }
+      }
+    }
+  ],
+  "final_checkpoint": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/runs/20261105_0358_elbow_curriculum_a100_elbow_curriculum_2_V1_steps-1m_reward-1446p7544_s/checkpoints/000001024000"
+}

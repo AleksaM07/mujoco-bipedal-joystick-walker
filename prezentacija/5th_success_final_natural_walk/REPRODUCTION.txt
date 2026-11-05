@@ -1,0 +1,12 @@
+POKRETANJE FINALNOG MODELA
+
+Iz korena repozitorijuma na Windowsu:
+
+  ./.venv-win/Scripts/python.exe scripts/evaluate_final_success.py
+
+Snimanje novog quad videa:
+
+  ./.venv-win/Scripts/python.exe scripts/evaluate_final_success.py --seed 22 --record-video videos/final_success_seed22_quad.mp4 --record-steps 500 --record-fps 30 --record-width 1280 --record-height 720 --record-layout quad
+
+Viewer i snimanje koriste arhivirani checkpoint, XML i BVH, a ne promenljive
+fajlove iz aktivnog radnog stabla.
