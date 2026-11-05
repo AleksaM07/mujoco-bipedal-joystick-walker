@@ -1,13 +1,11 @@
 # Kako mi biramo dijagnostički alat
 
-Mi svakodnevno koristimo `scripts/evaluate_first_success.py`, `train.py` i
-`evaluate.py`. Ove alate pokrećemo kada imamo konkretno dijagnostičko pitanje,
+Mi svakodnevno koristimo `scripts/evaluate_final_success.py`, `train.py` i
+`evaluate.py`. Dijagnostičke alate pokrećemo kada imamo konkretno pitanje,
 iz korena projekta preko `python -m tools.ime_alata --help`.
 
 | Kada proveravamo… | Koristimo… |
 | --- | --- |
-| Integritet prvog uspeha | `verify_success_archive.py` |
-| 18→26 DOF warm-start za ruke | `migrate_checkpoint_to_arms.py` |
 | Vreme, kinematiku i continuous reference | `check_recovery_reference.py`, `check_reference_curves.py` |
 | Kontakt, kolizije i dinamiku | `check_reference_contacts.py`, `check_reference_collisions.py`, `audit_reference_dynamics.py` |
 | IK i faze retargetinga | `audit_ik_fit.py`, `check_retarget_stages.py` |

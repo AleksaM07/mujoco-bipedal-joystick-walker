@@ -37,7 +37,6 @@ eksperimenata uklonili smo. Njihove tačne verzije ostaju u Git istoriji.
 | `CMU_SMPL+H-G/` | SMPL motion podaci za kasnije eksperimente. |
 | `marina_bvh_parse/` | Još ga referencira kompatibilni one-clip preset. |
 | `generated_models/` | XML verzije koje koriste sačuvane konfiguracije. |
-| `analysis_outputs/natural_walk_ablations/` | Aktuelna ablation merenja. |
 
 Stare XML i motion putanje ne brišemo zato što ih postojeći run konfiguracioni
 fajlovi i checkpoint evaluacija mogu zahtevati.

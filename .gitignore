@@ -60,18 +60,6 @@ temp_/
 runs/failed/*
 master_rad/*
 
-# Deliberately version the small, frozen first-success presentation.
-!prezentacija/1st_success/videos/*.mp4
-!prezentacija/1st_success/train.log
-
-# Preserve the second visually approved walk with its active but stiff arms.
-!prezentacija/2nd_success_stiff_arms/videos/*.mp4
-!prezentacija/2nd_success_stiff_arms/train.log
-!prezentacija/2nd_success_stiff_arms/record_seed22.stdout.log
-!prezentacija/2nd_success_stiff_arms/record_seed22.stderr.log
-!prezentacija/3rd_success_arm_ik_partial/videos/*.mp4
-!prezentacija/3rd_success_arm_ik_partial/train.log
-!prezentacija/4th_success_better_arms_stiff_elbows/videos/*.mp4
-!prezentacija/4th_success_better_arms_stiff_elbows/train.log
+# Preserve only the approved final natural-walk presentation.
 !prezentacija/5th_success_final_natural_walk/videos/*.mp4
 !prezentacija/5th_success_final_natural_walk/train.log

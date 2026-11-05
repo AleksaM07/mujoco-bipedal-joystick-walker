@@ -12,9 +12,9 @@ Radimo sposobnosti redom; ne menjamo više velikih stvari u istom eksperimentu.
      orijentaciju;
    - ne preuzimati ništa iz odbačenog bullet/A→B projekta.
 3. **Integracija**
-   - sačuvati joystick-only granu iz `main`;
+   - koristiti zaštićenu joystick-only granu;
    - napraviti čist interfejs za izbor joystick ili A→B moda;
-   - spojiti ih u `main` tek kada oba imaju zasebne testove.
+   - spojiti ih u novu integracionu granu tek kada oba imaju zasebne testove.
 4. **Više locomotion skillova**
    - proceniti više BVH klipova i AMP/MimicKit pristup;
    - odvojiti walk, run i stand metrike i prelaze.

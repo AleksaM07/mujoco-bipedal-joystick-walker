@@ -21,7 +21,7 @@ class NaturalWalkAblationAuditTests(unittest.TestCase):
     def test_archived_config_loads_as_single_clip_full_arm_baseline(self) -> None:
         config = load_base_config(
             PROJECT_ROOT
-            / "prezentacija/4th_success_better_arms_stiff_elbows/config.json"
+            / "prezentacija/5th_success_final_natural_walk/config.json"
         )
         self.assertEqual(config.arm_reference_mode, "cmu_elbow_wrist_ik")
         self.assertEqual(config.reference_clip_ids, [1])

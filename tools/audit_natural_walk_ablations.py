@@ -33,7 +33,7 @@ from tools.check_retarget_stages import capture_retarget_stages
 
 DEFAULT_CONFIG = (
     PROJECT_ROOT
-    / "prezentacija/4th_success_better_arms_stiff_elbows/config.json"
+    / "prezentacija/5th_success_final_natural_walk/config.json"
 )
 DEFAULT_OUTPUT = (
     PROJECT_ROOT / "analysis_outputs/natural_walk_ablations/reference_matrix.json"
