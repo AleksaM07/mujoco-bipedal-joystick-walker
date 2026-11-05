@@ -1,0 +1,137 @@
+{
+  "environment": {
+    "env_version": "standard",
+    "locomotion_skill": "stand",
+    "playground_impl": "jax",
+    "physics_backend": "mjx_jax",
+    "warp_num_worlds": 1,
+    "warp_naconmax": null,
+    "warp_njmax": null,
+    "warp_graph_mode": "warp",
+    "command_profile": "walk",
+    "joystick_speed_center": 1.1,
+    "joystick_speed_radius": 0.05,
+    "joystick_yaw_limit": 0.0,
+    "joystick_reward_weight": 0.2,
+    "tracking_sigma": 0.25,
+    "tracking_yaw_sigma": 0.35,
+    "arm_reference_mode": "cmu_elbow_wrist_ik",
+    "reference_elbow_flexion_alpha": 1.0,
+    "recovery_physics_version": "consistent_v6",
+    "reference_motion_speed_scale": 1.0,
+    "reference_loop_closure": "bounded",
+    "reference_gait": "bvh",
+    "arm_actuators": true,
+    "reference_gait_file": [],
+    "reference_clip_ids": null,
+    "reference_forced_clip_id": 0,
+    "reference_target_observation": true,
+    "reference_action_mode": "residual",
+    "reference_action_center": "default",
+    "reference_action_range": "reference_targets",
+    "reference_action_range_scale": 1.1,
+    "reference_residual_scale": 1.0,
+    "bvh_target_observation_steps": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "reference_replay_target_step": 0,
+    "deepmimic_root_velocity_weight_scale": 1.0,
+    "deepmimic_arm_reward_weight": 1.0,
+    "reference_reset_min_steps_remaining": 25,
+    "reference_min_motion_length": 0.8,
+    "reference_loop_mode": "wrap",
+    "reference_root_xy_scale": 0.35,
+    "reference_lock_stance_feet": true,
+    "reference_foot_lock_height": 0.035,
+    "reference_stability_sagittal_alpha": 1.0,
+    "reference_stability_other_alpha": 0.35,
+    "reference_stability_arm_alpha": 1.0,
+    "deepmimic_reward_mode": "pure",
+    "deepmimic_key_bodies": [
+      "metatarsal_midpoint_right",
+      "metatarsal_midpoint_left"
+    ],
+    "pose_termination": false,
+    "pose_termination_dist": 1.0,
+    "reset_sample_attempts": 2,
+    "reset_projection_levels": [
+      1.0,
+      0.7,
+      0.45
+    ],
+    "policy_observation_size": null,
+    "policy_observation_dict": true,
+    "xml_path": "prezentacija/5th_success_final_natural_walk/generated_models/human_male_180cm_75kg_standard_trainfast_v21_arms.xml",
+    "legacy_action_prior": false,
+    "action_smoothing": 0.2,
+    "init_qpos_file": null,
+    "accurate_physics": true
+  },
+  "xml_sha256": "494cb6707a59a957a27e248f07d7d7597227250588a9c6ca70b6314709895ef4",
+  "thresholds": {
+    "max_speed": 0.15,
+    "max_distance": 0.25,
+    "min_torso_up": 0.9,
+    "min_height_ratio": 0.85,
+    "dwell_seconds": 1.0
+  },
+  "actions": 26,
+  "control_dt": 0.02,
+  "simulation_dt": 0.005,
+  "reference_checks": {
+    "stationary": true,
+    "zero_velocities": true,
+    "within_control_limits": true
+  },
+  "pd_hold": {
+    "controller": "constant_neutral_PD_targets_no_policy",
+    "full_gravity": [
+      0.0,
+      0.0,
+      -9.81
+    ],
+    "root_free": true,
+    "failure_torso_up_threshold": 0.25,
+    "steps": 148,
+    "seconds": 2.96,
+    "fell": true,
+    "initial_foot_heights": [
+      -0.005000000000000046,
+      -0.005000000000000039
+    ],
+    "min_height": 0.40600985866321526,
+    "min_torso_up": 0.36979166992362483,
+    "max_speed": 2.2228810019316523,
+    "max_distance": 1.577424526756522,
+    "max_dwell_seconds": 1.48,
+    "final_dwell_seconds": 0.0,
+    "passed": false
+  },
+  "mjx_smoke": {
+    "controller": "frozen_walking_actor",
+    "steps": 122,
+    "requested_steps": 500,
+    "max_dwell_seconds": 1.0399999618530273,
+    "observation_sizes": {
+      "privileged_state": [
+        809
+      ],
+      "state": [
+        366
+      ]
+    },
+    "finite": true,
+    "done": 1.0,
+    "metrics": {
+      "stand_distance": 1.5591601133346558,
+      "stand_dwell_seconds": 0.0,
+      "stand_dwell_steps": 0.0,
+      "stand_eligible": 0.0,
+      "stand_speed": 2.4138143062591553,
+      "stand_success": 0.0
+    }
+  }
+}

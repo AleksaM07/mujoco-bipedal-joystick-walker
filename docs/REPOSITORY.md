@@ -13,6 +13,8 @@
 | `reference_*.py` | IK, interpolacija, root/stance i kinematika. |
 | `smpl_reference.py` | Postojeća SMPL podrška. |
 | `phase1_backends.py` | JAX/Warp backend pomoćne funkcije. |
+| `skills/` | Novi stand tracker i fizički kriterijumi uspeha. |
+| `tools/check_stand.py` | PD i checkpoint provere stajanja bez PPO treninga. |
 
 Ove module ne premeštamo dok traje curriculum. Refactor paketa bi promenio mnogo
 import putanja bez poboljšanja ponašanja politike.
