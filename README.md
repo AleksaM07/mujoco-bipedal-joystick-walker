@@ -1,75 +1,56 @@
-# Humanoid koji je naučio da hoda
+# MuJoCo humanoid locomotion
 
-Mi treniramo humanoida u MuJoCo simulatoru pomoću PPO-a i BVH reference.
-Na grani **`main`** imamo prvi vizuelno potvrđen hod:
-checkpoint **`000025681920`**, `consistent_v6`, jedan ciklus `02_01.bvh` i 18 akcija.
-Trenutno učimo imitaciju sa modelom bez aktivnih ruku. Joystick, ustajanje i
-izbegavanje projektila ostaju naši naredni zadaci.
+Treniramo humanoida u MuJoCo/MJX simulatoru pomoću PPO-a i BVH motion
+reference. Projekat trenutno ima dve zaštićene linije rada:
 
-## Odavde krećemo
+- `main`: potvrđeni osnovni hod i postojeći joystick sistem;
+- `experiment/arms-ik-v2`: prirodniji DeepMimic hod sa aktivnim rukama.
 
-| Kada želimo… | Otvaramo… |
+Aktivni eksperiment postepeno uvodi punu fleksiju lakta iz `02_01.bvh` klipa.
+Prelaz ide kroz 25%, 50%, 75% i 100% reference, uz automatsku proveru stabilnog
+hoda i stvarnog opsega oba lakta posle svakog nivoa.
+
+## Najvažniji ulazi
+
+| Putanja | Namena |
 | --- | --- |
-| Da vidimo uspeh | [Četiri videa](prezentacija/1st_success/videos/) |
-| Da razumemo šta smo popravili | [1ST_SUCCESS.txt](prezentacija/1st_success/1ST_SUCCESS.txt) i [preciziranja](prezentacija/1st_success/PROVERA_I_ISPRAVKE.txt) |
-| Da pokažemo rezultat | [Graf 10 prekretnica](prezentacija/1st_success/10_NAJBITNIJIH_STVARI.png) |
-| Da pokrenemo evaluaciju ili trening | [Komande i okruženja](docs/WORKFLOW.md) |
-| Da razumemo fajlove | [Mapa repository-ja](docs/REPOSITORY.md) |
-| Da nastavimo istraživanje | [Naš plan](docs/ROADMAP.md) |
-| Da pronađemo staru dijagnostiku | [Istorijska arhiva](docs/archive/README.md) |
-| Da vratimo staru granu | [Arhiva grana](docs/BRANCHES.md) |
+| `train.py` | Glavni PPO trening. |
+| `evaluate.py` | Evaluacija, viewer i snimanje videa. |
+| `biomechanics_env.py` | Fizika, observations, actions, rewards i termination. |
+| `bvh_reference.py` | BVH učitavanje i retargeting. |
+| `scripts/train_elbow_flexion_curriculum.py` | Trenutni gated elbow curriculum. |
+| `prezentacija/` | Zamrznuti uspesi, checkpoint-i i demonstracije. |
+| `runs/` | Lokalni treninzi i checkpoint-i. |
+| `videos/` | Lokalni snimci. |
 
-## Uspešan model pokrećemo na Windowsu
+Detaljnija mapa je u [docs/REPOSITORY.md](docs/REPOSITORY.md), a komande u
+[docs/WORKFLOW.md](docs/WORKFLOW.md).
 
-Iz korena projekta, u Git Bash-u ili PowerShell-u, koristimo postojeće Windows
-okruženje (jedan red):
+## Brza evaluacija
 
-```bash
+Prvi sačuvani uspeh na Windowsu:
+
+```powershell
 ./.venv-win/Scripts/python.exe scripts/evaluate_first_success.py
 ```
 
-Ovom komandom učitavamo kopiju checkpoint-a, XML-a i BVH-a iz `prezentacija/`.
-Za samostalnu proveru arhive bez simulacije koristimo:
+Drugi uspeh sa aktivnim, ali krutim rukama:
 
-```bash
-./.venv-win/Scripts/python.exe tools/verify_success_archive.py --require-tracked
+```powershell
+./.venv-win/Scripts/python.exe scripts/evaluate_second_success.py
 ```
 
-Detalje instalacije, snimanja, headless provere i WSL treninga držimo u
-[WORKFLOW.md](docs/WORKFLOW.md). Linux `.venv` i Windows `.venv-win` koristimo
-odvojeno. Našu trenutnu `uv` konfiguraciju sa CUDA zavisnostima koristimo za Linux;
-još nemamo proverenu instalaciju iz tog lockfile-a na čistom Windows računaru.
+Provera trenutnog koda:
 
-## Šta smo izmerili
-
-Na najboljoj trening evaluaciji dobili smo reward **1396.087**, prosek
-**500/500 koraka** i sva četiri evaluaciona sveta do horizonta. Naknadno smo
-snimili četiri deterministička rollout-a sa seedovima 11, 22, 33 i 44: svaki je
-završio 500 koraka, odnosno 10 sekundi, bez prijavljenog pada.
-
-Pod „93.1% kvaliteta” podrazumevamo normalizovani reward ovog zadatka. Prirodnost
-hoda smo vizuelno potvrdili; tim procentom ne merimo biomehaničku tačnost.
-Ovim testovima još ne dokazujemo proizvoljno dugu stabilnost, upravljanje do
-ciljne tačke ili otpornost na guranje. Referentni XY pomak od oko 1.41 m/ciklus
-ne poistovećujemo sa izmerenom putanjom politike.
-
-Mi čuvamo rezultat u [prezentacija/1st_success/](prezentacija/1st_success/):
-kompletan checkpoint, konfiguraciju, XML/BVH, log, videe i SHA-256 manifest.
-Najbolji checkpoint razlikujemo od poslednjeg checkpoint-a završenog run-a.
-
-## Kako organizujemo rad
-
-Mi zadržavamo `train.py` i `evaluate.py` kao glavne ulaze. Runtime module držimo
-u korenu radi postojećih import-a i kompatibilnosti. Svakodnevne komande držimo
-u `scripts/`, dijagnostiku u `tools/`, a regresione testove u `tests/`.
-Stare izveštaje čuvamo u `docs/archive/`; ne čitamo ih kao aktuelni status.
-
-Mi testiramo iz postojećeg okruženja bez instaliranja dodatnih paketa:
-
-```bash
+```powershell
 ./.venv-win/Scripts/python.exe -m unittest discover -s tests -v
 ```
 
-Naše test klase su kompatibilne i sa pytest-om. U postojeći Windows venv još
-nismo instalirali pytest. Reference i izvore pratimo u [REFERENCES.md](REFERENCES.md)
-i [registry.yaml](references/registry.yaml).
+## Pravila projekta
+
+- Ne koristimo kod iz odbačenog `bipedal-humanoid-bullet-avoidance` projekta.
+- Ne menjamo `main` dok ne zamrznemo završni DeepMimic rezultat.
+- Ne proglašavamo uspeh samo na osnovu reward-a: tražimo stabilan rollout,
+  fizičke metrike i video.
+- `runs/`, `prezentacija/`, `videos/`, BVH/SMPL podatke i aktivne checkpoint-e
+  ne brišemo tokom čišćenja.

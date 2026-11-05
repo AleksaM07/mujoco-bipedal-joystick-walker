@@ -1,25 +1,29 @@
-# Naš plan posle prvog hoda
+# Roadmap
 
-Mi prvi uspešan model čuvamo kao polaznu tačku za poređenje svih narednih faza.
-Za svaku fazu pravimo odvojen commit, merimo rezultat i snimamo najbolji checkpoint.
+Radimo sposobnosti redom; ne menjamo više velikih stvari u istom eksperimentu.
 
-| Faza | Šta ćemo uraditi | Kako ćemo znati da smo uspeli |
-| --- | --- | --- |
-| 1. Arhiva i jasnoća | Čuvamo težine, assete, videe, log i preglednu dokumentaciju. | Prolazimo SHA-256 proveru i možemo da pustimo arhivirani model. |
-| 2. Kontrola brzine i smera | Usklađujemo referencu i komande; postepeno učimo joystick. | Merimo grešku komande i padove pri promenama brzine/yaw-a kroz više seedova. |
-| 3. Aktivne ruke i ostali zglobovi | Definišemo novi model i action/observation dimenzije; proveravamo retargeting. | Snimamo prirodno koordinisan hod i merimo kontakte/limite i stabilnost. |
-| 4. Ustajanje | Uvodimo padove kao reset stanja i učimo povratak u stabilan stav. | Merimo uspešnost, vreme ustajanja i prelaz nazad na hod. |
-| 5. Izbegavanje projektila u simulaciji | Dodajemo opažanje dolazećih objekata i progresivno teže scenarije. | Merimo izbegavanje, sudare i oporavak bez gubitka kontrole kretanja. |
+1. **Završni prirodni hod**
+   - završiti elbow curriculum 25/50/75/100%;
+   - uraditi matched ablations za lateralni prior i action smoothing;
+   - snimiti više seedova i zamrznuti najbolji checkpoint.
+2. **Čist A→B zadatak**
+   - napraviti novi sistem od nule;
+   - koristiti relativni cilj u lokalnom frame-u, željenu brzinu i završnu
+     orijentaciju;
+   - ne preuzimati ništa iz odbačenog bullet/A→B projekta.
+3. **Integracija**
+   - sačuvati joystick-only granu iz `main`;
+   - napraviti čist interfejs za izbor joystick ili A→B moda;
+   - spojiti ih u `main` tek kada oba imaju zasebne testove.
+4. **Više locomotion skillova**
+   - proceniti više BVH klipova i AMP/MimicKit pristup;
+   - odvojiti walk, run i stand metrike i prelaze.
+5. **Ustajanje**
+   - posebna reset distribucija i success kriterijum;
+   - prelaz `fallen → stand → walk`.
+6. **Avoidance**
+   - tek nakon stabilne locomotion arhitekture;
+   - prepreke i projektili ostaju novi modul, ne nasleđe starog projekta.
 
-Mi pri joystick radu prvo moramo rešiti činjenicu da pure režim potiskuje komande.
-Samo uključivanje komandnog vektora ne garantuje da je politika naučila da ga
-prati. Transformaciju reference ili hijerarhijsku kontrolu uporedićemo uz isti
-zaleđeni walking baseline.
-
-Mi ruke ne uključujemo prostim učitavanjem istog 18-action checkpoint-a u veći
-model. Pri promeni dimenzija biće nam potreban eksplicitan transfer/destilacija
-ili novi trening. Prvo ćemo proveriti fizički model i dostupne reference za ruke.
-
-Mi za ustajanje koristimo posebne kriterijume uspeha i reset distribuciju.
-Još nismo dokazali robustan hod pod udarima, višeminutnu stabilnost ili navigaciju
-do proizvoljne tačke. Te rezultate ćemo meriti kao nove sposobnosti.
+Za svaku fazu čuvamo checkpoint, konfiguraciju, najmanje četiri deterministička
+rollout-a i kratak rezultat neuspelih ablations.

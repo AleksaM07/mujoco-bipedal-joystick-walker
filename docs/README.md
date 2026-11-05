@@ -1,12 +1,15 @@
-# Naša dokumentacija
+# Dokumentacija
 
-Mi počinjemo od [glavnog README-a](../README.md), pa biramo jednu od četiri teme:
+Aktuelna dokumentacija je namerno mala:
 
-- [WORKFLOW.md](WORKFLOW.md): gledamo model, snimamo, proveravamo i treniramo.
-- [REPOSITORY.md](REPOSITORY.md): razumemo gde je šta i koje fajlove menjamo.
-- [ROADMAP.md](ROADMAP.md): prelazimo na joystick, ruke i sledeće sposobnosti.
-- [BRANCHES.md](BRANCHES.md): razumemo grane i vraćamo arhivirane eksperimente.
+- [WORKFLOW.md](WORKFLOW.md): pokretanje, praćenje i evaluacija;
+- [REPOSITORY.md](REPOSITORY.md): mapa koda i podataka;
+- [ROADMAP.md](ROADMAP.md): redosled sledećih sposobnosti;
+- [BRANCHES.md](BRANCHES.md): trenutno i planirano stanje grana;
+- [REPOSITORY_AUDIT_2026-11-05.md](REPOSITORY_AUDIT_2026-11-05.md): poslednji
+  pregled i odluke o čišćenju;
+- [KAKO_SMO_UBRZALI_TRENING.md](KAKO_SMO_UBRZALI_TRENING.md): praktične
+  performansne lekcije.
 
-Naš dokaz prvog hoda držimo u [prezentaciji](../prezentacija/1st_success/).
-Istorijske dijagnostike držimo u [arhivi](archive/README.md). Njihove crvene
-zastavice tumačimo prema datumu i verziji, uz kasnije izmerene rezultate.
+Istorijski phase izveštaji uklonjeni su iz radnog stabla. Ostaju dostupni kroz
+Git istoriju i ne treba ih tumačiti kao trenutno stanje projekta.

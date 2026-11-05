@@ -1,60 +1,53 @@
-# Kako čitamo naš repository
+# Mapa repository-ja
 
-Mi za svakodnevni rad prvo otvaramo README, zatim jedan launcher i konkretan
-runtime modul. Sve ostalo koristimo po potrebi.
+## Produkcioni runtime
 
-## Aktivni kod
-
-| Putanja | Šta ovde radimo |
+| Putanja | Odgovornost |
 | --- | --- |
-| `train.py` | Pokrećemo PPO, reset/eval wrappers, checkpoint-e i logovanje. |
-| `evaluate.py` | Učitavamo sačuvanu konfiguraciju, policy, viewer i video snimanje. |
-| `config.py` | Definišemo EnvConfig, TrainConfig i postojeće preset vrednosti. |
-| `biomechanics_env.py` | Sastavljamo fiziku, observation/action ugovor, reward i termination. |
-| `biomechanics_model.py` | Gradimo humanoid XML i modele. |
-| `bvh_reference.py` | Učitavamo BVH, mapiramo zglobove i biramo ciklus. |
-| `reference_interpolation.py` | Pripremamo kontinuirane krive i loop closure. |
-| `reference_ik.py`, `reference_root.py`, `reference_kinematics.py` | Rešavamo IK, stance/root handoff i referentnu kinematiku. |
-| `smpl_reference.py` | Čuvamo podršku za SMPL i istorijske konfiguracije. |
-| `phase1_backends.py` | Biramo backend; naziv je istorijski, modul je i dalje aktivan. |
-| `scripts/` | Koristimo kratke ulaze za gledanje, trening i benchmark. |
-| `tools/` | Pokrećemo specifične provere; [indeks alata](../tools/README.md). |
-| `tests/` | Čuvamo zaštitu od ponavljanja već pronađenih grešaka. |
+| `train.py` | PPO konfiguracija, trening, checkpoint-i i logging. |
+| `evaluate.py` | Učitavanje checkpoint-a, evaluacija, viewer i video. |
+| `config.py` | `EnvConfig`, `TrainConfig` i podrazumevane vrednosti. |
+| `biomechanics_env.py` | MuJoCo okruženje i RL ugovor. |
+| `biomechanics_model.py` | Izgradnja humanoid modela. |
+| `bvh_reference.py` | BVH parser, segmenti i host retargeting. |
+| `reference_*.py` | IK, interpolacija, root/stance i kinematika. |
+| `smpl_reference.py` | Postojeća SMPL podrška. |
+| `phase1_backends.py` | JAX/Warp backend pomoćne funkcije. |
 
-Mi tokom ovog čišćenja zadržavamo import putanje runtime modula. Njihovo buduće
-premeštanje u Python paket radićemo kao zaseban refactor sa testovima; time ćemo
-moći jasno da odvojimo promenu organizacije od promene ponašanja modela.
+Ove module ne premeštamo dok traje curriculum. Refactor paketa bi promenio mnogo
+import putanja bez poboljšanja ponašanja politike.
 
-## Podaci i rezultati
+## Ulazi i provere
 
-| Putanja | Kako je koristimo |
+- `scripts/` sadrži samo korisničke entrypoint-e i benchmark skripte.
+- `tools/` sadrži dijagnostiku koja štiti već pronađene reference/physics greške.
+- `tests/` sadrži regresione testove za runtime i alate.
+
+Jednokratne shell/PowerShell launchere iz završenih recovery, arms i joystick
+eksperimenata uklonili smo. Njihove tačne verzije ostaju u Git istoriji.
+
+## Podaci koje čuvamo
+
+| Putanja | Razlog |
 | --- | --- |
-| `prezentacija/1st_success/` | Čuvamo zamrznut dokaz uspeha i njegov model. |
-| `generated_models/` | Čuvamo XML varijante; uspeh koristi `v21_noarms`. |
-| `BVH_walking_animation/` | Čuvamo izvorne BVH klipove i liste; uspeh koristi `02/02_01.bvh`. |
-| `CMU_SMPL+H-G/` | Čuvamo drugi motion format za postojeću SMPL podršku. |
-| `marina_bvh_parse/` | Čuvamo raniji motion skup; generički one-clip preset ga još referencira. |
-| `runs/` | Čuvamo lokalne treninge i checkpoint-e; većinu Git namerno ignoriše. |
-| `videos/` | Čuvamo lokalna snimanja; prva četiri uspeha verzionišemo u prezentaciji. |
-| `analysis_outputs/` | Čuvamo rezultate ranijih merenja potrebne za dijagnostičke izveštaje. |
-| `artifacts/` | Čuvamo lokalne logove, benchmark rezultate i oporavljivu arhivu workspace-a. |
-| `docs/archive/` | Čuvamo istorijske izveštaje bez mešanja sa aktuelnim uputstvom. |
-| `legacy/` | Čuvamo stari Berkeley runner i stare analize. |
-| `references/`, `REFERENCES.md` | Pratimo poreklo ideja i implementacija. |
+| `prezentacija/` | Uspešni modeli, manifesti i prezentacioni video. |
+| `runs/` | Treninzi i checkpoint-i, uključujući aktivni curriculum. |
+| `videos/` | Vizuelni dokazi i poređenja. |
+| `BVH_walking_animation/` | Glavni BVH skup i trenutni `02_01.bvh`. |
+| `CMU_SMPL+H-G/` | SMPL motion podaci za kasnije eksperimente. |
+| `marina_bvh_parse/` | Još ga referencira kompatibilni one-clip preset. |
+| `generated_models/` | XML verzije koje koriste sačuvane konfiguracije. |
+| `analysis_outputs/natural_walk_ablations/` | Aktuelna ablation merenja. |
 
-Mi ne premeštamo motion/XML skupove tokom ovog prolaza: njihove putanje već
-postoje u sačuvanim run konfiguracijama. Privremene klonove, probe i render
-foldere sklonili smo u `artifacts/workspace_archive_20261102/`; tamo ih možemo
-vratiti. Za DeepMimic i MimicKit kopije proverili smo svaki fajl SHA-256 pre
-uklanjanja izvora.
+Stare XML i motion putanje ne brišemo zato što ih postojeći run konfiguracioni
+fajlovi i checkpoint evaluacija mogu zahtevati.
 
-## Lokalno okruženje
+## Lokalni resursi
 
-Mi koristimo `.venv-win` za Windows evaluaciju, a Linux/WSL `.venv` za GPU trening.
-Ostala virtualna okruženja, `.uv-cache` i JAX keševe tretiramo kao lokalne resurse.
-Ne verzionišemo ih i ne brišemo ih radi kozmetičkog sređivanja stabla.
+- `.venv` je aktivno WSL/GPU okruženje.
+- `.venv-win` je Windows evaluaciono okruženje.
+- `artifacts/repo_cleanup_20261102/branches.bundle` je privremeni recovery backup.
+- `artifacts/workspace_archive_20261102/master_rad` sadrži materijale za master
+  rad i ne sme se brisati kao običan cache.
 
-Mi imamo oko 2.42 GiB spakovane Git istorije pre ovog čišćenja. Premestanjem
-današnjih fajlova ili brisanjem grana ne uklanjamo istorijske velike blobove.
-Eventualnu migraciju velikih podataka i rewrite istorije planiraćemo odvojeno,
-jer bi promenila stare commit identifikatore.
+Cache direktorijumi i privremeni klonovi nisu deo Git-a. Mogu se ponovo kreirati.
