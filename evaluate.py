@@ -1364,6 +1364,8 @@ def make_environment(env_config: EnvConfig):
             config_overrides.pop(name)
     if skill not in {"walk", "stand"}:
         raise ValueError("locomotion_skill must be walk or stand.")
+    if skill != "stand" and env_config.stand_reward_mode != "imitation":
+        raise ValueError("stand_reward_mode requires locomotion_skill=stand.")
     environment_class = BiomechanicsJoystickEnv
     if skill == "stand":
         from skills.stand import StandEnv

@@ -1,4 +1,4 @@
-"""Compare walking-actor transfer and scratch stand learning on one GPU.
+"""Run controlled stand learning experiments on one GPU.
 
 Each training/evaluation subprocess releases its GPU memory before the next
 starts. All generated artifacts live in a fresh experiment directory in runs/.
@@ -24,14 +24,19 @@ ARCHIVE = PROJECT_ROOT / "prezentacija/5th_success_final_natural_walk"
 VARIANTS = ("transfer", "scratch")
 
 
-def build_configs(variant: str, timesteps: int) -> tuple[EnvConfig, TrainConfig]:
-    """Keep archived physics/PPO settings matched, changing initialization only."""
+def build_configs(
+    variant: str, timesteps: int, reward_mode: str = "imitation"
+) -> tuple[EnvConfig, TrainConfig]:
+    """Keep archived physics/PPO settings with explicit initialization and reward."""
     if variant not in VARIANTS or timesteps <= 0:
         raise ValueError("Expected transfer/scratch and positive timesteps.")
+    if reward_mode not in {"imitation", "balance_v1"}:
+        raise ValueError("Expected imitation or balance_v1 stand reward.")
     saved = json.loads((ARCHIVE / "config.json").read_text(encoding="utf-8"))
     environment = replace(
         EnvConfig(**saved["env"]),
         locomotion_skill="stand",
+        stand_reward_mode=reward_mode,
         playground_impl="jax",
         physics_backend="mjx_jax",
         warp_num_worlds=1,
@@ -66,7 +71,7 @@ def build_configs(variant: str, timesteps: int) -> tuple[EnvConfig, TrainConfig]
             str(ARCHIVE / "model_000001024000") if variant == "transfer" else None
         ),
         restore_value_fn=variant != "transfer",
-        run_tag=f"stand_{variant}_{timesteps}",
+        run_tag=f"stand_{reward_mode}_{variant}_{timesteps}",
         debug_run=False,
     )
     return environment, training
@@ -123,7 +128,9 @@ def run_command(command: list[str], log_path: Path) -> int:
     return result.returncode
 
 
-def run_variant(variant: str, output: Path, timesteps: int) -> dict[str, Any]:
+def run_variant(
+    variant: str, output: Path, timesteps: int, reward_mode: str = "imitation"
+) -> dict[str, Any]:
     """Train one variant, then physically check every saved checkpoint."""
     command = [
         sys.executable,
@@ -134,6 +141,8 @@ def run_variant(variant: str, output: Path, timesteps: int) -> dict[str, Any]:
         str(output / variant),
         "--timesteps",
         str(timesteps),
+        "--stand-reward-mode",
+        reward_mode,
     ]
     result: dict[str, Any] = {"variant": variant, "training_command": command}
     result["training_exit"] = run_command(command, output / f"{variant}_train.log")
@@ -180,9 +189,13 @@ def run_variant(variant: str, output: Path, timesteps: int) -> dict[str, Any]:
 
 
 def main() -> int:
-    """Run both variants sequentially; a failed physical gate remains a result."""
+    """Run requested variants sequentially; a failed physical gate remains a result."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--timesteps", type=int, default=1_000_000)
+    parser.add_argument("--variants", choices=VARIANTS, nargs="+", default=VARIANTS)
+    parser.add_argument(
+        "--stand-reward-mode", choices=("imitation", "balance_v1"), default="imitation"
+    )
     parser.add_argument("--output", type=Path)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--worker", choices=VARIANTS, help=argparse.SUPPRESS)
@@ -190,15 +203,17 @@ def main() -> int:
     args = parser.parse_args()
     if args.timesteps <= 0:
         parser.error("timesteps must be positive")
+    if len(set(args.variants)) != len(args.variants):
+        parser.error("variants must be unique")
     output = args.output or RUNS_DIR / (
-        f"{datetime.now(UTC):%Y%m%d_%H%M%SZ}_stand_ablation_{args.timesteps}_seed7"
+        f"{datetime.now(UTC):%Y%m%d_%H%M%SZ}_stand_{args.stand_reward_mode}_{args.timesteps}_seed7"
     )
     output = output.resolve()
     if not output.is_relative_to(RUNS_DIR.resolve()):
         parser.error("output must be a fresh directory under runs/")
     plan = {}
-    for variant in VARIANTS:
-        env, training = build_configs(variant, args.timesteps)
+    for variant in args.variants:
+        env, training = build_configs(variant, args.timesteps, args.stand_reward_mode)
         plan[variant] = {"env": asdict(env), "train": asdict(training)}
     if args.dry_run:
         print(json.dumps({"output": str(output), "plan": plan}, indent=2))
@@ -210,7 +225,9 @@ def main() -> int:
 
         configure_stdout_encoding()
         jax.config.update("jax_default_device", choose_device("gpu", allow_cpu=False))
-        env, training = build_configs(args.worker, args.timesteps)
+        env, training = build_configs(
+            args.worker, args.timesteps, args.stand_reward_mode
+        )
         run_training(env, training, output)
         return 0
     output.mkdir(parents=True, exist_ok=False)
@@ -221,8 +238,8 @@ def main() -> int:
         "selection": "Physical rollout completion, no termination, final success, drift/speed, then reward.",
     }
     write_report(output / "comparison.json", report)
-    for variant in VARIANTS:
-        result = run_variant(variant, output, args.timesteps)
+    for variant in args.variants:
+        result = run_variant(variant, output, args.timesteps, args.stand_reward_mode)
         report["variants"].append(result)
         write_report(output / "comparison.json", report)
     evaluated = [row for row in report["variants"] if row["status"] == "evaluated"]
@@ -249,7 +266,9 @@ def main() -> int:
             report["video_complete"] = len(
                 list((output / "videos").glob("*/stand_seed_*.mp4"))
             ) == 4 and report["video_exit"] in (0, 1)
-    report["status"] = "complete" if len(evaluated) == 2 else "incomplete"
+    report["status"] = (
+        "complete" if len(evaluated) == len(args.variants) else "incomplete"
+    )
     if report.get("video_complete") is False:
         report["status"] = "incomplete"
     write_report(output / "comparison.json", report)

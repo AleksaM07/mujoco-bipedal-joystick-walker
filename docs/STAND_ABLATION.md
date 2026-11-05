@@ -28,7 +28,7 @@ wsl -e env XLA_PYTHON_CLIENT_PREALLOCATE=false .venv/bin/python scripts/run_stan
 wsl -e env XLA_PYTHON_CLIENT_PREALLOCATE=false .venv/bin/python -u scripts/run_stand_ablation.py
 ```
 
-Runner pravi nov folder `runs/<UTC_timestamp>_stand_ablation_1000000_seed7`.
+Runner pravi nov folder `runs/<UTC_timestamp>_stand_<reward_mode>_1000000_seed7`.
 Trening i evaluacija svake varijante teku uzastopno u zasebnim procesima, tako
 da oslobađaju GPU memoriju pre sledeće faze. `comparison.json` sadrži plan,
 komande, rezultate i izabrani checkpoint; `transfer_train.log` i
@@ -88,10 +88,73 @@ dwell je 0, max dwell 1.04 s i max drift približno 1.559 m. To potvrđuje
 neuspeh postojećeg actor-a na neutralnoj stand referenci pre PPO učenja.
 Arhivirani walking checkpoint se učitava samo uz `--walking-baseline`.
 
+## Rezultat prvog 1M + 1M poređenja
+
+Oba treninga završila su 1,024,000 koraka. Provereno je svih pet sačuvanih
+checkpoint-a po varijanti. Nijedan nije prošao fizički gate. Sačuvan celokupan
+izveštaj je `analysis_outputs/skills/stand_ablation_1m_20261105.json`.
+
+| Varijanta | PPO checkpoint | Fizički koraci | Max dwell | Završni dwell | Max drift | Prosečna brzina |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Transfer, najbolji | 409,600 | 169/500 | 1.08 s | 0 s | 1.547 m | 0.501 m/s |
+| Scratch, najbolji | 204,800 | 144/500 | 1.14 s | 0 s | 1.531 m | 0.550 m/s |
+| Transfer, poslednji | 1,024,000 | 104/500 | 0.20 s | 0 s | 1.479 m | 0.837 m/s |
+| Scratch, poslednji | 1,024,000 | 103/500 | 0.10 s | 0 s | 1.488 m | 0.793 m/s |
+
+Rezultati važe za svaki od četiri seed-a, koji imaju iste fizičke početke.
+Video `runs/stand_ablation_20261105_1615Z_1m_seed7/videos/000000409600/stand_seed_11.mp4`
+pregledan je i potvrđuje pad. `video_exit=1` ovde znači neuspešan fizički gate;
+sva četiri videa su uspešno zapisana. Mediapy writer nije radio u instaliranom
+okruženju, pa je postojeći imageio fallback uspešno snimio video.
+
+Transfer je dao nešto dužu najbolju epizodu, ali oba run-a degradiraju prema
+kraju i nema uverljivog dokaza da je walking inicijalizacija dobar put do
+naučenog stand-a. Čak i neutralni PD baseline traje 148 koraka. Sledeći test
+zato koristi scratch i menja samo reward, uz isti konzervativni learning rate.
+
+## Razlog i definicija testa `balance_v1`
+
+Pure imitation reward namerno ignoriše apsolutni root XY. Uz arm weight 1.0,
+polovina ukupne nagrade dolazi iz arm imitation grane. Visoka sličnost poza
+može stoga ostati prisutna i dok se gubi ravnoteža. Ovo je merljiv nesklad sa
+stand kriterijumima, ali ne dokazuje da je jedini uzrok slabog PPO rezultata.
+
+Native MuJoCo PD trag je sačuvan u
+`analysis_outputs/skills/stand_pd_balance_trace_20261105.json`. Na 75. koraku
+(1.5 s) brzina je već 0.151 m/s, dok je torso-up još 0.997 i visina 1.490 m
+naspram početnih 1.503 m. Na 100. koraku brzina raste na 0.523 m/s. To motiviše
+gušći signal za korekcije pre nego što robot znatno izgubi visinu.
+
+Opt-in `stand_reward_mode=balance_v1` koristi:
+
+```text
+error = (speed / 0.15)^2 + (anchor_drift / 0.25)^2
+      + ((1 - torso_up) / 0.10)^2 + ((height_ratio - 1) / 0.15)^2
+balance_score = exp(-error) * both_feet_contact
+reward = imitation_reward * (0.2 + 0.8 * balance_score)
+```
+
+Fizički pad zadržava postojeći terminalni reward -25. Dwell i success ne daju
+bonus. Reference, model, observacije, action layout, reset i fizički gate su
+isti. Default ostaje `imitation` radi tačne reprodukcije prethodnih run-ova.
+Trening i evaluator učitavaju verziju reward-a iz sačuvanog config-a.
+
+Jedan kontrolisani scratch test pokreće se ovako:
+
+```powershell
+wsl -e env XLA_PYTHON_CLIENT_PREALLOCATE=false .venv/bin/python -u scripts/run_stand_ablation.py --variants scratch --stand-reward-mode balance_v1
+```
+
+Budžet je opet 1M, seed 7, LR `2e-5`, 64 okruženja i `bare` režim. Nema
+istovremene promene discount-a, learning rate-a ili početne poze. Reward između
+verzija nije uporediv kao merilo uspeha; fizički gate ostaje uporediv.
+
 ## Provera implementacije
 
-Pun unittest suite završio je sa 375/375 uspešnih testova. Naknadne fokusirane
-provere pokrivaju novi runner, odbijanje tihe promene physics backend-a i
-dosledan XML pri resume-u. Test prenosa koristi stvarni Brax initialization
-kod i proverava očuvani actor/normalizer uz nov critic. Ruff provere novih
-alata i izmenjenih testova, formatiranje i `git diff --check` prolaze.
+Pun unittest suite sa `balance_v1` izmenama završio je sa 387/387 uspešnih
+testova. Provere pokrivaju novi runner, odbijanje tihe promene physics backend-a,
+dosledan XML pri resume-u, očuvanu kaznu za pad i JIT/vmap nove nagrade.
+Test prenosa koristi stvarni Brax initialization kod i proverava očuvani
+actor/normalizer uz nov critic. Ruff provere novih alata i izmenjenih testova,
+formatiranje i `git diff --check` prolaze. CLI dry-run potvrđuje scratch bez
+resume checkpoint-a i da se u kontrolisanom testu menja samo reward režim.

@@ -158,6 +158,7 @@ class TrainingProgressLogger:
             for key, label in (
                 ("eval/episode_stand_speed", "stand_speed_mps"),
                 ("eval/episode_stand_distance", "stand_drift_m"),
+                ("eval/episode_stand_balance_score", "stand_balance_step"),
             ):
                 value = metrics.get(key)
                 if value is not None:
@@ -1509,6 +1510,7 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
             env_config.deepmimic_root_velocity_weight_scale
         ),
         "deepmimic_arm_reward_weight": env_config.deepmimic_arm_reward_weight,
+        "stand_reward_mode": env_config.stand_reward_mode,
         "reference_reset_min_steps_remaining": (
             env_config.reference_reset_min_steps_remaining
         ),
@@ -1541,6 +1543,11 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         config_overrides["sim_dt"] = 0.005
     if env_config.locomotion_skill not in {"walk", "stand"}:
         raise ValueError("locomotion_skill must be walk or stand.")
+    if (
+        env_config.locomotion_skill != "stand"
+        and env_config.stand_reward_mode != "imitation"
+    ):
+        raise ValueError("stand_reward_mode requires locomotion_skill=stand.")
     environment_class = BiomechanicsJoystickEnv
     if env_config.locomotion_skill == "stand":
         from skills.stand import StandEnv
@@ -2577,6 +2584,12 @@ def main() -> None:
         help="Select the existing walker or the experimental stationary tracker.",
     )
     parser.add_argument(
+        "--stand-reward-mode",
+        choices=["imitation", "balance_v1"],
+        default=EnvConfig.stand_reward_mode,
+        help="Versioned stand reward; balance_v1 adds dense physical balance feedback.",
+    )
+    parser.add_argument(
         "--reference-gait",
         choices=["none", "sine", "bvh", "smpl"],
         default="bvh",
@@ -3085,6 +3098,7 @@ def main() -> None:
         recovery_physics_version=args.recovery_physics_version,
         reference_motion_speed_scale=args.reference_motion_speed_scale,
         locomotion_skill=args.locomotion_skill,
+        stand_reward_mode=args.stand_reward_mode,
         reference_loop_closure=args.reference_loop_closure,
         reference_gait=args.reference_gait,
         arm_actuators=args.arm_actuators,

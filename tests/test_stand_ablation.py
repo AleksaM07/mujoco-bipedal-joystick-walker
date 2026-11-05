@@ -53,6 +53,18 @@ class StandAblationTests(unittest.TestCase):
         self.assertGreater(checkpoint_rank(stable), checkpoint_rank(high_reward_fall))
         self.assertGreater(checkpoint_rank(stable), checkpoint_rank(high_reward_drift))
 
+    def test_balance_followup_changes_only_reward_and_run_label(self) -> None:
+        old_env, old_training = build_configs("scratch", 1_000_000)
+        new_env, new_training = build_configs("scratch", 1_000_000, "balance_v1")
+        old_values, new_values = asdict(old_env), asdict(new_env)
+        self.assertEqual(new_values.pop("stand_reward_mode"), "balance_v1")
+        self.assertEqual(old_values.pop("stand_reward_mode"), "imitation")
+        self.assertEqual(old_values, new_values)
+        old_values, new_values = asdict(old_training), asdict(new_training)
+        old_values.pop("run_tag")
+        new_values.pop("run_tag")
+        self.assertEqual(old_values, new_values)
+
 
 if __name__ == "__main__":
     unittest.main()

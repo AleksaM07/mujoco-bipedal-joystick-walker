@@ -717,6 +717,7 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         reference_replay_target_step=0,
         deepmimic_root_velocity_weight_scale=1.0,
         deepmimic_arm_reward_weight=0.0,
+        stand_reward_mode="imitation",
         # Keep finite clips away from the terminal edge during random reset.
         # This prevents short clamp snippets from ending a few control steps
         # after reset before the controller can learn a gait segment.
@@ -875,6 +876,8 @@ class EnvConfig:
 
     # Opt-in skills environment; old checkpoints retain their original behavior.
     locomotion_skill: str = "walk"
+    # Keep the first stand ablation reproducible; balance shaping is opt-in.
+    stand_reward_mode: str = "imitation"
 
     # MJX-Warp je primarni backend. MJX-JAX ostaje samo za stare checkpoint-e
     # i male CPU dijagnostike.

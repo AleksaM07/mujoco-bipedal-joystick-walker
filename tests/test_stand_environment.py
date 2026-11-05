@@ -7,7 +7,7 @@ import jax
 import jax.numpy as jp
 import numpy as np
 
-from evaluate import make_environment
+from evaluate import make_environment, restore_saved_env_config
 from skills.stand import StandEnv
 from tools.check_stand import stand_config
 from train import make_environment as make_training_environment
@@ -72,6 +72,38 @@ class StandEnvironmentTests(unittest.TestCase):
         stepped = jax.eval_shape(wrapped.step, state, jp.zeros((2, 26)))
         self.assertEqual(state.info["stand_dwell_steps"].dtype, jp.int32)
         self.assertEqual(stepped.metrics["stand_dwell_steps"].dtype, jp.float32)
+
+    def test_balance_reward_preserves_physics_layout_and_terminal_penalty(self):
+        config = replace(stand_config(), stand_reward_mode="balance_v1")
+        env = make_environment(config)
+        action = jp.zeros(26)
+        state = self.step(self.reset(jax.random.PRNGKey(11)), action)
+        reward = jax.jit(env._get_reward)
+        actual = reward(state.data, action, action, state.info)
+        imitation = self.env._get_reward(state.data, action, action, state.info)
+        expected = imitation * (0.2 + 0.8 * env._balance_score(state.data, state.info))
+        self.assertAlmostEqual(float(actual), float(expected), places=5)
+        self.assertLessEqual(float(actual), float(imitation))
+        self.assertEqual(env.action_size, self.env.action_size)
+        traced = jax.eval_shape(env.step, state, action)
+        self.assertEqual(jax.tree.structure(traced), jax.tree.structure(state))
+        fallen = state.data.replace(qpos=state.data.qpos.at[2].set(0.1))
+        self.assertEqual(
+            float(reward(fallen, action, action, state.info)), env.FALL_REWARD
+        )
+
+    def test_old_configs_keep_imitation_and_balance_mode_is_stand_only(self):
+        restored = restore_saved_env_config({"env": {"locomotion_skill": "stand"}})
+        self.assertEqual(restored.stand_reward_mode, "imitation")
+        for factory in (make_environment, make_training_environment):
+            with self.assertRaisesRegex(ValueError, "locomotion_skill=stand"):
+                factory(
+                    replace(
+                        stand_config(),
+                        locomotion_skill="walk",
+                        stand_reward_mode="balance_v1",
+                    )
+                )
 
 
 if __name__ == "__main__":

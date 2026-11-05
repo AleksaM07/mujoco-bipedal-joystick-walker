@@ -102,6 +102,7 @@ class TrainingProgressTests(unittest.TestCase):
                     "eval/avg_episode_length": 300.0,
                     "eval/episode_stand_speed": 60.0,
                     "eval/episode_stand_distance": 30.0,
+                    "eval/episode_stand_balance_score": 150.0,
                     "eval/episode_stand_eligible": 225.0,
                     "eval/episode_terminated": 0.5,
                     "eval/episode_stand_success": 200.0,
@@ -112,6 +113,7 @@ class TrainingProgressTests(unittest.TestCase):
         self.assertIn("episode_length=300.0", line)
         self.assertIn("stand_speed_mps=0.200", line)
         self.assertIn("stand_drift_m=0.100", line)
+        self.assertIn("stand_balance_step=0.500", line)
         self.assertIn("stand_eligible_pct=75.0", line)
         self.assertIn("physical_termination_pct=50.0", line)
         self.assertIn("stand_gate=requires_checkpoint_rollout", line)

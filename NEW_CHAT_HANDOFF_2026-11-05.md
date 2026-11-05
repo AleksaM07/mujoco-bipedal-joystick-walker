@@ -2,7 +2,7 @@
 
 Datum: 2026-11-05
 
-## Nastavak rada — priprema prvog stand PPO poređenja
+## Aktuelni status — neuspešan prvi par, zatim `balance_v1`
 
 Na skills grani dodati su fresh-critic restore (`--no-restore-value-fn`),
 smislen stand logging i nezavisni checkpoint gate na četiri obavezna seed-a.
@@ -20,12 +20,26 @@ Prvi transfer→scratch eksperiment pokrenut je u:
 
 `runs/stand_ablation_20261105_1615Z_1m_seed7`
 
-`comparison.json` se ažurira po završetku svake varijante. Početni status je
-`running`; to nije dokaz naučenog stajanja. Trening trenutno kreće transfer
-varijantom. Slede scratch, fizičke provere svih checkpoint-a i video najboljeg
-kandidata. Za konačan nalaz proveriti izveštaje i aktivne procese; ne pokretati
-dupli run. Push skills grane zaustavljen je automatskom proverom i čeka
-izričito korisničko odobrenje. Natural-walk arhiva i joystick grana su netaknute.
+Prvo poređenje je **završeno i nije prošlo fizički gate**. Oba treninga imaju
+1,024,000 stvarnih koraka (zaokruženje na PPO blokove). Najbolji transfer je
+checkpoint 409,600: 169/500 fizičkih koraka. Najbolji scratch je checkpoint
+204,800: 144/500. Sva četiri seed-a daju iste neutralne početke; oba kandidata
+padaju i imaju završni dwell 0. Svi checkpoint-i su provereni, a video najboljeg
+transfer kandidata potvrđuje pad. Ne nastavljati ka walk→brake→stand ili A→B.
+
+Sačuvan izveštaj: `analysis_outputs/skills/stand_ablation_1m_20261105.json`.
+Dijagnoza i naredni kontrolisani test opisani su u `docs/STAND_ABLATION.md`:
+stand reward `balance_v1`, scratch, isti PPO parametri i budžet. Nova
+implementacija prolazi pun suite od 387 testova. Proveriti
+aktuelne procese i noviji run pre pokretanja; ne duplirati eksperiment.
+Korisnik je izričito odobrio push skills grane; commit-i do `807c991` su
+objavljeni. Natural-walk arhiva i joystick grana su netaknute.
+
+## Arhivirani početni handoff
+
+Odeljci ispod, do završne kratke tačke nastavka, opisuju stanje pre prvog PPO
+poređenja. Aktuelni rezultati i sledeći eksperiment su iznad i u
+`docs/STAND_ABLATION.md`.
 
 ## Poruka koju treba poslati novom chatu
 
@@ -433,9 +447,9 @@ progress, kočenje i dwell. Goal mora biti u policy observation-u; trenutno nije
 
 ## Kratko: tačna početna tačka novog chata
 
-Natural walking je završen i zaštićen. Stand environment i metrike su
-implementirani i testirani. Neutralni PD target i walking actor oba padaju za oko
-2.5–3 sekunde, što opravdava poseban stand trening. Nijedan stand PPO run još
-nije pokrenut. Sledeći posao je fresh-critic checkpoint transfer, smislen stand
-logging i multi-seed gate, zatim dva kratka 1M stand run-a za transfer-vs-scratch
-poređenje. Tek nakon uspešnog stand-a počinje walk→brake→stand, pa A→B.
+Natural walking je završen i zaštićen. Fresh-critic transfer, smislen logging
+i nezavisni gate su implementirani. Prvi 1M transfer i 1M scratch su završeni;
+nijedan checkpoint nije prošao stand gate. Sledeći kontrolisani eksperiment je
+scratch `balance_v1`, isti seed 7, LR `2e-5` i budžet 1M. Prvo proveriti procese
+i najnoviji run da se trening ne duplira. Tek nakon uspešnog stand-a počinje
+walk→brake→stand, pa A→B.
