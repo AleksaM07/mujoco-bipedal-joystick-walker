@@ -13,6 +13,20 @@ Proverava svaki checkpoint fizički i čuva video izabranog kandidata.
 Originalni tekst ispod opisuje stanje pre ovih izmena; status treninga i
 rezultate treba čitati iz novog izveštaja eksperimenta.
 
+Proverena implementacija je sačuvana u commitu `c5f3fc0`. Pun suite je prošao
+375/375 testova, uz naknadne uspešne fokusirane provere novih izmena.
+Ponovljen GPU baseline na četiri seed-a pada na 122/500 koraka.
+Prvi transfer→scratch eksperiment pokrenut je u:
+
+`runs/stand_ablation_20261105_1615Z_1m_seed7`
+
+`comparison.json` se ažurira po završetku svake varijante. Početni status je
+`running`; to nije dokaz naučenog stajanja. Trening trenutno kreće transfer
+varijantom. Slede scratch, fizičke provere svih checkpoint-a i video najboljeg
+kandidata. Za konačan nalaz proveriti izveštaje i aktivne procese; ne pokretati
+dupli run. Push skills grane zaustavljen je automatskom proverom i čeka
+izričito korisničko odobrenje. Natural-walk arhiva i joystick grana su netaknute.
+
 ## Poruka koju treba poslati novom chatu
 
 > Nastavi rad iz `NEW_CHAT_HANDOFF_2026-11-05.md`. Radi na grani
