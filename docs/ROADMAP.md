@@ -2,10 +2,10 @@
 
 Radimo sposobnosti redom; ne menjamo više velikih stvari u istom eksperimentu.
 
-1. **Završni prirodni hod**
-   - završiti elbow curriculum 25/50/75/100%;
-   - uraditi matched ablations za lateralni prior i action smoothing;
-   - snimiti više seedova i zamrznuti najbolji checkpoint.
+1. **Završni prirodni hod — završeno 2026-11-05**
+   - elbow curriculum 25/50/75/100% prošao je sve gate-ove;
+   - finalni checkpoint, config, XML, BVH, dokazi i video su zamrznuti;
+   - dodatni seedovi ostaju opciona robusnost, ne uslov za početak A→B.
 2. **Čist A→B zadatak**
    - napraviti novi sistem od nule;
    - koristiti relativni cilj u lokalnom frame-u, željenu brzinu i završnu

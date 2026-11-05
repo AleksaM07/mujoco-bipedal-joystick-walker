@@ -6,8 +6,8 @@ reference. Projekat trenutno ima dve zaštićene linije rada:
 - `main`: potvrđeni osnovni hod i postojeći joystick sistem;
 - `experiment/arms-ik-v2`: prirodniji DeepMimic hod sa aktivnim rukama.
 
-Aktivni eksperiment postepeno uvodi punu fleksiju lakta iz `02_01.bvh` klipa.
-Prelaz ide kroz 25%, 50%, 75% i 100% reference, uz automatsku proveru stabilnog
+Završni DeepMimic rezultat prati `02_01.bvh` sa punom fleksijom lakta. Do njega
+smo došli curriculum-om 25%, 50%, 75% i 100%, uz automatsku proveru stabilnog
 hoda i stvarnog opsega oba lakta posle svakog nivoa.
 
 ## Najvažniji ulazi
@@ -19,6 +19,7 @@ hoda i stvarnog opsega oba lakta posle svakog nivoa.
 | `biomechanics_env.py` | Fizika, observations, actions, rewards i termination. |
 | `bvh_reference.py` | BVH učitavanje i retargeting. |
 | `scripts/train_elbow_flexion_curriculum.py` | Trenutni gated elbow curriculum. |
+| `scripts/evaluate_final_success.py` | Finalni zamrznuti prirodni hod. |
 | `prezentacija/` | Zamrznuti uspesi, checkpoint-i i demonstracije. |
 | `runs/` | Lokalni treninzi i checkpoint-i. |
 | `videos/` | Lokalni snimci. |
@@ -38,6 +39,12 @@ Drugi uspeh sa aktivnim, ali krutim rukama:
 
 ```powershell
 ./.venv-win/Scripts/python.exe scripts/evaluate_second_success.py
+```
+
+Finalni prirodni hod sa pokretnim laktovima:
+
+```powershell
+./.venv-win/Scripts/python.exe scripts/evaluate_final_success.py
 ```
 
 Provera trenutnog koda:

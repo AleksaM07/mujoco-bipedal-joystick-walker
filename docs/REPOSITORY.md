@@ -51,3 +51,7 @@ fajlovi i checkpoint evaluacija mogu zahtevati.
   rad i ne sme se brisati kao običan cache.
 
 Cache direktorijumi i privremeni klonovi nisu deo Git-a. Mogu se ponovo kreirati.
+
+Trenutni kanonski DeepMimic rezultat je
+`prezentacija/5th_success_final_natural_walk`; launcher
+`scripts/evaluate_final_success.py` koristi samo njegove zamrznute asset-e.

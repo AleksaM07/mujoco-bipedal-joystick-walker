@@ -7,13 +7,14 @@ Sve komande pokrećemo iz korena repository-ja.
 ```powershell
 ./.venv-win/Scripts/python.exe scripts/evaluate_first_success.py
 ./.venv-win/Scripts/python.exe scripts/evaluate_second_success.py
+./.venv-win/Scripts/python.exe scripts/evaluate_final_success.py
 ./.venv-win/Scripts/python.exe evaluate.py --help
 ```
 
 Prvi JAX compile može trajati nekoliko minuta. Ne proglašavamo zastoj dok proces
 aktivno koristi CPU ili GPU i nema greške u logu.
 
-## Aktivni elbow curriculum
+## Završeni elbow curriculum
 
 Campaign:
 
@@ -44,9 +45,10 @@ $run = Get-ChildItem runs -Directory |
 Get-Content "$($run.FullName)\train.log" -Wait -Tail 50
 ```
 
-Campaign automatski trenira `alpha=0.25, 0.50, 0.75, 1.00`. Posle svakog nivoa
-traži četiri 500-step rollout-a bez fizičkog pada, dovoljan pose/arm score i
-stvarno kretanje oba lakta. Neuspeli gate zaustavlja campaign.
+Campaign je završio `alpha=0.25, 0.50, 0.75, 1.00`; svaki nivo je prošao četiri
+500-step rollout-a bez fizičkog pada, pose/arm prag i proveru stvarnog kretanja
+oba lakta. Finalni rezultat je zamrznut u
+`prezentacija/5th_success_final_natural_walk`.
 
 ## Ručni novi curriculum
 
