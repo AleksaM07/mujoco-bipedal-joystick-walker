@@ -32,6 +32,12 @@ ujutru dodatno pregleda. Nijedan rezultat automatski ne pokreće A→B.
 
 ## Pokretanje i izlaz
 
+Red je pokrenut iz commita `b85899d` 2026-11-05 u 22:25 UTC, kao skriven
+pozadinski WSL proces. Potvrđeni su `queue.json` sa statusom `waiting`, Windows
+launcher PID 15988 i WSL PID 7789. Launcher logovi su
+`runs/stand_overnight_20261105_4x1m.stdout.log` i odgovarajući `.stderr.log`.
+Proveriti postojeći proces i izveštaj pre ponovnog pozivanja komande.
+
 Pripremljena komanda iz korena repoa u PowerShell-u:
 
 ```powershell

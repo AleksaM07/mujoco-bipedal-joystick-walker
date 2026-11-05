@@ -2,6 +2,31 @@
 
 Datum: 2026-11-05
 
+## Noćni nastavak — aktivan red, najviše četiri dodatna run-a
+
+Korisnik je pred spavanje izričito odobrio **najviše četiri dodatna treninga
+od po 1M koraka**. Implementacija je u commitu `b85899d`, a postupak u
+`docs/STAND_OVERNIGHT.md`. Prošlo je 11 fokusiranih testova, Ruff i stvarna WSL
+provera baseline config-a. Ovo je unapred definisan lokalni red eksperimenata,
+ne novi AI agent koji samostalno menja kod.
+
+Red je pokrenut 2026-11-05 u 22:25 UTC kao skriven Windows/WSL pozadinski proces:
+
+`runs/stand_overnight_20261105_4x1m`
+
+Pri proveri je imao Windows launcher PID 15988 i WSL PID 7789. `queue.json`
+potvrđuje `status=waiting`, limit 4 i LR redom `6e-5`, `1e-4`, `2e-4`, `3e-4`.
+Čeka završetak postojećeg balance_v1 run-a, uključujući video i izlazak parent
+procesa 324. Taj trening je već završio 1,024,000 koraka; u trenutku pokretanja
+reda radio je izabrani video rollout. PID-eve ponovo proveriti, ne pretpostavljati.
+
+Sledeća tačka rada: **prvo pročitati `queue.json` i `summary.md` u ovom folderu**
+i proveriti procese. Ne pokretati duplikat niti dodatne run-ove preko odobrena četiri.
+Red sam staje na fizičkom uspehu, tehničkoj grešci, STOP fajlu ili limitu. Ujutru
+pregledati najbolje fizičke rezultate i video; A→B ostaje odložen do stand uspeha.
+Zaustavljanje pre sledećeg run-a: napraviti prazan `STOP` u folderu noćnog reda.
+Status čeka kraj aktivnog treninga/evaluacije; ne ubijati procese bez razloga.
+
 ## Aktuelni status — neuspešan prvi par, zatim `balance_v1`
 
 Na skills grani dodati su fresh-critic restore (`--no-restore-value-fn`),
