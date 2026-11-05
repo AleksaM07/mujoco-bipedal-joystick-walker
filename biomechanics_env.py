@@ -2440,6 +2440,9 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
             initial_deepmimic = {
                 "pose": jp.array(0.0),
                 "velocity": jp.array(0.0),
+                "arm": jp.array(0.0),
+                "arm_pose": jp.array(0.0),
+                "arm_velocity": jp.array(0.0),
                 "end_effector": jp.array(0.0),
                 "root": jp.array(0.0),
                 "com": jp.array(0.0),
@@ -2449,6 +2452,8 @@ class BiomechanicsJoystickEnv(mjx_env.MjxEnv):
                 "key_position": jp.array(0.0),
                 "pose_error": jp.array(0.0),
                 "velocity_error": jp.array(0.0),
+                "arm_pose_error": jp.array(0.0),
+                "arm_velocity_error": jp.array(0.0),
                 "root_xy_error": jp.array(0.0),
                 "root_height_error": jp.array(0.0),
                 "root_vel_error": jp.array(0.0),
