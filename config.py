@@ -1005,6 +1005,7 @@ class TrainConfig:
     save_checkpoints: bool = True
     checkpoint_out: str | None = None
     resume_from: str | None = None
+    restore_value_fn: bool = True
     run_tag: str | None = None
     debug_run: bool = False
     bare: bool = False

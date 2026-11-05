@@ -64,7 +64,7 @@ def logged_stage(name: str):
 class TrainingProgressLogger:
     """Prima PPO metrike i upisuje samo korisne linije."""
 
-    def __init__(self, max_episode_steps: int):
+    def __init__(self, max_episode_steps: int) -> None:
         self.max_episode_steps = max(int(max_episode_steps), 1)
         self.max_episode_reward = (
             float(BiomechanicsJoystickEnv.REWARD_MAX) * self.max_episode_steps
@@ -152,6 +152,29 @@ class TrainingProgressLogger:
                 value = metrics.get(key)
                 if value is not None:
                     diagnostics.append(f"{label}={float(value) / length:.3f}")
+
+            # Brax averages episode sums. Dividing by mean episode length gives
+            # a mean over all evaluated steps, including the terminal steps.
+            for key, label in (
+                ("eval/episode_stand_speed", "stand_speed_mps"),
+                ("eval/episode_stand_distance", "stand_drift_m"),
+            ):
+                value = metrics.get(key)
+                if value is not None:
+                    diagnostics.append(f"{label}={float(value) / length:.3f}")
+            eligible = metrics.get("eval/episode_stand_eligible")
+            if eligible is not None:
+                diagnostics.append(
+                    f"stand_eligible_pct={100.0 * float(eligible) / length:.1f}"
+                )
+                terminated = metrics.get("eval/episode_terminated")
+                if terminated is not None:
+                    diagnostics.append(
+                        f"physical_termination_pct={100.0 * float(terminated):.1f}"
+                    )
+                # Summed dwell/success are not final values and cannot certify
+                # a skill. Only the independent full rollout gate can do that.
+                diagnostics.append("stand_gate=requires_checkpoint_rollout")
 
         logger.info(
             "eval | step={} | reward={} | episode_length={}{}",
@@ -689,6 +712,7 @@ def run_training(
         inferred_xml_path = infer_xml_path_from_resume(restore_checkpoint)
         if inferred_xml_path is not None:
             env_config.xml_path = inferred_xml_path
+            eval_env_config.xml_path = inferred_xml_path
 
     run_dir, checkpoint_dir = reserve_training_directories(run_dir, checkpoint_dir)
 
@@ -745,9 +769,11 @@ def run_training(
     if restore_checkpoint_path is not None:
         logger.info(
             "resume enabled | restore_checkpoint_path={} | "
-            "weights/normalizer only; optimizer and step counter restart | "
+            "actor and saved normalizer restored; critic={} | "
+            "optimizer and step counter restart | "
             "requires compatible env/action/obs/network config",
             restore_checkpoint_path,
+            "restored" if train_config.restore_value_fn else "fresh",
         )
         if env_config.xml_path is not None:
             logger.info("resume xml locked | xml_path={}", env_config.xml_path)
@@ -842,6 +868,7 @@ def run_training(
                 policy_params_fn=PpoPercentLogger(rl_config.num_timesteps),
                 save_checkpoint_path=save_checkpoint_path,
                 restore_checkpoint_path=restore_checkpoint_path,
+                restore_value_fn=train_config.restore_value_fn,
                 wrap_env_fn=make_wrap_env_fn(eval_env),
                 **train_kwargs_extra,
                 **train_kwargs,
@@ -2908,6 +2935,16 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--restore-value-fn",
+        action=argparse.BooleanOptionalAction,
+        default=TrainConfig.restore_value_fn,
+        help=(
+            "Restore the checkpoint critic (default). Use --no-restore-value-fn "
+            "with --resume-from to keep the actor and saved observation normalizer "
+            "but initialize a fresh critic. Optimizer and step counter always restart."
+        ),
+    )
+    parser.add_argument(
         "--run-tag",
         type=str,
         default=None,
@@ -3000,6 +3037,8 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=RUNS_DIR)
     args = parser.parse_args()
 
+    if args.locomotion_skill == "stand" and args.one_clip_overfit:
+        parser.error("--one-clip-overfit is a walking preset, incompatible with stand")
     if args.one_clip_overfit:
         apply_one_clip_overfit_preset(args)
     if args.device == "cpu" and args.debug_run and args.physics_backend == "mjx_warp":
@@ -3009,25 +3048,28 @@ def main() -> None:
     device = choose_device(args.device, args.allow_cpu)
     jax.config.update("jax_default_device", device)
 
-    reference_gait_file = expand_reference_gait_files(
-        args.reference_gait_file,
-        args.reference_gait_list,
-    )
-    if args.one_clip_overfit and reference_gait_file is None:
+    # Stand generates its own neutral reference and must not resolve motion files.
+    reference_gait_file = []
+    if args.locomotion_skill != "stand":
         reference_gait_file = expand_reference_gait_files(
-            reference_gait_files=[ONE_CLIP_OVERFIT_REFERENCE],
+            args.reference_gait_file,
+            args.reference_gait_list,
         )
-    if args.reference_gait == "bvh" and reference_gait_file is None:
-        reference_gait_file = expand_reference_gait_files(
-            reference_gait_lists=[DEFAULT_BVH_REFERENCE_LIST],
-        )
-    if args.reference_gait == "smpl" and reference_gait_file is None:
-        reference_gait_file = expand_reference_gait_files(
-            reference_gait_files=[
-                path.relative_to(PROJECT_ROOT)
-                for path in DEFAULT_SMPL_REFERENCE_FILES
-            ],
-        )
+        if args.one_clip_overfit and reference_gait_file is None:
+            reference_gait_file = expand_reference_gait_files(
+                reference_gait_files=[ONE_CLIP_OVERFIT_REFERENCE],
+            )
+        if args.reference_gait == "bvh" and reference_gait_file is None:
+            reference_gait_file = expand_reference_gait_files(
+                reference_gait_lists=[DEFAULT_BVH_REFERENCE_LIST],
+            )
+        if args.reference_gait == "smpl" and reference_gait_file is None:
+            reference_gait_file = expand_reference_gait_files(
+                reference_gait_files=[
+                    path.relative_to(PROJECT_ROOT)
+                    for path in DEFAULT_SMPL_REFERENCE_FILES
+                ],
+            )
 
     env_config = EnvConfig(
         env_version=args.env_version,
@@ -3166,6 +3208,7 @@ def main() -> None:
             str(args.checkpoint_out) if args.checkpoint_out is not None else None
         ),
         resume_from=str(args.resume_from) if args.resume_from is not None else None,
+        restore_value_fn=args.restore_value_fn,
         run_tag=args.run_tag,
         debug_run=args.debug_run,
         bare=args.bare or debug_defaults.get("bare", False),

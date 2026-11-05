@@ -2,6 +2,17 @@
 
 Datum: 2026-11-05
 
+## Nastavak rada — priprema prvog stand PPO poređenja
+
+Na skills grani dodati su fresh-critic restore (`--no-restore-value-fn`),
+smislen stand logging i nezavisni checkpoint gate na četiri obavezna seed-a.
+Detalji, tačne komande i ograničenja su u `docs/STAND_ABLATION.md`.
+Runner `scripts/run_stand_ablation.py` koristi arhivirani env/PPO config za
+transfer i scratch varijantu, po 1M koraka, bez ERFI/domain randomization-a.
+Proverava svaki checkpoint fizički i čuva video izabranog kandidata.
+Originalni tekst ispod opisuje stanje pre ovih izmena; status treninga i
+rezultate treba čitati iz novog izveštaja eksperimenta.
+
 ## Poruka koju treba poslati novom chatu
 
 > Nastavi rad iz `NEW_CHAT_HANDOFF_2026-11-05.md`. Radi na grani

@@ -1,5 +1,10 @@
 # Skills: pregled i prvi korak — 2026-11-05
 
+Nastavak implementacije i komande za kontrolisano stand PPO poređenje opisani
+su u [STAND_ABLATION.md](STAND_ABLATION.md). Fresh-critic opcija, smislen logging
+i fizički checkpoint gate sada su implementirani. Pregled ispod beleži početno
+stanje i neuspešne baselines, pre tog poređenja.
+
 ## Polazna tačka koju sam sačuvao
 
 Napravio sam `skills_walking_with_anatomical_human_robot` od commita `2a6156e`.
