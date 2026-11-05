@@ -39,10 +39,23 @@ obnovljivi iz Git-a, ali su generisani artefakti.
 - Stari XML modeli nisu obrisani jer ih sačuvani runovi mogu referencirati.
 - `marina_bvh_parse` nije obrisan jer ga kompatibilni preset još koristi.
 
+## Rezultat elbow curriculum-a
+
+Sva četiri nivoa (`0.25`, `0.50`, `0.75`, `1.00`) prošla su automatski gate.
+Završni checkpoint završava 500/500 koraka na sva četiri fiksna seed-a bez
+fizičkog pada. Elbow amplituda na nivou `1.00` dostiže približno 92–100% BVH
+reference na većini proba; jedan desni rollout prelazi referencu i zato rezultat
+ostaje video-kandidat dok ga ručno ne odobrimo.
+
+- finalni run: `runs/20261105_0358_elbow_curriculum_a100_elbow_curriculum_2_V1_steps-1m_reward-1446p7544_s`;
+- finalni checkpoint: `checkpoints/000001024000` unutar tog run-a;
+- campaign status: `artifacts/elbow_curriculum_20261105_4m/status.json`;
+- video-kandidat: `videos/5th_success_candidate_elbow_curriculum_a100_seed11_quad.mp4`;
+- regresija: 356 testova prolazi.
+
 ## Sledeće odluke
 
-1. Sačekati sva četiri elbow gate-a i izabrati završni checkpoint.
-2. Snimiti video i zamrznuti peti uspeh ako 100% nivo prođe.
-3. Tada push-ovati aktivnu granu i ukloniti zastarele remote eksperimente.
-4. Napraviti joystick-only branch iz zaštićenog `main` stanja.
-5. Novi A→B razvijati bez koda iz odbačenog bullet projekta.
+1. Ručno pogledati video i zamrznuti peti uspeh samo ako je pokret stvarno bolji.
+2. Tada push-ovati aktivnu granu i ukloniti zastarele remote eksperimente.
+3. Napraviti joystick-only branch iz zaštićenog `main` stanja.
+4. Novi A→B razvijati bez koda iz odbačenog bullet projekta.
