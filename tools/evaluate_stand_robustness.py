@@ -243,7 +243,19 @@ def main() -> int:
     parser.add_argument("--checkpoints", type=Path, nargs="+", required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--device", choices=("cpu", "gpu"), default="gpu")
+    parser.add_argument(
+        "--probes",
+        nargs="+",
+        choices=[probe.name for probe in PROBES],
+        help="Optional diagnostic subset; only the full suite can certify robustness.",
+    )
+    parser.add_argument("--control-trace", action="store_true")
     args = parser.parse_args()
+    names = args.probes or [probe.name for probe in PROBES]
+    if len(set(names)) != len(names):
+        parser.error("Probe names must be unique.")
+    probes = [next(probe for probe in PROBES if probe.name == name) for name in names]
+    full_suite = len(probes) == len(PROBES)
     checkpoints = [path.resolve() for path in args.checkpoints]
     output = args.output_dir.resolve()
     validate_output_path(output)
@@ -264,6 +276,9 @@ def main() -> int:
     output.mkdir(parents=True, exist_ok=False)
     report: dict[str, Any] = {
         "protocol": "stand_robustness_v1",
+        "full_suite": full_suite,
+        "requested_probes": names,
+        "control_trace": args.control_trace,
         "status": "running",
         "seed": SEED,
         "environment": asdict(config),
@@ -280,18 +295,43 @@ def main() -> int:
             thresholds=asdict(env.thresholds),
         )
         reset = jax.jit(env.reset)
-        advance = make_rollout_step(env, checkpoints[0])
+        advance = make_rollout_step(
+            env, checkpoints[0], control_trace=args.control_trace
+        )
+        if args.control_trace:
+            reference = np.asarray(env._init_q)[np.asarray(env._actuator_qpos_indices)]
+            scales = np.asarray(env._action_scale) * config.reference_residual_scale
+            limits = np.asarray(env.mj_model.actuator_ctrlrange)
+            report["control_layout"] = [
+                {
+                    "joint": name,
+                    "reference_radians": float(reference[index]),
+                    "residual_half_range_radians": float(scales[index]),
+                    "target_min_radians": float(
+                        max(reference[index] - scales[index], limits[index, 0])
+                    ),
+                    "target_max_radians": float(
+                        min(reference[index] + scales[index], limits[index, 1])
+                    ),
+                    "xml_ctrl_range": limits[index].tolist(),
+                    "xml_force_range": env.mj_model.actuator_forcerange[index].tolist(),
+                }
+                for index, name in enumerate(env._actuator_joint_names)
+            ]
         for checkpoint in checkpoints:
             validate_xml_manifest(checkpoint, env)
             validate_action_compatibility(checkpoint, env.action_size)
             params = brax_checkpoint.load(str(checkpoint))
-            for probe in PROBES:
+            for probe in probes:
                 report["results"].append(
                     run_probe(env, checkpoint, probe, output, reset, advance, params)
                 )
                 write_report(output / "report.json", report)
+    cases_passed = all(row["passed"] for row in report["results"])
     report.update(
-        status="complete", passed=all(row["passed"] for row in report["results"])
+        status="complete",
+        passed=full_suite and cases_passed,
+        requested_cases_passed=cases_passed,
     )
     write_report(output / "report.json", report)
     return 0 if report["passed"] else 1

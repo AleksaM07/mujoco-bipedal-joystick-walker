@@ -142,7 +142,23 @@ def summarize_rollout(
     }
 
 
-def make_rollout_step(env: StandEnv, checkpoint: Path) -> Any:
+def collect_control_sample(
+    env: StandEnv, state: Any, action: jax.Array
+) -> dict[str, jax.Array]:
+    """Read policy outputs and applied actuator controls without modifying state."""
+    sample = {}
+    for index, name in enumerate(env._actuator_joint_names):
+        sample[f"action_{name}"] = action[index]
+        sample[f"smoothed_action_{name}"] = state.info["last_action"][index]
+        sample[f"target_{name}"] = state.data.ctrl[index]
+        sample[f"position_{name}"] = state.data.qpos[env._actuator_qpos_indices[index]]
+        sample[f"force_{name}"] = state.data.actuator_force[index]
+    return sample
+
+
+def make_rollout_step(
+    env: StandEnv, checkpoint: Path, *, control_trace: bool = False
+) -> Any:
     """Compile physics and inference with dynamic parameters for checkpoint reuse."""
     make_policy = ppo_networks.make_inference_fn(load_ppo_networks(checkpoint))
 
@@ -176,6 +192,8 @@ def make_rollout_step(env: StandEnv, checkpoint: Path) -> Any:
             "eligible": state.metrics["stand_eligible"],
             "reward": state.reward,
         }
+        if control_trace:
+            sample.update(collect_control_sample(env, state, action))
         return state, sample
 
     return advance

@@ -1,15 +1,25 @@
 """Check push timing/units and acceptance without expensive humanoid training."""
 
+import json
+import tempfile
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
+import jax
+import jax.numpy as jp
 import mujoco
 import numpy as np
 
-from tools.evaluate_stand import summarize_rollout
+from config import EnvConfig
+from skills.stand_metrics import StandThresholds
+from tools.evaluate_stand import collect_control_sample, summarize_rollout
 from tools.evaluate_stand_robustness import (
     PROBES,
     StandProbe,
     force_schedule,
+    main,
     recovery_seconds,
     summarize_probe,
 )
@@ -35,6 +45,111 @@ def sample(**changes: float) -> dict[str, float]:
 
 
 class StandRobustnessTests(unittest.TestCase):
+    def test_control_trace_reads_correct_actuator_and_joint_indices_under_jit(
+        self,
+    ) -> None:
+        env = SimpleNamespace(
+            _actuator_joint_names=("left_ankle_z", "right_ankle_z"),
+            _actuator_qpos_indices=jp.array([3, 1]),
+        )
+
+        @jax.jit
+        def collect(action, smoothed, control, qpos, force):
+            state = SimpleNamespace(
+                info={"last_action": smoothed},
+                data=SimpleNamespace(ctrl=control, qpos=qpos, actuator_force=force),
+            )
+            return collect_control_sample(env, state, action)
+
+        sample = collect(
+            jp.array([0.9, -0.8]),
+            jp.array([0.7, -0.6]),
+            jp.array([0.13, -0.02]),
+            jp.array([1.0, -0.1, 2.0, 0.2]),
+            jp.array([12.0, -13.0]),
+        )
+        expected = {
+            "action_left_ankle_z": 0.9,
+            "action_right_ankle_z": -0.8,
+            "smoothed_action_left_ankle_z": 0.7,
+            "smoothed_action_right_ankle_z": -0.6,
+            "target_left_ankle_z": 0.13,
+            "target_right_ankle_z": -0.02,
+            "position_left_ankle_z": 0.2,
+            "position_right_ankle_z": -0.1,
+            "force_left_ankle_z": 12.0,
+            "force_right_ankle_z": -13.0,
+        }
+        self.assertEqual(set(sample), set(expected))
+        for name, value in expected.items():
+            self.assertAlmostEqual(float(sample[name]), value, places=6)
+
+    def test_successful_subset_is_not_reported_as_full_robustness(self) -> None:
+        for subset in (False, True):
+            with (
+                self.subTest(subset=subset),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                root = Path(directory)
+                output = root / "runs/result"
+                env = SimpleNamespace(
+                    xml_path="unused",
+                    dt=0.02,
+                    thresholds=StandThresholds(),
+                    reset=lambda key: key,
+                    action_size=26,
+                )
+                arguments = [
+                    "evaluate",
+                    "--checkpoints",
+                    str(root / "000000409600"),
+                    "--output-dir",
+                    str(output),
+                    "--device",
+                    "cpu",
+                ]
+                if subset:
+                    arguments += ["--probes", "push_x_neg"]
+                with (
+                    patch("sys.argv", arguments),
+                    patch("tools.evaluate_stand_robustness.PROJECT_ROOT", root),
+                    patch(
+                        "tools.evaluate_stand_robustness.load_stand_config",
+                        return_value=EnvConfig(locomotion_skill="stand"),
+                    ),
+                    patch(
+                        "tools.evaluate_stand_robustness.read_checkpoint_network_config",
+                        return_value={},
+                    ),
+                    patch(
+                        "tools.evaluate_stand_robustness.make_environment",
+                        return_value=env,
+                    ),
+                    patch(
+                        "tools.evaluate_stand_robustness.file_sha256",
+                        return_value="hash",
+                    ),
+                    patch("tools.evaluate_stand_robustness.make_rollout_step"),
+                    patch("tools.evaluate_stand_robustness.validate_xml_manifest"),
+                    patch(
+                        "tools.evaluate_stand_robustness.validate_action_compatibility"
+                    ),
+                    patch("tools.evaluate_stand_robustness.brax_checkpoint.load"),
+                    patch(
+                        "tools.evaluate_stand_robustness.run_probe",
+                        return_value={"passed": True},
+                    ),
+                ):
+                    exit_code = main()
+                report = json.loads(
+                    (output / "report.json").read_text(encoding="utf-8")
+                )
+                self.assertTrue(report["requested_cases_passed"])
+                self.assertEqual(report["passed"], not subset)
+                self.assertEqual(report["full_suite"], not subset)
+                self.assertEqual(len(report["results"]), 1 if subset else 5)
+                self.assertEqual(exit_code, 1 if subset else 0)
+
     def test_push_has_exact_half_open_interval_direction_and_impulse(self) -> None:
         for probe in PROBES[1:]:
             with self.subTest(probe=probe.name):
