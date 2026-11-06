@@ -15,7 +15,7 @@ Dokazi: `analysis_outputs/skills/stand_horizon60_20261106.json` i
 raspoređeni frejmovi iz `robustness/000001024000/hold_60s.mp4` i
 `push_x_neg.mp4`; potvrđuju dugo stajanje i preostali pad.
 
-Korisnik je tražio nastavak. Priprema se **jedan dodatni 1M run** iz finalnog
+Korisnik je tražio nastavak. Pokrenut je **jedan dodatni 1M run** iz finalnog
 checkpoint-a (3,072,000 koraka u dosadašnjem lancu), ista 60 s epizoda,
 `balance_v1`, LR `3e-4`, seed 7 i 64 env-a. Jedina nova trening opcija je
 `--stand-push-max-fraction 0.05`: polovina epizoda u očekivanju ostaje bez
@@ -23,12 +23,24 @@ potiska; ostale imaju -X impulse jačine 0–5% težine, trajanja 0.2 s na svaki
 10 s, sa fazom 2–8 s. Jačina/faza se ponovo izvlače na resetu. PPO evaluacija
 ostaje bez potisaka, a kriterijumi nezavisne evaluacije ostaju nepromenjeni.
 
-Planirani folder: `runs/stand_pushx_20261106_1m_lr3e-4`.
+Aktivni folder: `runs/stand_pushx_20261106_1m_lr3e-4`.
 Pun suite prolazi 412/412 testova, a WSL dry-run potvrđuje stvarni checkpoint
-i konfiguraciju. Tačna sledeća tačka: sačuvati proverene izmene i pokrenuti
-jedan run iz čistog commita. Ako folder već postoji,
-prvo proveriti proces i izveštaj; ne pokretati duplikat. A→B i tranzicija
-iz hoda čekaju potvrđen oporavak. Noćni red ostaje završen.
+i konfiguraciju. Rezultati su sačuvani u `4cdf552`, implementacija u `8294630`;
+oba commita su pushovana. Run je pokrenut iz čistog `8294630` 2026-11-06 u
+17:10 UTC (18:10 lokalno), skriveni Windows/WSL launcher PID 28456 pri startu.
+Tačna komanda je u susednom `.launch.json`; logovi u `.stdout.log`, `.stderr.log`
+i `resume_train.log` unutar foldera. Rezultat ovog novog treninga još nije poznat.
+Stvarni `resume/*/config.json` potvrđuje svih 1M koraka, 3,000-step epizodu,
+LR `3e-4`, seed 7, 64 env-a, `stand_push_max_fraction=0.05`, critic restore
+i tačan source finalni checkpoint. `comparison.json` beleži aktivan trening
+i `robustness_requested=true`; pri poslednjoj proveri worker priprema okruženje.
+
+Tačna sledeća tačka: prvo proveriti ovaj postojeći proces i `comparison.json`;
+**ne pokretati duplikat**. Runner sam radi kratak gate, četiri videa i svih
+25 dužih testova nakon treninga. Fizički uspeh zahteva kandidat u
+`robustness_candidates_passed`, očuvano dugo stajanje i pregled snimka;
+sam `status=complete` znači da je pipeline završen, ne da je stand robustan.
+A→B i tranzicija iz hoda čekaju potvrđen oporavak. Noćni red ostaje završen.
 
 ## Prethodni korak — duži stand test nije prošao, 2026-11-06
 

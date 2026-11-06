@@ -80,7 +80,7 @@ fixed 5%-weight pushes on every new checkpoint. Passing only training reward,
 the short gate or three directions is insufficient. Walk-to-stand and A-to-B
 remain pending.
 
-Planned output: `runs/stand_pushx_20261106_1m_lr3e-4`.
+Active output: `runs/stand_pushx_20261106_1m_lr3e-4`.
 
 ```text
 .venv/bin/python -u scripts/run_stand_ablation.py --variants resume --resume-from <horizon60_final_checkpoint> --timesteps 1000000 --stand-reward-mode balance_v1 --learning-rate 0.0003 --episode-length 3000 --stand-push-max-fraction 0.05 --robustness-check --output runs/stand_pushx_20261106_1m_lr3e-4
@@ -98,3 +98,14 @@ Formatting of the new module/runner tests and `git diff --check` pass.
 A WSL dry-run against the actual final checkpoint confirms the intended
 source, 1M budget, 3,000-step horizon, LR, seed, environment count, critic
 restore and 0.05 maximum push fraction.
+
+The new run was launched from clean commit `8294630` at 17:10 UTC
+(18:10 local) on 2026-11-06. Results of the horizon experiment were committed
+in `4cdf552`; both commits were pushed to the skills branch. The hidden
+Windows launcher PID was 28456 at startup. Its sibling `.launch.json` records
+the command and source commit. Check this existing run before starting a new
+one. The new training/recovery result is not yet known.
+The worker's actual saved config confirms the source checkpoint, 1M budget,
+3,000-step episodes, LR `3e-4`, seed 7, 64 environments, critic restore and
+0.05 push fraction. The parent reports active training with automatic
+robustness validation requested.
