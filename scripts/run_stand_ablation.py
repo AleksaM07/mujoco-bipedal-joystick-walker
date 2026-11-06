@@ -12,6 +12,7 @@ import subprocess
 import sys
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,7 @@ from config import RUNS_DIR, EnvConfig, TrainConfig
 
 ARCHIVE = PROJECT_ROOT / "prezentacija/5th_success_final_natural_walk"
 VARIANTS = ("transfer", "scratch")
+ALL_VARIANTS = (*VARIANTS, "resume")
 
 
 def build_configs(
@@ -30,10 +32,13 @@ def build_configs(
     timesteps: int,
     reward_mode: str = "imitation",
     learning_rate: float = 2e-5,
+    resume_from: Path | None = None,
 ) -> tuple[EnvConfig, TrainConfig]:
     """Keep archived physics/PPO settings with explicit initialization and reward."""
-    if variant not in VARIANTS or timesteps <= 0:
-        raise ValueError("Expected transfer/scratch and positive timesteps.")
+    if variant not in ALL_VARIANTS or timesteps <= 0:
+        raise ValueError("Expected transfer/scratch/resume and positive timesteps.")
+    if (variant == "resume") != (resume_from is not None):
+        raise ValueError("Only the resume variant requires --resume-from.")
     if reward_mode not in {"imitation", "balance_v1"}:
         raise ValueError("Expected imitation or balance_v1 stand reward.")
     if not math.isfinite(learning_rate) or learning_rate <= 0:
@@ -80,6 +85,46 @@ def build_configs(
         run_tag=f"stand_{reward_mode}_{variant}_{timesteps}_lr{learning_rate:g}",
         debug_run=False,
     )
+    if resume_from is not None:
+        checkpoint = resume_from.resolve()
+        if not checkpoint.is_relative_to(RUNS_DIR.resolve()):
+            raise ValueError("Stand continuation requires a checkpoint under runs/.")
+        if (
+            checkpoint.parent.name != "checkpoints"
+            or not checkpoint.name.isdigit()
+            or not (checkpoint / "ppo_network_config.json").is_file()
+        ):
+            raise ValueError("Expected one saved numeric stand checkpoint directory.")
+        source = json.loads(
+            (checkpoint.parent.parent / "config.json").read_text(encoding="utf-8")
+        )
+        manifest = json.loads(
+            (checkpoint.parent.parent / "xml_manifest.json").read_text(encoding="utf-8")
+        )
+        current_hash = sha256(Path(environment.xml_path).read_bytes()).hexdigest()
+        if manifest.get("xml_sha256") != current_hash:
+            raise ValueError("Resume requires a matching source XML manifest.")
+        # Paths differ between Windows and WSL. The training loader separately
+        # verifies the checkpoint XML hash before starting physics/training.
+        source_env = replace(EnvConfig(**source["env"]), xml_path=environment.xml_path)
+        if source_env != environment:
+            raise ValueError("Resume requires the same stand environment and reward.")
+        source_training, target_training = (
+            asdict(TrainConfig(**source["train"])),
+            asdict(training),
+        )
+        for key in (
+            "num_timesteps",
+            "learning_rate",
+            "run_tag",
+            "resume_from",
+            "restore_value_fn",
+        ):
+            source_training.pop(key)
+            target_training.pop(key)
+        if source_training != target_training:
+            raise ValueError("Resume requires matching controlled PPO settings.")
+        training = replace(training, resume_from=str(checkpoint), restore_value_fn=True)
     return environment, training
 
 
@@ -142,6 +187,7 @@ def run_variant(
     timesteps: int,
     reward_mode: str = "imitation",
     learning_rate: float = 2e-5,
+    resume_from: Path | None = None,
 ) -> dict[str, Any]:
     """Train one variant, then physically check every saved checkpoint."""
     command = [
@@ -159,6 +205,8 @@ def run_variant(
         str(learning_rate),
     ]
     result: dict[str, Any] = {"variant": variant, "training_command": command}
+    if resume_from is not None:
+        command.extend(["--resume-from", str(resume_from.resolve())])
     result["training_exit"] = run_command(command, output / f"{variant}_train.log")
     if result["training_exit"] != 0:
         result["status"] = "training_failed"
@@ -207,13 +255,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--timesteps", type=int, default=1_000_000)
     parser.add_argument("--learning-rate", type=float, default=2e-5)
-    parser.add_argument("--variants", choices=VARIANTS, nargs="+", default=VARIANTS)
+    parser.add_argument("--variants", choices=ALL_VARIANTS, nargs="+", default=VARIANTS)
+    parser.add_argument("--resume-from", type=Path)
     parser.add_argument(
         "--stand-reward-mode", choices=("imitation", "balance_v1"), default="imitation"
     )
     parser.add_argument("--output", type=Path)
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--worker", choices=VARIANTS, help=argparse.SUPPRESS)
+    parser.add_argument("--worker", choices=ALL_VARIANTS, help=argparse.SUPPRESS)
     parser.add_argument("--skip-video", action="store_true")
     args = parser.parse_args()
     if args.timesteps <= 0:
@@ -229,10 +278,17 @@ def main() -> int:
     if not output.is_relative_to(RUNS_DIR.resolve()):
         parser.error("output must be a fresh directory under runs/")
     plan = {}
-    for variant in args.variants:
-        env, training = build_configs(
-            variant, args.timesteps, args.stand_reward_mode, args.learning_rate
-        )
+    for variant in (args.worker,) if args.worker else args.variants:
+        try:
+            env, training = build_configs(
+                variant,
+                args.timesteps,
+                args.stand_reward_mode,
+                args.learning_rate,
+                args.resume_from,
+            )
+        except (OSError, ValueError) as exc:
+            parser.error(str(exc))
         plan[variant] = {"env": asdict(env), "train": asdict(training)}
     if args.dry_run:
         print(json.dumps({"output": str(output), "plan": plan}, indent=2))
@@ -245,7 +301,11 @@ def main() -> int:
         configure_stdout_encoding()
         jax.config.update("jax_default_device", choose_device("gpu", allow_cpu=False))
         env, training = build_configs(
-            args.worker, args.timesteps, args.stand_reward_mode, args.learning_rate
+            args.worker,
+            args.timesteps,
+            args.stand_reward_mode,
+            args.learning_rate,
+            args.resume_from,
         )
         run_training(env, training, output)
         return 0
@@ -259,7 +319,12 @@ def main() -> int:
     write_report(output / "comparison.json", report)
     for variant in args.variants:
         result = run_variant(
-            variant, output, args.timesteps, args.stand_reward_mode, args.learning_rate
+            variant,
+            output,
+            args.timesteps,
+            args.stand_reward_mode,
+            args.learning_rate,
+            args.resume_from,
         )
         report["variants"].append(result)
         write_report(output / "comparison.json", report)

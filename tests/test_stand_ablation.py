@@ -1,9 +1,16 @@
 """Keep the stand comparison controlled and rank physics before reward."""
 
+import contextlib
+import io
+import json
+import tempfile
 import unittest
 from dataclasses import asdict
+from hashlib import sha256
+from pathlib import Path
+from unittest.mock import patch
 
-from scripts.run_stand_ablation import build_configs, checkpoint_rank
+from scripts.run_stand_ablation import build_configs, checkpoint_rank, main, run_variant
 
 
 class StandAblationTests(unittest.TestCase):
@@ -78,6 +85,94 @@ class StandAblationTests(unittest.TestCase):
         for rate in (0, -1, float("nan"), float("inf")):
             with self.subTest(rate=rate), self.assertRaises(ValueError):
                 build_configs("scratch", 1_000_000, "balance_v1", rate)
+
+    def test_resume_restores_stand_weights_with_matching_env_and_ppo_config(
+        self,
+    ) -> None:
+        environment, training = build_configs("scratch", 1_000_000, "balance_v1", 3e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkpoint = root / "source/checkpoints/000001024000"
+            checkpoint.mkdir(parents=True)
+            (checkpoint / "ppo_network_config.json").write_text("{}", encoding="utf-8")
+            saved = {"env": asdict(environment), "train": asdict(training)}
+            config_path = checkpoint.parent.parent / "config.json"
+            config_path.write_text(json.dumps(saved), encoding="utf-8")
+            manifest_path = checkpoint.parent.parent / "xml_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "xml_sha256": sha256(
+                            Path(environment.xml_path).read_bytes()
+                        ).hexdigest()
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch("scripts.run_stand_ablation.RUNS_DIR", root):
+                resumed_env, resumed = build_configs(
+                    "resume", 1_000_000, "balance_v1", 3e-4, checkpoint
+                )
+                self.assertEqual(environment, resumed_env)
+                self.assertTrue(resumed.restore_value_fn)
+                self.assertEqual(resumed.resume_from, str(checkpoint.resolve()))
+                before, after = asdict(training), asdict(resumed)
+                for key in ("run_tag", "resume_from"):
+                    before.pop(key)
+                    after.pop(key)
+                self.assertEqual(before, after)
+                output = io.StringIO()
+                arguments = [
+                    "run_stand_ablation.py",
+                    "--worker",
+                    "resume",
+                    "--resume-from",
+                    str(checkpoint),
+                    "--stand-reward-mode",
+                    "balance_v1",
+                    "--learning-rate",
+                    "0.0003",
+                    "--dry-run",
+                    "--output",
+                    str(root / "continued"),
+                ]
+                with patch("sys.argv", arguments), contextlib.redirect_stdout(output):
+                    self.assertEqual(main(), 0)
+                self.assertEqual(set(json.loads(output.getvalue())["plan"]), {"resume"})
+                saved["env"]["locomotion_skill"] = "walk"
+                config_path.write_text(json.dumps(saved), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "same stand environment"):
+                    build_configs("resume", 1_000_000, "balance_v1", 3e-4, checkpoint)
+                saved["env"]["locomotion_skill"] = "stand"
+                saved["train"]["seed"] = 99
+                config_path.write_text(json.dumps(saved), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "matching controlled PPO"):
+                    build_configs("resume", 1_000_000, "balance_v1", 3e-4, checkpoint)
+                manifest_path.write_text('{"xml_sha256": "wrong"}', encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "matching source XML"):
+                    build_configs("resume", 1_000_000, "balance_v1", 3e-4, checkpoint)
+
+    def test_resume_is_explicit_and_forwarded_to_worker(self) -> None:
+        with self.assertRaisesRegex(ValueError, "requires --resume-from"):
+            build_configs("resume", 1_000_000)
+        with self.assertRaisesRegex(ValueError, "requires --resume-from"):
+            build_configs("scratch", 1_000_000, resume_from=Path("unexpected"))
+        checkpoint = Path("runs/source/checkpoints/000001024000")
+        with patch("scripts.run_stand_ablation.run_command", return_value=2) as run:
+            result = run_variant(
+                "resume",
+                Path("runs/continuation"),
+                1_000_000,
+                "balance_v1",
+                3e-4,
+                checkpoint,
+            )
+        self.assertEqual(result["status"], "training_failed")
+        command = run.call_args.args[0]
+        self.assertEqual(
+            command[command.index("--resume-from") + 1], str(checkpoint.resolve())
+        )
+        self.assertEqual(command[command.index("--learning-rate") + 1], "0.0003")
 
 
 if __name__ == "__main__":

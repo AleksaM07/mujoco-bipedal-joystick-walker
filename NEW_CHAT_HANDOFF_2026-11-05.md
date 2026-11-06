@@ -2,7 +2,23 @@
 
 Datum: 2026-11-05
 
-## Noćni nastavak — aktivan red, najviše četiri dodatna run-a
+## Najnoviji rezultat — 2026-11-06 ujutru
+
+Noćni red je završen u 03:44 UTC (04:44 lokalno), tačno četiri dodatna run-a,
+bez tehničkih grešaka. Status je `budget_exhausted`. LR `3e-4` dao je prvi
+checkpoint sa 500/500 koraka bez pada, ali završni stand gate i dalje pada:
+max dwell 9.26 s, završni dwell 0, završni drift 0.489 m. Sva četiri seed-a
+daju isti neutralni fizički početak. Pregled snimka potvrđuje dugo stajanje
+i izlazak iz balansa u poslednjoj sekundi, dok je robot na kraju još uspravan.
+
+Rezultati svih 25 gate-ova: `analysis_outputs/skills/stand_overnight_20261106.json`.
+Detalji i naredni korak: `docs/STAND_OVERNIGHT_RESULTS.md`.
+Korisnik je jutros tražio da se nastavi; sledeći kontrolisani korak je jedan
+1M nastavak najboljeg stand checkpoint-a, isti `balance_v1` i LR `3e-4`, sa
+actor/critic/normalizer težinama. Pre pokretanja proveriti aktuelne procese.
+Noćni red se ne pokreće ponovo. A→B ostaje odložen.
+
+## Noćni nastavak — istorija pokretanja
 
 Korisnik je pred spavanje izričito odobrio **najviše četiri dodatna treninga
 od po 1M koraka**. Implementacija je u commitu `b85899d`, a postupak u
@@ -20,7 +36,7 @@ potvrđuje `status=waiting`, limit 4 i LR redom `6e-5`, `1e-4`, `2e-4`, `3e-4`.
 procesa 324. Taj trening je već završio 1,024,000 koraka; u trenutku pokretanja
 reda radio je izabrani video rollout. PID-eve ponovo proveriti, ne pretpostavljati.
 
-Sledeća tačka rada: **prvo pročitati `queue.json` i `summary.md` u ovom folderu**
+Tačka nastavka pri pokretanju: prvo pročitati `queue.json` i `summary.md` u ovom folderu
 i proveriti procese. Ne pokretati duplikat niti dodatne run-ove preko odobrena četiri.
 Red sam staje na fizičkom uspehu, tehničkoj grešci, STOP fajlu ili limitu. Ujutru
 pregledati najbolje fizičke rezultate i video; A→B ostaje odložen do stand uspeha.
@@ -60,7 +76,7 @@ Rezultati su u commitu `15c777a`, implementacija u `dc29721`.
 Korisnik je izričito odobrio push skills grane; oba commita su objavljena.
 Natural-walk arhiva i joystick grana su netaknute.
 
-**Aktivan naredni eksperiment**, pokrenut 2026-11-05 oko 21:10 UTC:
+**Završen prethodni eksperiment**, pokrenut 2026-11-05 oko 21:10 UTC:
 
 `runs/stand_balance_v1_20261105_2110Z_1m_seed7`
 
@@ -489,9 +505,8 @@ progress, kočenje i dwell. Goal mora biti u policy observation-u; trenutno nije
 
 Natural walking je završen i zaštićen. Fresh-critic transfer, smislen logging
 i nezavisni gate su implementirani. Prvi 1M transfer i 1M scratch su završeni;
-nijedan checkpoint nije prošao stand gate. Kontrolisani scratch `balance_v1`
-eksperiment već je pokrenut u `runs/stand_balance_v1_20261105_2110Z_1m_seed7`.
-Prvo proveriti procese i njegov rezultat da se trening ne duplira. Potom
-pregledati fizički gate i video, uporediti sa prethodnim scratch rezultatom
-i tek na osnovu toga odabrati sledeći eksperiment. Tek nakon uspešnog stand-a
-počinje walk→brake→stand, pa A→B.
+nijedan checkpoint nije prošao stand gate. Noćna LR pretraga završila je četiri
+dodatna run-a. Najbolji, LR `3e-4`, izdrži 500/500, ali pred kraj izgubi stand
+uslove. Jutarnji nastavak je još 1M od tog stand checkpoint-a, sa istim reward-om
+i LR-om. Prvo pročitati najnoviji status na vrhu i proveriti aktivne procese.
+Tek nakon uspešnog stand-a počinje walk→brake→stand, pa A→B.
