@@ -2,7 +2,26 @@
 
 Datum: 2026-11-05
 
-## Najnoviji rezultat — 2026-11-06 ujutru
+## Najnovije — prvi uspešan stand gate, 2026-11-06
+
+Jutarnji 1M nastavak je završio trening i fizičku proveru. **Svih pet novih
+checkpoint-a prolazi 500/500 na četiri obavezna seed-a**, bez pada, sa završnim
+success=1 i dwell=10 s. Najbolji po fizičkom rangiranju je novi checkpoint
+409,600: max drift 0.020615 m i mean speed 0.005462 m/s. Ukupno ima 1,433,600
+koraka u lancu učenja. Zadržati i poslednji checkpoint: i on prolazi gate.
+
+Dokazi: `analysis_outputs/skills/stand_first_pass_20261106.json` i
+`docs/STAND_FIRST_PASS.md`. Pregledani su raspoređeni frejmovi i završni frejm
+videa seed-a 11; potvrđuju mirno stajanje do kraja. Pri prvom beleženju fizičkog
+uspeha pipeline još renderuje ostale videe. Prvo proveriti `comparison.json`
+u `runs/stand_balance_v1_continue_20261106_1m_lr3e-4` pre korišćenja GPU-a.
+
+Sledeći korak: duža provera održavanja stajanja izabranog i poslednjeg checkpoint-a,
+pa kontrolisane perturbacije. Trenutni rezultat pokriva 10 s iz identičnog
+neutralnog reseta; walk→brake→stand i A→B još nisu provereni. Ne pokretati novi
+scratch/overnight trening niti menjati nagradu samo radi višeg reward-a.
+
+## Prethodni rezultat — noćni red i pokretanje jutarnjeg nastavka
 
 Noćni red je završen u 03:44 UTC (04:44 lokalno), tačno četiri dodatna run-a,
 bez tehničkih grešaka. Status je `budget_exhausted`. LR `3e-4` dao je prvi
@@ -18,7 +37,7 @@ najboljeg stand checkpoint-a, isti `balance_v1` i LR `3e-4`, sa vraćanjem
 actor/critic/normalizer težina. Implementacija je u commitu `56ad729`, rezultati
 noćnog reda u `1670313`; oba su pushovana.
 
-**Aktivan run**, pokrenut 2026-11-06 u 07:01 UTC (08:01 lokalno):
+**Run sa završenim treningom/gate-om**, pokrenut 2026-11-06 u 07:01 UTC (08:01 lokalno):
 
 `runs/stand_balance_v1_continue_20261106_1m_lr3e-4`
 
@@ -521,8 +540,9 @@ progress, kočenje i dwell. Goal mora biti u policy observation-u; trenutno nije
 
 Natural walking je završen i zaštićen. Fresh-critic transfer, smislen logging
 i nezavisni gate su implementirani. Prvi 1M transfer i 1M scratch su završeni;
-nijedan checkpoint nije prošao stand gate. Noćna LR pretraga završila je četiri
-dodatna run-a. Najbolji, LR `3e-4`, izdrži 500/500, ali pred kraj izgubi stand
-uslove. Jutarnji nastavak je još 1M od tog stand checkpoint-a, sa istim reward-om
-i LR-om. Prvo pročitati najnoviji status na vrhu i proveriti aktivne procese.
-Tek nakon uspešnog stand-a počinje walk→brake→stand, pa A→B.
+prvi par nije prošao stand gate. Noćna LR pretraga našla je bolji kandidat,
+a jutarnji 1M nastavak zatim dao pet checkpoint-a koji svi prolaze 500/500,
+završni success i dwell=10 s. Izabran je novi checkpoint 409,600 sa drift-om
+oko 2.1 cm. Pročitati `docs/STAND_FIRST_PASS.md`, proveriti da je završeno
+renderovanje videa, pa uraditi dužu stand proveru i kontrolisane perturbacije.
+Tek zatim nastaviti walk→brake→stand i A→B.
