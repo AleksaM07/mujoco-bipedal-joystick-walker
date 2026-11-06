@@ -9,6 +9,7 @@ import numpy as np
 
 from evaluate import make_environment, restore_saved_env_config
 from skills.stand import StandEnv
+from skills.stand_training_pushes import StandTrainingPushWrapper
 from tools.check_stand import stand_config
 from train import make_environment as make_training_environment
 from train import wrap_biomechanics_evaluation
@@ -72,6 +73,15 @@ class StandEnvironmentTests(unittest.TestCase):
         stepped = jax.eval_shape(wrapped.step, state, jp.zeros((2, 26)))
         self.assertEqual(state.info["stand_dwell_steps"].dtype, jp.int32)
         self.assertEqual(stepped.metrics["stand_dwell_steps"].dtype, jp.float32)
+
+    def test_training_push_wrapper_preserves_real_humanoid_observations_and_tree(self):
+        env = StandTrainingPushWrapper(self.env, 0.05)
+        state = jax.eval_shape(env.reset, jax.random.PRNGKey(7))
+        stepped = jax.eval_shape(env.step, state, jp.zeros(26))
+        self.assertEqual(jax.tree.structure(state), jax.tree.structure(stepped))
+        self.assertEqual(stepped.obs["state"].shape, (366,))
+        self.assertEqual(stepped.obs["privileged_state"].shape, (809,))
+        self.assertEqual(stepped.info["stand_push_steps"].dtype, jp.int32)
 
     def test_balance_reward_preserves_physics_layout_and_terminal_penalty(self):
         config = replace(stand_config(), stand_reward_mode="balance_v1")

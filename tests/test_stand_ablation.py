@@ -144,6 +144,23 @@ class StandAblationTests(unittest.TestCase):
                 ):
                     baseline_values.pop(key)
                 self.assertEqual(longer_values, baseline_values)
+                pushed_env, pushed_training = build_configs(
+                    "resume",
+                    1_000_000,
+                    "balance_v1",
+                    3e-4,
+                    checkpoint,
+                    episode_length=3000,
+                    stand_push_max_fraction=0.05,
+                )
+                self.assertEqual(longer_env, pushed_env)
+                pushed_values, longer_values = (
+                    asdict(pushed_training),
+                    asdict(longer_training),
+                )
+                self.assertEqual(pushed_values.pop("stand_push_max_fraction"), 0.05)
+                self.assertEqual(longer_values.pop("stand_push_max_fraction"), 0.0)
+                self.assertEqual(pushed_values, longer_values)
                 output = io.StringIO()
                 arguments = [
                     "run_stand_ablation.py",
@@ -190,6 +207,7 @@ class StandAblationTests(unittest.TestCase):
                 3e-4,
                 checkpoint,
                 episode_length=3000,
+                stand_push_max_fraction=0.05,
             )
         self.assertEqual(result["status"], "training_failed")
         command = run.call_args.args[0]
@@ -198,6 +216,14 @@ class StandAblationTests(unittest.TestCase):
         )
         self.assertEqual(command[command.index("--learning-rate") + 1], "0.0003")
         self.assertEqual(command[command.index("--episode-length") + 1], "3000")
+        self.assertEqual(
+            command[command.index("--stand-push-max-fraction") + 1], "0.05"
+        )
+
+    def test_push_fraction_is_explicit_and_bounded(self) -> None:
+        for fraction in (-0.01, 0.06, float("nan"), float("inf")):
+            with self.subTest(fraction=fraction), self.assertRaises(ValueError):
+                build_configs("scratch", 1_000_000, stand_push_max_fraction=fraction)
 
     def test_long_episode_requires_at_least_original_gate_length(self) -> None:
         with self.assertRaisesRegex(ValueError, "at least 500"):

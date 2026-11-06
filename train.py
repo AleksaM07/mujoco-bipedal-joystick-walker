@@ -666,6 +666,15 @@ def run_training(
     out_dir: Path,
 ) -> Path:
     """Pokrece MuJoCo Playground env kroz Brax PPO/MJX training pipeline."""
+    if not np.isfinite(train_config.stand_push_max_fraction) or not (
+        0 <= train_config.stand_push_max_fraction <= 0.05
+    ):
+        raise ValueError("Stand push fraction must be finite and in [0, 0.05].")
+    if train_config.stand_push_max_fraction and (
+        env_config.locomotion_skill != "stand"
+        or env_config.physics_backend != "mjx_jax"
+    ):
+        raise ValueError("Training pushes require locomotion_skill=stand and mjx_jax.")
     patch_jax_for_brax_compatibility()
 
     env_name = env_display_name(env_config)
@@ -847,6 +856,13 @@ def run_training(
         logger.info("ERFI disabled for this run")
     if not enable_domain_randomization:
         logger.info("domain randomization disabled for this run")
+    if train_config.stand_push_max_fraction:
+        logger.info(
+            "stand training pushes | -world X | max body-weight fraction={} | "
+            "nominal episode probability=0.5 | pulse=0.2s every 10s | "
+            "random phase=2..8s | nominal evaluation unchanged",
+            train_config.stand_push_max_fraction,
+        )
 
     if train_config.debug_run:
         with logged_stage("debug_preflight"):
@@ -870,7 +886,9 @@ def run_training(
                 save_checkpoint_path=save_checkpoint_path,
                 restore_checkpoint_path=restore_checkpoint_path,
                 restore_value_fn=train_config.restore_value_fn,
-                wrap_env_fn=make_wrap_env_fn(eval_env),
+                wrap_env_fn=make_wrap_env_fn(
+                    eval_env, stand_push_max_fraction=train_config.stand_push_max_fraction
+                ),
                 **train_kwargs_extra,
                 **train_kwargs,
             )
@@ -900,7 +918,7 @@ def run_training(
     return success_dir
 
 
-def make_wrap_env_fn(eval_env):
+def make_wrap_env_fn(eval_env, *, stand_push_max_fraction: float = 0.0):
     """Return Brax wrapper with nominal eval and reset-time DR for training."""
 
     def wrap_env(
@@ -919,6 +937,12 @@ def make_wrap_env_fn(eval_env):
             return wrap_biomechanics_evaluation(
                 wrapped_env, episode_length, action_repeat
             )
+        if wrapped_env is not eval_env and stand_push_max_fraction:
+            from skills.stand_training_pushes import StandTrainingPushWrapper
+
+            if randomization_fn is not None:
+                raise ValueError("Stand push experiment requires nominal model physics.")
+            wrapped_env = StandTrainingPushWrapper(wrapped_env, stand_push_max_fraction)
         return wrap_biomechanics_training(
             wrapped_env,
             episode_length=episode_length,
@@ -2948,6 +2972,12 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--stand-push-max-fraction",
+        type=float,
+        default=0.0,
+        help="Training-only -X thorax pushes up to this fraction of body weight (0..0.05).",
+    )
+    parser.add_argument(
         "--restore-value-fn",
         action=argparse.BooleanOptionalAction,
         default=TrainConfig.restore_value_fn,
@@ -3207,6 +3237,7 @@ def main() -> None:
             else debug_defaults.get("learning_rate")
         ),
         distribution_type=args.distribution_type,
+        stand_push_max_fraction=args.stand_push_max_fraction,
         enable_erfi=args.erfi,
         enable_domain_randomization=(
             args.domain_randomization

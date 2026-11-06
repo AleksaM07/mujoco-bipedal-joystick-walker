@@ -1003,6 +1003,8 @@ class TrainConfig:
     distribution_type: str | None = None
     enable_erfi: bool = False
     enable_domain_randomization: bool = False
+    # Training-only -X thorax pulses; evaluation always uses nominal physics.
+    stand_push_max_fraction: float = 0.0
     no_erfi: bool = False
     no_domain_randomization: bool = False
     save_checkpoints: bool = True
