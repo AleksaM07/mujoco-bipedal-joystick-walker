@@ -2,7 +2,35 @@
 
 Datum: 2026-11-05
 
-## Najnovije — push trening završen, duža evaluacija još traje
+## Najnovije — push evaluacija završena, sledi dijagnostika komandi
+
+`runs/stand_pushx_20261106_1m_lr3e-4` je završio ceo pipeline i svih 25 provera.
+**Nijedan checkpoint ne prolazi pun robustness test.** Prva dva prolaze 60 s
+i +X/±Y, ali padaju pod -X; 614,400 dodatno pada pod +X, a 819,200 gubi nominalni
+balans na 40.06 s. Poslednji checkpoint pada na 4.18 s u svim slučajevima, pre
+početka sile. Ne nastavljati automatski poslednje težine. Sačuvani izvor
+`stand_horizon60.../000001024000` ostaje prethodni stabilni kandidat.
+
+Kompletni dokazi: `analysis_outputs/skills/stand_pushx_robustness_20261106.json`
+i `docs/STAND_PUSHX_RESULTS.md`. Kinematička rekonstrukcija iz snimljenih poza
+je u `analysis_outputs/skills/stand_pushx_kinematics_20261106.json`: posle -X
+potiska težište nastavlja iza zadnjih kontakata stopala, uz ispravljanje kolena.
+Uski ankle residual raspon je hipoteza za proveru, ne još dokazan uzrok.
+
+Pripremljena je kratka evaluacija bez treninga: samo postojeći -X probe na
+izvornom horizon60 finalnom checkpoint-u i push-trained 409,600, uz
+`--control-trace --probes push_x_neg`. Beleži akcije, smoothed akcije, stvarne
+PD ciljeve, uglove i momente, kao i efektivne/ XML granice. Ne menja težine,
+akcioni raspon ili fiziku. Podskup testova ne može se označiti kao pun prolaz.
+Petnaest fokusiranih testova i Ruff prolaze.
+
+Sledeća tačka: sačuvati proverene izmene i pokrenuti dijagnostiku u
+`runs/stand_control_diagnostic_20261106` iz čistog commita. Ako folder postoji,
+proveriti proces i izveštaj pre novog pokretanja. Sačekati oba slučaja,
+uporediti ciljeve/granice i tek onda odrediti sledeću kontrolisanu promenu.
+Natural-walk arhiva i joystick grana ostaju netaknute; A→B ostaje odložen.
+
+## Prethodna provera — kratki gate gotov, duža evaluacija u toku
 
 Provera 2026-11-06 oko 20:10 lokalno: `runs/stand_pushx_20261106_1m_lr3e-4`
 završio je 1,024,000 novih trening koraka, svih pet kratkih gate-ova i četiri
