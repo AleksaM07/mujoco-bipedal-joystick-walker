@@ -42,7 +42,8 @@ The first suite was launched from commit `823bc51` on 2026-11-06 at 08:36 UTC
 (09:36 local time), as a hidden WSL process. Its output directory is
 `runs/stand_robustness_20261106_selected_final`; launcher logs are the sibling
 `.stdout.log` and `.stderr.log` files. The Windows launcher PID was 27984 at
-startup. Check this existing run before starting another; results are pending.
+startup. The suite is now complete: all ten cases were evaluated, and neither
+checkpoint passed the longer hold or any complete push-case criterion.
 
 Run with the existing WSL virtual environment after prior GPU processes exit:
 
@@ -71,3 +72,67 @@ velocity response; force removal; post-push dwell timing; late recovery; final
 failure; and rejecting a short trajectory as a long-horizon success. Ruff lint,
 formatting and diff checks pass. Installed MJX source confirms the force/torque
 ordering and world-space application at `xipos` used by this protocol.
+
+## Completed result — 2026-11-06
+
+The complete report is preserved in
+`analysis_outputs/skills/stand_robustness_20261106.json`. The actual model mass
+is 75.15 kg, giving a 36.861076 N pulse and 7.372216 Ns impulse.
+
+| Checkpoint | Case | Physical steps | End time | Fresh recovery dwell | Final success |
+| ---: | --- | ---: | ---: | ---: | --- |
+| 409,600 | hold | 971 / 3,000 | 19.42 s | n/a | no |
+| 409,600 | +X | 360 / 1,000 | 7.20 s | not reached | no |
+| 409,600 | -X | 365 / 1,000 | 7.30 s | not reached | no |
+| 409,600 | +Y | 984 / 1,000 | 19.68 s | 1.00 s after release | no |
+| 409,600 | -Y | 947 / 1,000 | 18.94 s | 1.00 s after release | no |
+| 1,024,000 | hold | 967 / 3,000 | 19.34 s | n/a | no |
+| 1,024,000 | +X | 915 / 1,000 | 18.30 s | 1.02 s after release | no |
+| 1,024,000 | -X | 349 / 1,000 | 6.98 s | not reached | no |
+| 1,024,000 | +Y | 1,000 / 1,000 | 20.00 s | 1.00 s after release | no |
+| 1,024,000 | -Y | 926 / 1,000 | 18.52 s | 1.00 s after release | no |
+
+The final checkpoint's +Y case survives the full horizon but loses stand
+eligibility: max drift is 1.239 m and final success is false. All other cases
+end in physical failure. A brief recovery dwell alone is insufficient.
+
+The first 500 steps of the selected checkpoint's longer hold reproduce its
+earlier successful gate exactly: max drift 0.0206152033 m, mean speed
+0.0054618480 m/s, and eligibility on every step. Thus the longer evaluator
+preserves the earlier ten-second result. The later instability is outside
+the previous training horizon. This supports testing a longer horizon; it
+does not prove that horizon length is the only cause.
+
+## Next controlled experiment: 60-second training episodes
+
+Continue the morning run's **final 1,024,000 checkpoint** for one additional
+1M requested steps, restoring actor, critic and observation normalizer.
+Brax initializes a fresh optimizer and step counter. The source has the most
+training in this lineage and better +X recovery in this suite; it is not
+uniformly superior in every case.
+
+Change only `episode_length` from 500 to 3,000 (10 to 60 seconds). Keep
+`balance_v1`, learning rate `3e-4`, seed 7, 64 environments, PPO settings,
+neutral reset, model and physics. Do not add training pushes in this run.
+The final weights will have 3,072,000 actual steps in the lineage if the
+new requested 1M again rounds to 1,024,000.
+
+```text
+.venv/bin/python -u scripts/run_stand_ablation.py --variants resume --resume-from <morning_final_checkpoint> --timesteps 1000000 --stand-reward-mode balance_v1 --learning-rate 0.0003 --episode-length 3000 --robustness-check --output runs/stand_horizon60_20261106_1m_lr3e-4
+```
+
+The runner checks every new checkpoint with the original four-seed 500-step
+gate, renders the best short-gate candidate, then runs all five robustness
+cases on **every** new checkpoint. With five saved checkpoints this gives
+25 longer cases. `stand_gate_passed` describes only the short gate;
+`robustness_candidates_passed` separately lists checkpoints passing all five
+longer cases. A completed physical failure is a valid experiment result.
+Missing or partial robustness results make the pipeline incomplete.
+
+Eight runner tests and seven overnight regression tests pass, covering the
+explicit horizon change, preservation of environment/PPO configuration,
+worker argument forwarding, complete physical failures, passing candidates
+and incomplete case sets. Ruff and formatting checks pass. A WSL dry-run
+against the actual source checkpoint confirms the intended configuration.
+The old overnight queue is not restarted. Walk-to-stand and A-to-B remain
+pending evidence of sustained balance and recovery.

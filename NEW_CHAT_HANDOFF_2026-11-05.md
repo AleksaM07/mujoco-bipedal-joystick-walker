@@ -2,7 +2,36 @@
 
 Datum: 2026-11-05
 
-## Najnovije — prvi uspešan stand gate, 2026-11-06
+## Najnovije — duži stand test nije prošao, 2026-11-06
+
+Robustness run `runs/stand_robustness_20261106_selected_final` je **završen**:
+svih 10 slučajeva je provereno, nijedan ne prolazi ceo fizički kriterijum.
+Checkpoint 409,600 pada posle 19.42 s bez potiska, a 1,024,000 posle 19.34 s.
+Kratak oporavak posle nekih potisaka ne znači uspeh: završni stand nije održan.
+Finalni checkpoint pod +Y potiskom završava svih 20 s bez pada, ali izlazi
+iz stand kriterijuma; ostali slučajevi završavaju fizičkim padom.
+
+Prvih 500 koraka produženog testa izabranog checkpoint-a tačno reprodukuje
+prethodni uspešan gate (max drift 0.020615 m, mean speed 0.005462 m/s).
+Dokazi: `analysis_outputs/skills/stand_robustness_20261106.json` i
+`docs/STAND_ROBUSTNESS.md`. Ne proglašavati robustan stand na osnovu 10 s videa.
+
+Korisnik je ponovo odobrio nastavak. Pripremljen je **jedan novi 1M nastavak**
+iz poslednjeg checkpoint-a jutarnjeg run-a, uz jedinu promenu treninga:
+`episode_length=3000` umesto 500 (60 s umesto 10 s). Isti `balance_v1`,
+LR `3e-4`, seed 7, 64 env-a, actor/critic/normalizer restore; optimizer je nov.
+Bez novih potisaka tokom treninga. Runner dobija `--robustness-check` da
+automatski proveri svih pet dužih slučajeva na svakom novom checkpoint-u,
+posle standardnog gate-a i videa. Ciljni folder:
+
+`runs/stand_horizon60_20261106_1m_lr3e-4`
+
+Tačna sledeća tačka: sačuvati proverene izmene i pokrenuti ovaj jedan run iz
+čistog commita, zatim potvrditi stvarni config i upisati aktivni status ovde.
+Ako folder već postoji, prvo proveriti proces, `comparison.json` i log;
+ne pokretati duplikat. Noćni red ostaje završen. Walk→brake→stand i A→B čekaju.
+
+## Prethodni korak — prvi uspešan stand gate i pokretanje duže provere
 
 Korisnik je pregledao video i odobrio nastavak. Sva četiri videa su sada gotova,
 run ima `status=complete`, `stand_gate_passed=true`, `video_complete=true`.
@@ -20,7 +49,7 @@ Pokrenuto 2026-11-06 u 08:36 UTC (09:36 lokalno), Windows launcher PID 27984
 pri pokretanju. `report.json` se čuva posle svakog slučaja; `.stdout.log` i
 `.stderr.log` su uz folder u `runs/`. CSV tragovi sadrže metrike i sile svakog
 koraka, a NPZ sačuvane poze za kasniji video. Prvo proveriti ovaj proces i
-izveštaj, ne pokretati duplikat. Za sada je rezultat provere nepoznat.
+izveštaj, ne pokretati duplikat. Rezultat je naknadno sačuvan u odeljku iznad.
 
 Jutarnji 1M nastavak je završio trening i fizičku proveru. **Svih pet novih
 checkpoint-a prolazi 500/500 na četiri obavezna seed-a**, bez pada, sa završnim
@@ -560,6 +589,8 @@ i nezavisni gate su implementirani. Prvi 1M transfer i 1M scratch su završeni;
 prvi par nije prošao stand gate. Noćna LR pretraga našla je bolji kandidat,
 a jutarnji 1M nastavak zatim dao pet checkpoint-a koji svi prolaze 500/500,
 završni success i dwell=10 s. Izabran je novi checkpoint 409,600 sa drift-om
-oko 2.1 cm. Pročitati `docs/STAND_FIRST_PASS.md`, proveriti da je završeno
-renderovanje videa, pa uraditi dužu stand proveru i kontrolisane perturbacije.
-Tek zatim nastaviti walk→brake→stand i A→B.
+oko 2.1 cm. Video je završen i korisnik ga je pregledao, ali duža provera
+otkriva pad oko 19.4 s. Pročitati najnoviji odeljak iznad i
+`docs/STAND_ROBUSTNESS.md`; sledeći kontrolisani test je jedan 1M nastavak sa
+60 s epizodama i automatskom produženom proverom. Ne pokretati duplikat ako
+je taj run već aktivan. Walk→brake→stand i A→B ostaju odloženi.
