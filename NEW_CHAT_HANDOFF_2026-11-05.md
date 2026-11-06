@@ -2,7 +2,29 @@
 
 Datum: 2026-11-05
 
-## Najnovije — 60 s stajanja prolazi, ostaje -X oporavak
+## Najnovije — push trening završen, duža evaluacija još traje
+
+Provera 2026-11-06 oko 20:10 lokalno: `runs/stand_pushx_20261106_1m_lr3e-4`
+završio je 1,024,000 novih trening koraka, svih pet kratkih gate-ova i četiri
+videa. **Prva četiri checkpoint-a prolaze kratak gate, poslednji pada na
+209/500 = 4.18 s** na sva četiri seed-a. Ne nastavljati automatski poslednji
+checkpoint uprkos 60 s stohastičke PPO evaluacije.
+
+Najbolji kratki gate je 614,400: max drift 0.990 cm, završni dwell 10 s.
+Pregledani raspoređeni frejmovi i završni frejm videa potvrđuju stajanje do
+kraja. Dokazi su u `analysis_outputs/skills/stand_pushx_short_gates_20261106.json`
+i `docs/STAND_PUSHX_RESULTS.md`. Potpuna robustnost još nije poznata.
+
+`comparison.json` je `status=running`, `stage=robustness`. Pri proveri je
+završeno 5/25 slučajeva: checkpoint 204,800 prolazi 60 s i +X/±Y potiske,
+ali pada pod -X na 6.98 s. Parent/evaluator WSL PID tada su bili 429/9115.
+Proveriti sadašnji `robustness/report.json` i procese; **ne pokretati duplikat
+ili novi trening dok ova evaluacija ne završi**. Sledeća tačka je pregled
+svih 25 rezultata i izbor kandidata po celom fizičkom kriterijumu. Ako nijedan
+ne prođe, prvo dijagnostikovati neuspeh pre novog kontrolisanog testa.
+Natural-walk arhiva i joystick grana ostaju netaknute, A→B je i dalje odložen.
+
+## Prethodni korak — 60 s stajanja prolazi, ostaje -X oporavak
 
 Run `runs/stand_horizon60_20261106_1m_lr3e-4` je **završen**, uključujući
 svih 25 robustness slučajeva i četiri kratka videa. Četiri checkpoint-a
