@@ -54,3 +54,10 @@ testova za runner i noćni red prolazi, uz Ruff i WSL dry-run stvarnog checkpoin
 Po završetku proveriti svaki novi checkpoint i pregledati najbolji video.
 Uspeh traži i 500/500 i završni success; tek potom sledi duža provera održavanja
 stajanja i perturbacije. Walk→brake→stand i A→B još nisu započeti.
+
+Run je pokrenut iz čistog commita `56ad729` 2026-11-06 u 07:01 UTC
+(08:01 lokalno), u `runs/stand_balance_v1_continue_20261106_1m_lr3e-4`.
+Sačuvani config potvrđuje izvorni checkpoint, LR, seed, reward režim i vraćanje
+critic-a. U trenutku beleženja statusa završena je konstrukcija okruženja i
+u toku je reset dijagnostika; novi rezultat još nije poznat. Proveriti
+`resume_train.log` i `comparison.json` pre daljeg rada.

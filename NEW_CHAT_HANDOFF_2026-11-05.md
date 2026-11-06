@@ -13,10 +13,26 @@ i izlazak iz balansa u poslednjoj sekundi, dok je robot na kraju još uspravan.
 
 Rezultati svih 25 gate-ova: `analysis_outputs/skills/stand_overnight_20261106.json`.
 Detalji i naredni korak: `docs/STAND_OVERNIGHT_RESULTS.md`.
-Korisnik je jutros tražio da se nastavi; sledeći kontrolisani korak je jedan
-1M nastavak najboljeg stand checkpoint-a, isti `balance_v1` i LR `3e-4`, sa
-actor/critic/normalizer težinama. Pre pokretanja proveriti aktuelne procese.
-Noćni red se ne pokreće ponovo. A→B ostaje odložen.
+Korisnik je jutros tražio da se nastavi. Pokrenut je **jedan 1M nastavak**
+najboljeg stand checkpoint-a, isti `balance_v1` i LR `3e-4`, sa vraćanjem
+actor/critic/normalizer težina. Implementacija je u commitu `56ad729`, rezultati
+noćnog reda u `1670313`; oba su pushovana.
+
+**Aktivan run**, pokrenut 2026-11-06 u 07:01 UTC (08:01 lokalno):
+
+`runs/stand_balance_v1_continue_20261106_1m_lr3e-4`
+
+Startovan je iz čistog commita `56ad729` kao skriven Windows/WSL proces
+(Windows launcher PID 16560 u trenutku pokretanja). Sačuvani config potvrđuje
+tačan izvorni checkpoint `run_4_lr0.0003/.../checkpoints/000001024000`, seed 7,
+LR `3e-4`, `balance_v1`, 1M traženih koraka i `restore_value_fn=true`.
+Pri poslednjoj proveri završio je konstrukciju okruženja i radio reset
+dijagnostiku. Log je `resume_train.log`; status je `comparison.json`.
+Runner sam proverava sve nove checkpoint-e i snima najboljeg kandidata.
+
+Sledeća tačka: proveriti ovaj postojeći proces i rezultat, pregledati gate/video
+i uporediti sa izvornih 500/500 uz završni dwell 0. Ne pokretati duplikat.
+Noćni red se ne pokreće ponovo. A→B ostaje odložen do potvrđenog stand-a.
 
 ## Noćni nastavak — istorija pokretanja
 
