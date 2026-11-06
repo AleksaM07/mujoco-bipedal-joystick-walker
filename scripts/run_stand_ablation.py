@@ -33,6 +33,7 @@ def build_configs(
     reward_mode: str = "imitation",
     learning_rate: float = 2e-5,
     resume_from: Path | None = None,
+    episode_length: int = 500,
 ) -> tuple[EnvConfig, TrainConfig]:
     """Keep archived physics/PPO settings with explicit initialization and reward."""
     if variant not in ALL_VARIANTS or timesteps <= 0:
@@ -43,6 +44,8 @@ def build_configs(
         raise ValueError("Expected imitation or balance_v1 stand reward.")
     if not math.isfinite(learning_rate) or learning_rate <= 0:
         raise ValueError("learning_rate must be finite and positive.")
+    if episode_length < 500:
+        raise ValueError("Stand training episodes must contain at least 500 steps.")
     saved = json.loads((ARCHIVE / "config.json").read_text(encoding="utf-8"))
     environment = replace(
         EnvConfig(**saved["env"]),
@@ -66,7 +69,7 @@ def build_configs(
         num_envs=64,
         num_eval_envs=4,
         num_evals=6,
-        episode_length=500,
+        episode_length=episode_length,
         batch_size=128,
         unroll_length=10,
         num_minibatches=4,
@@ -82,7 +85,7 @@ def build_configs(
             str(ARCHIVE / "model_000001024000") if variant == "transfer" else None
         ),
         restore_value_fn=variant != "transfer",
-        run_tag=f"stand_{reward_mode}_{variant}_{timesteps}_lr{learning_rate:g}",
+        run_tag=f"stand_{reward_mode}_{variant}_{timesteps}_lr{learning_rate:g}_ep{episode_length}",
         debug_run=False,
     )
     if resume_from is not None:
@@ -119,6 +122,7 @@ def build_configs(
             "run_tag",
             "resume_from",
             "restore_value_fn",
+            "episode_length",
         ):
             source_training.pop(key)
             target_training.pop(key)
@@ -188,6 +192,7 @@ def run_variant(
     reward_mode: str = "imitation",
     learning_rate: float = 2e-5,
     resume_from: Path | None = None,
+    episode_length: int = 500,
 ) -> dict[str, Any]:
     """Train one variant, then physically check every saved checkpoint."""
     command = [
@@ -203,6 +208,8 @@ def run_variant(
         reward_mode,
         "--learning-rate",
         str(learning_rate),
+        "--episode-length",
+        str(episode_length),
     ]
     result: dict[str, Any] = {"variant": variant, "training_command": command}
     if resume_from is not None:
@@ -255,6 +262,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--timesteps", type=int, default=1_000_000)
     parser.add_argument("--learning-rate", type=float, default=2e-5)
+    parser.add_argument("--episode-length", type=int, default=500)
+    parser.add_argument("--robustness-check", action="store_true")
     parser.add_argument("--variants", choices=ALL_VARIANTS, nargs="+", default=VARIANTS)
     parser.add_argument("--resume-from", type=Path)
     parser.add_argument(
@@ -269,6 +278,10 @@ def main() -> int:
         parser.error("timesteps must be positive")
     if not math.isfinite(args.learning_rate) or args.learning_rate <= 0:
         parser.error("learning-rate must be finite and positive")
+    if args.episode_length < 500:
+        parser.error("episode-length must be at least 500")
+    if args.robustness_check and len(args.variants) != 1:
+        parser.error("--robustness-check requires exactly one variant")
     if len(set(args.variants)) != len(args.variants):
         parser.error("variants must be unique")
     output = args.output or RUNS_DIR / (
@@ -286,6 +299,7 @@ def main() -> int:
                 args.stand_reward_mode,
                 args.learning_rate,
                 args.resume_from,
+                args.episode_length,
             )
         except (OSError, ValueError) as exc:
             parser.error(str(exc))
@@ -306,12 +320,15 @@ def main() -> int:
             args.stand_reward_mode,
             args.learning_rate,
             args.resume_from,
+            args.episode_length,
         )
         run_training(env, training, output)
         return 0
     output.mkdir(parents=True, exist_ok=False)
     report: dict[str, Any] = {
         "status": "running",
+        "stage": "training",
+        "robustness_requested": args.robustness_check,
         "plan": plan,
         "variants": [],
         "selection": "Physical rollout completion, no termination, final success, drift/speed, then reward.",
@@ -325,6 +342,7 @@ def main() -> int:
             args.stand_reward_mode,
             args.learning_rate,
             args.resume_from,
+            args.episode_length,
         )
         report["variants"].append(result)
         write_report(output / "comparison.json", report)
@@ -334,6 +352,8 @@ def main() -> int:
         report["best_candidate"] = best["variant"]
         report["stand_gate_passed"] = best["best_gate"]["passed"]
         if not args.skip_video:
+            report["stage"] = "video"
+            write_report(output / "comparison.json", report)
             video_command = [
                 sys.executable,
                 str(PROJECT_ROOT / "tools/evaluate_stand.py"),
@@ -352,11 +372,75 @@ def main() -> int:
             report["video_complete"] = len(
                 list((output / "videos").glob("*/stand_seed_*.mp4"))
             ) == 4 and report["video_exit"] in (0, 1)
+        if args.robustness_check:
+            checkpoints = sorted(
+                path
+                for path in (Path(best["run_dir"]) / "checkpoints").iterdir()
+                if path.is_dir() and path.name.isdigit()
+            )
+            robustness_output = output / "robustness"
+            command = [
+                sys.executable,
+                str(PROJECT_ROOT / "tools/evaluate_stand_robustness.py"),
+                "--checkpoints",
+                *map(str, checkpoints),
+                "--output-dir",
+                str(robustness_output),
+                "--device",
+                "gpu",
+            ]
+            report["stage"] = "robustness"
+            report["robustness_report"] = str(robustness_output / "report.json")
+            write_report(output / "comparison.json", report)
+            report["robustness_exit"] = run_command(command, output / "robustness.log")
+            report["robustness_complete"] = report["robustness_exit"] in (0, 1)
+            if report["robustness_complete"]:
+                try:
+                    robust = json.loads(
+                        (robustness_output / "report.json").read_text(encoding="utf-8")
+                    )
+                    expected_cases = {
+                        "hold_60s",
+                        "push_x_pos",
+                        "push_x_neg",
+                        "push_y_pos",
+                        "push_y_neg",
+                    }
+                    expected = {
+                        (str(path.resolve()), case)
+                        for path in checkpoints
+                        for case in expected_cases
+                    }
+                    observed = {
+                        (row["checkpoint"], row["probe"]["name"])
+                        for row in robust["results"]
+                    }
+                    report["robustness_complete"] = (
+                        robust["status"] == "complete"
+                        and observed == expected
+                        and len(robust["results"]) == len(expected)
+                    )
+                    report["robustness_candidates_passed"] = [
+                        str(path.resolve())
+                        for path in checkpoints
+                        if report["robustness_complete"]
+                        and all(
+                            row["passed"]
+                            for row in robust["results"]
+                            if row["checkpoint"] == str(path.resolve())
+                        )
+                    ]
+                except (OSError, ValueError, KeyError, TypeError) as exc:
+                    report["robustness_complete"] = False
+                    report["robustness_error"] = str(exc)
     report["status"] = (
         "complete" if len(evaluated) == len(args.variants) else "incomplete"
     )
     if report.get("video_complete") is False:
         report["status"] = "incomplete"
+    if report.get("robustness_complete") is False:
+        report["status"] = "incomplete"
+    report["stage"] = "finished"
     write_report(output / "comparison.json", report)
     print(f"Comparison: {output / 'comparison.json'}", flush=True)
     return 0 if report["status"] == "complete" else 2

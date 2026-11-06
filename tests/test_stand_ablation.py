@@ -121,6 +121,29 @@ class StandAblationTests(unittest.TestCase):
                     before.pop(key)
                     after.pop(key)
                 self.assertEqual(before, after)
+                longer_env, longer_training = build_configs(
+                    "resume",
+                    1_000_000,
+                    "balance_v1",
+                    3e-4,
+                    checkpoint,
+                    episode_length=3000,
+                )
+                self.assertEqual(environment, longer_env)
+                longer_values = asdict(longer_training)
+                self.assertEqual(longer_values.pop("episode_length"), 3000)
+                self.assertTrue(longer_values.pop("restore_value_fn"))
+                for key in ("run_tag", "resume_from"):
+                    longer_values.pop(key)
+                baseline_values = asdict(training)
+                for key in (
+                    "episode_length",
+                    "restore_value_fn",
+                    "run_tag",
+                    "resume_from",
+                ):
+                    baseline_values.pop(key)
+                self.assertEqual(longer_values, baseline_values)
                 output = io.StringIO()
                 arguments = [
                     "run_stand_ablation.py",
@@ -166,6 +189,7 @@ class StandAblationTests(unittest.TestCase):
                 "balance_v1",
                 3e-4,
                 checkpoint,
+                episode_length=3000,
             )
         self.assertEqual(result["status"], "training_failed")
         command = run.call_args.args[0]
@@ -173,6 +197,110 @@ class StandAblationTests(unittest.TestCase):
             command[command.index("--resume-from") + 1], str(checkpoint.resolve())
         )
         self.assertEqual(command[command.index("--learning-rate") + 1], "0.0003")
+        self.assertEqual(command[command.index("--episode-length") + 1], "3000")
+
+    def test_long_episode_requires_at_least_original_gate_length(self) -> None:
+        with self.assertRaisesRegex(ValueError, "at least 500"):
+            build_configs("scratch", 1_000_000, episode_length=499)
+
+    def test_robustness_stage_distinguishes_physical_failure_from_missing_cases(
+        self,
+    ) -> None:
+        for missing_case, passed in ((False, False), (False, True), (True, True)):
+            with (
+                self.subTest(missing_case=missing_case, passed=passed),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                root = Path(directory)
+                checkpoint = root / "training/checkpoints/000000204800"
+                checkpoint.mkdir(parents=True)
+                result = {
+                    "variant": "scratch",
+                    "status": "evaluated",
+                    "run_dir": str(checkpoint.parent.parent),
+                    "best_checkpoint": str(checkpoint),
+                    "best_gate": {
+                        "passed": True,
+                        "rollouts": [
+                            {
+                                "steps": 500,
+                                "finite": True,
+                                "terminated": False,
+                                "final_success": True,
+                                "max_drift": 0.02,
+                                "mean_speed": 0.01,
+                                "reward": 1400,
+                            }
+                        ],
+                    },
+                }
+                output = root / "experiment"
+
+                def fake_robustness(
+                    command: list[str],
+                    log_path: Path,
+                    missing_case: bool = missing_case,
+                    checkpoint: Path = checkpoint,
+                    passed: bool = passed,
+                ) -> int:
+                    destination = Path(command[command.index("--output-dir") + 1])
+                    destination.mkdir()
+                    names = [
+                        "hold_60s",
+                        "push_x_pos",
+                        "push_x_neg",
+                        "push_y_pos",
+                        "push_y_neg",
+                    ]
+                    if missing_case:
+                        names.pop()
+                    report = {
+                        "status": "complete",
+                        "results": [
+                            {
+                                "checkpoint": str(checkpoint.resolve()),
+                                "probe": {"name": name},
+                                "passed": passed,
+                            }
+                            for name in names
+                        ],
+                    }
+                    (destination / "report.json").write_text(
+                        json.dumps(report), encoding="utf-8"
+                    )
+                    return 0 if passed else 1
+
+                arguments = [
+                    "runner",
+                    "--variants",
+                    "scratch",
+                    "--output",
+                    str(output),
+                    "--skip-video",
+                    "--robustness-check",
+                ]
+                with (
+                    patch("scripts.run_stand_ablation.RUNS_DIR", root),
+                    patch("sys.argv", arguments),
+                    patch(
+                        "scripts.run_stand_ablation.run_variant", return_value=result
+                    ),
+                    patch(
+                        "scripts.run_stand_ablation.run_command",
+                        side_effect=fake_robustness,
+                    ),
+                    contextlib.redirect_stdout(io.StringIO()),
+                ):
+                    exit_code = main()
+                saved = json.loads(
+                    (output / "comparison.json").read_text(encoding="utf-8")
+                )
+                self.assertEqual(saved["robustness_complete"], not missing_case)
+                self.assertEqual(
+                    saved["robustness_candidates_passed"],
+                    [str(checkpoint.resolve())] if passed and not missing_case else [],
+                )
+                self.assertEqual(exit_code, 2 if missing_case else 0)
 
 
 if __name__ == "__main__":
