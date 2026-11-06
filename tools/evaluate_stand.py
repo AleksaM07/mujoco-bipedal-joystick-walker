@@ -77,11 +77,18 @@ def load_stand_config(checkpoint: Path, walking_baseline: bool = False) -> EnvCo
 
 
 def summarize_rollout(
-    samples: list[dict[str, float]], *, seed: int, dt: float, dwell_steps: int
+    samples: list[dict[str, float]],
+    *,
+    seed: int,
+    dt: float,
+    dwell_steps: int,
+    requested_steps: int = GATE_STEPS,
 ) -> dict[str, Any]:
     """Judge complete rollouts from instantaneous values, never episode sums."""
     if not samples:
         raise ValueError("A rollout must contain at least one physics step.")
+    if requested_steps < GATE_STEPS:
+        raise ValueError("Physical validation cannot shorten the 500-step gate.")
     final = samples[-1]
     finite = all(
         bool(sample["finite"]) and all(np.isfinite(value) for value in sample.values())
@@ -98,7 +105,7 @@ def summarize_rollout(
     return {
         "seed": seed,
         "steps": len(samples),
-        "requested_steps": GATE_STEPS,
+        "requested_steps": requested_steps,
         "seconds": len(samples) * dt,
         "finite": finite,
         "terminated": terminated,
@@ -126,7 +133,7 @@ def summarize_rollout(
         "eligible_fraction": aggregate("eligible", np.mean),
         "reward": aggregate("reward", np.sum),
         "passed": bool(
-            len(samples) == GATE_STEPS
+            len(samples) == requested_steps
             and finite
             and not terminated
             and not done
@@ -140,7 +147,9 @@ def make_rollout_step(env: StandEnv, checkpoint: Path) -> Any:
     make_policy = ppo_networks.make_inference_fn(load_ppo_networks(checkpoint))
 
     @jax.jit
-    def advance(state, key, params):
+    def advance(state, key, params, external_forces=None):
+        if external_forces is not None:
+            state = state.replace(data=state.data.replace(xfrc_applied=external_forces))
         policy = make_policy(params, deterministic=True)
         action, _ = policy(state.obs, key)
         state = env.step(state, action)
