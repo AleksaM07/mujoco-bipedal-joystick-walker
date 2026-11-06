@@ -1,5 +1,10 @@
 # Stand robustness v1 — frozen checkpoint validation
 
+The follow-up with 60-second training episodes is complete. See
+[STAND_HORIZON60_RESULTS.md](STAND_HORIZON60_RESULTS.md): sustained stance now
+passes, while negative-X recovery remains the next training target. The
+acceptance protocol below is unchanged.
+
 The user reviewed the successful ten-second stand video and authorized the
 next step. This protocol tests the selected continuation checkpoint 409,600
 and the final checkpoint 1,024,000. No weights, reward, reset, model XML or

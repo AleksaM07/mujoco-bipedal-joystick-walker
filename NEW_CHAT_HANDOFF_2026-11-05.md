@@ -2,7 +2,35 @@
 
 Datum: 2026-11-05
 
-## Najnovije — duži stand test nije prošao, 2026-11-06
+## Najnovije — 60 s stajanja prolazi, ostaje -X oporavak
+
+Run `runs/stand_horizon60_20261106_1m_lr3e-4` je **završen**, uključujući
+svih 25 robustness slučajeva i četiri kratka videa. Četiri checkpoint-a
+prolaze svih 60 s stajanja. Poslednja dva (819,200 i 1,024,000) prolaze i
++X/±Y potiske; svi padaju pod -X potiskom. Finalni checkpoint pada na 6.96 s,
+ali bez potiska drži 60 s uz max drift 2.436 cm. Nijedan nije potpuno robustan.
+
+Dokazi: `analysis_outputs/skills/stand_horizon60_20261106.json` i
+`docs/STAND_HORIZON60_RESULTS.md`. Dodatno su renderovani i pregledani
+raspoređeni frejmovi iz `robustness/000001024000/hold_60s.mp4` i
+`push_x_neg.mp4`; potvrđuju dugo stajanje i preostali pad.
+
+Korisnik je tražio nastavak. Priprema se **jedan dodatni 1M run** iz finalnog
+checkpoint-a (3,072,000 koraka u dosadašnjem lancu), ista 60 s epizoda,
+`balance_v1`, LR `3e-4`, seed 7 i 64 env-a. Jedina nova trening opcija je
+`--stand-push-max-fraction 0.05`: polovina epizoda u očekivanju ostaje bez
+potiska; ostale imaju -X impulse jačine 0–5% težine, trajanja 0.2 s na svakih
+10 s, sa fazom 2–8 s. Jačina/faza se ponovo izvlače na resetu. PPO evaluacija
+ostaje bez potisaka, a kriterijumi nezavisne evaluacije ostaju nepromenjeni.
+
+Planirani folder: `runs/stand_pushx_20261106_1m_lr3e-4`.
+Pun suite prolazi 412/412 testova, a WSL dry-run potvrđuje stvarni checkpoint
+i konfiguraciju. Tačna sledeća tačka: sačuvati proverene izmene i pokrenuti
+jedan run iz čistog commita. Ako folder već postoji,
+prvo proveriti proces i izveštaj; ne pokretati duplikat. A→B i tranzicija
+iz hoda čekaju potvrđen oporavak. Noćni red ostaje završen.
+
+## Prethodni korak — duži stand test nije prošao, 2026-11-06
 
 Robustness run `runs/stand_robustness_20261106_selected_final` je **završen**:
 svih 10 slučajeva je provereno, nijedan ne prolazi ceo fizički kriterijum.
@@ -603,8 +631,10 @@ i nezavisni gate su implementirani. Prvi 1M transfer i 1M scratch su završeni;
 prvi par nije prošao stand gate. Noćna LR pretraga našla je bolji kandidat,
 a jutarnji 1M nastavak zatim dao pet checkpoint-a koji svi prolaze 500/500,
 završni success i dwell=10 s. Izabran je novi checkpoint 409,600 sa drift-om
-oko 2.1 cm. Video je završen i korisnik ga je pregledao, ali duža provera
-otkriva pad oko 19.4 s. Pročitati najnoviji odeljak iznad i
-`docs/STAND_ROBUSTNESS.md`; sledeći kontrolisani test je jedan 1M nastavak sa
-60 s epizodama i automatskom produženom proverom. Ne pokretati duplikat ako
-je taj run već aktivan. Walk→brake→stand i A→B ostaju odloženi.
+oko 2.1 cm. Sledeća duža provera otkrila je pad oko 19.4 s, pa je odrađen
+1M nastavak sa 60 s epizodama. On daje četiri uspešna 60 s checkpoint-a;
+poslednja dva prolaze i tri pravca potiska, ali svi još padaju pod -X.
+Pročitati najnoviji odeljak i `docs/STAND_HORIZON60_RESULTS.md`: sledeći
+kontrolisani test dodaje samo trening potiske u tom smeru. Ako taj run već
+postoji, prvo proveriti njegov proces/izveštaj, ne pokretati duplikat.
+Walk→brake→stand i A→B ostaju odloženi.
