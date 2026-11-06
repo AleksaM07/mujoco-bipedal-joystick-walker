@@ -136,3 +136,11 @@ and incomplete case sets. Ruff and formatting checks pass. A WSL dry-run
 against the actual source checkpoint confirms the intended configuration.
 The old overnight queue is not restarted. Walk-to-stand and A-to-B remain
 pending evidence of sustained balance and recovery.
+
+This continuation was launched on 2026-11-06 at 13:14 UTC (14:14 local) from
+clean commit `c37f924`, with Windows launcher PID 26156 at startup. Output:
+`runs/stand_horizon60_20261106_1m_lr3e-4`. The sibling `.launch.json` records
+the exact arguments and source commit. Check this existing run and its
+`comparison.json` before starting anything else; no result is available yet.
+The worker's saved `config.json` confirms the 3,000-step episodes, source
+checkpoint, critic restore, `balance_v1`, LR `3e-4`, seed 7 and 64 environments.

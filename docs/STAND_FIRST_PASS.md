@@ -36,7 +36,9 @@ seed-a. Konačni `comparison.json` beleži `status=complete`, `stand_gate_passed
 Korisnik je pregledao snimak, ocenio ga kao dobar i odobrio narednu proveru.
 
 Ovo potvrđuje naučen stand **iz neutralnog reseta tokom 10 sekundi**. Svi seed-ovi
-počinju iz iste fizičke poze. Duže održavanje stajanja, perturbacije i ulazak
-iz hoda još nisu provereni. Sledeći korak je duži rollout izabranog i poslednjeg
-checkpoint-a, pa kontrolisane perturbacije; tek zatim walk→brake→stand.
+počinju iz iste fizičke poze. Naknadna [duža provera](STAND_ROBUSTNESS.md)
+izabranog i poslednjeg checkpoint-a otkrila je pad oko 19.4 s i neuspeh
+završnih kriterijuma posle potisaka. Kratki uspeh zato ne potvrđuje održiv
+stand. Sledeći kontrolisani trening produžava epizode na 60 s, a ulazak
+iz hoda ostaje odložen.
 Natural-walk arhiva i joystick grana ostaju netaknute.

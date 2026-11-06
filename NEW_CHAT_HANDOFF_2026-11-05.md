@@ -16,7 +16,7 @@ prethodni uspešan gate (max drift 0.020615 m, mean speed 0.005462 m/s).
 Dokazi: `analysis_outputs/skills/stand_robustness_20261106.json` i
 `docs/STAND_ROBUSTNESS.md`. Ne proglašavati robustan stand na osnovu 10 s videa.
 
-Korisnik je ponovo odobrio nastavak. Pripremljen je **jedan novi 1M nastavak**
+Korisnik je ponovo odobrio nastavak. Pokrenut je **jedan novi 1M nastavak**
 iz poslednjeg checkpoint-a jutarnjeg run-a, uz jedinu promenu treninga:
 `episode_length=3000` umesto 500 (60 s umesto 10 s). Isti `balance_v1`,
 LR `3e-4`, seed 7, 64 env-a, actor/critic/normalizer restore; optimizer je nov.
@@ -26,10 +26,24 @@ posle standardnog gate-a i videa. Ciljni folder:
 
 `runs/stand_horizon60_20261106_1m_lr3e-4`
 
-Tačna sledeća tačka: sačuvati proverene izmene i pokrenuti ovaj jedan run iz
-čistog commita, zatim potvrditi stvarni config i upisati aktivni status ovde.
-Ako folder već postoji, prvo proveriti proces, `comparison.json` i log;
-ne pokretati duplikat. Noćni red ostaje završen. Walk→brake→stand i A→B čekaju.
+Pokrenut 2026-11-06 u 13:14 UTC (14:14 lokalno), iz čistog commita `c37f924`.
+Rezultati prethodne provere su u `3aa49dc`; oba commita su pushovana.
+Skriveni Windows/WSL launcher imao je PID 26156 pri pokretanju. Tačna komanda,
+vreme i source commit su u susednom `.launch.json`, logovi u `.stdout.log`
+i `.stderr.log`; glavni trening log je `resume_train.log`. `comparison.json`
+potvrđuje `status=running`, `stage=training` i `robustness_requested=true`.
+Sačuvani stvarni `resume/*/config.json` potvrđuje epizode od 3,000 koraka,
+1M budžet, LR `3e-4`, seed 7, 64 env-a, `balance_v1`, vraćanje critic-a i
+tačan izvorni finalni checkpoint. Pri poslednjoj proveri parent/worker su
+imali WSL PID 337/436; konstrukcija okruženja je završena, reset dijagnostika
+je u toku. PID-eve ponovo proveriti; rezultat treninga još nije poznat.
+
+Tačna sledeća tačka: prvo proveriti ovaj postojeći proces, `comparison.json`
+i `resume_train.log`; **ne pokretati duplikat**. Runner sam radi trening,
+kratak gate, video i svih 25 produženih testova. Posle završetka proveriti
+`robustness/report.json` i `robustness_candidates_passed`, pregledati rezultate
+i sačuvane poze/video pre narednog koraka. Prolazak kratkog gate-a sam nije
+dovoljan. Noćni red ostaje završen. Walk→brake→stand i A→B čekaju.
 
 ## Prethodni korak — prvi uspešan stand gate i pokretanje duže provere
 
