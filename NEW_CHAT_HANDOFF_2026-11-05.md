@@ -4,6 +4,24 @@ Datum: 2026-11-05
 
 ## Najnovije — prvi uspešan stand gate, 2026-11-06
 
+Korisnik je pregledao video i odobrio nastavak. Sva četiri videa su sada gotova,
+run ima `status=complete`, `stand_gate_passed=true`, `video_complete=true`.
+Pokrenuta je sledeća **fizička provera zamrznutih težina**, bez novog treninga:
+
+`runs/stand_robustness_20261106_selected_final`
+
+Protokol `docs/STAND_ROBUSTNESS.md`, implementacija `823bc51`: za checkpoint-e
+409,600 i 1,024,000 proverava 60 s neprekinutog stajanja i četiri potiska od
+5% težine modela, po 0.2 s, u pravcima ±world X/±world Y. Recovery mora imati
+novu 1 s eligible sekvencu unutar 5 s od prestanka sile i uspešan kraj 20 s
+epizode. Seed je 11; pravci su različiti kontrolisani fizički uslovi.
+
+Pokrenuto 2026-11-06 u 08:36 UTC (09:36 lokalno), Windows launcher PID 27984
+pri pokretanju. `report.json` se čuva posle svakog slučaja; `.stdout.log` i
+`.stderr.log` su uz folder u `runs/`. CSV tragovi sadrže metrike i sile svakog
+koraka, a NPZ sačuvane poze za kasniji video. Prvo proveriti ovaj proces i
+izveštaj, ne pokretati duplikat. Za sada je rezultat provere nepoznat.
+
 Jutarnji 1M nastavak je završio trening i fizičku proveru. **Svih pet novih
 checkpoint-a prolazi 500/500 na četiri obavezna seed-a**, bez pada, sa završnim
 success=1 i dwell=10 s. Najbolji po fizičkom rangiranju je novi checkpoint
@@ -12,9 +30,8 @@ koraka u lancu učenja. Zadržati i poslednji checkpoint: i on prolazi gate.
 
 Dokazi: `analysis_outputs/skills/stand_first_pass_20261106.json` i
 `docs/STAND_FIRST_PASS.md`. Pregledani su raspoređeni frejmovi i završni frejm
-videa seed-a 11; potvrđuju mirno stajanje do kraja. Pri prvom beleženju fizičkog
-uspeha pipeline još renderuje ostale videe. Prvo proveriti `comparison.json`
-u `runs/stand_balance_v1_continue_20261106_1m_lr3e-4` pre korišćenja GPU-a.
+videa seed-a 11; potvrđuju mirno stajanje do kraja. Kompletan video pipeline
+je završen pre pokretanja nove robustness provere.
 
 Sledeći korak: duža provera održavanja stajanja izabranog i poslednjeg checkpoint-a,
 pa kontrolisane perturbacije. Trenutni rezultat pokriva 10 s iz identičnog

@@ -30,8 +30,10 @@ Pregledani su frejmovi na razmacima od dve sekunde i završni frejm videa
 `videos/000000409600/stand_seed_11.mp4`: robot ostaje uspravan i miruje i na
 kraju epizode. Ponovljeni video rollout takođe prolazi gate, uz max drift
 2.061 cm. Male numeričke razlike između dva procesa ne menjaju zaključak.
-Pri prvom beleženju rezultata ostali videi se još snimaju; konačan status svih
-videa treba čitati iz run-ovog `comparison.json`.
+Sva četiri videa su sada završena i ponovljeni video gate prolazi na sva četiri
+seed-a. Konačni `comparison.json` beleži `status=complete`, `stand_gate_passed=true`,
+`video_complete=true` i `video_exit=0`. Potvrda je dodata sačuvanom izveštaju.
+Korisnik je pregledao snimak, ocenio ga kao dobar i odobrio narednu proveru.
 
 Ovo potvrđuje naučen stand **iz neutralnog reseta tokom 10 sekundi**. Svi seed-ovi
 počinju iz iste fizičke poze. Duže održavanje stajanja, perturbacije i ulazak

@@ -38,6 +38,12 @@ different perturbations.
 
 ## Execution and outputs
 
+The first suite was launched from commit `823bc51` on 2026-11-06 at 08:36 UTC
+(09:36 local time), as a hidden WSL process. Its output directory is
+`runs/stand_robustness_20261106_selected_final`; launcher logs are the sibling
+`.stdout.log` and `.stderr.log` files. The Windows launcher PID was 27984 at
+startup. Check this existing run before starting another; results are pending.
+
 Run with the existing WSL virtual environment after prior GPU processes exit:
 
 ```text
