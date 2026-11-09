@@ -2,6 +2,38 @@
 
 Datum: 2026-11-05
 
+Poslednje ažuriranje: 2026-11-09. Aktuelni status je na vrhu; odeljci označeni
+kao prethodni/arhivirani služe istoriji i ne nalažu ponavljanje završenog rada.
+
+## Poruka za novi chat — aktuelna
+
+> Nastavi iz `NEW_CHAT_HANDOFF_2026-11-05.md` na grani
+> `skills_walking_with_anatomical_human_robot`. Pročitaj ceo handoff i
+> `docs/SKILLS_REVIEW.md`, proveri git status i poslednja četiri commita.
+> Prvo proveri postojeći run `runs/stand_pushx_continue_20261109_1m_lr1e-4`,
+> njegove procese, `comparison.json` i logove; ne pokreći duplikat.
+> Sada radimo stand recovery posle -X potiska. Prirodan hod i 60 s mirnog
+> stajanja već postoje; walk→stand i A→B još nisu implementirani.
+> Nakon run-a pregledaj sve fizičke provere i video. Pre novih promena koristi
+> zabeleženo poređenje DeepMimic/MimicKit/ASE; ne ponavljaj isti neuspešni run
+> bez nove proverljive hipoteze. Ne menjaj finalnu natural-walk arhivu niti
+> joystick granu. Push skills grane je korisnik već izričito odobrio.
+
+## Mapa veština
+
+| Veština | Stanje |
+| --- | --- |
+| Prirodan hod po referenci | Završen i zamrznut; nije upravljanje proizvoljnim XY ciljem. |
+| Stajanje iz neutralne poze | 60 s prolazi na sačuvanim kandidatima. |
+| Stand oporavak posle potiska | +X/±Y prolaze; -X još pada. To je aktivni trening. |
+| Prelaz hod→kočenje→stajanje | Još nije implementiran/proveren. |
+| Dolazak A→B sa zaustavljanjem | Još nije implementiran/proveren. |
+
+Pregled spoljnih implementacija i razlika između razmatranog pristupa i stvarno
+ugrađenog koda dopunjen je 2026-11-09 u `docs/SKILLS_REVIEW.md`. U ovom repou
+još nema AMP diskriminatora, ASE latentnih veština ili naučenog high-level
+kontrolera. Koristimo Brax PPO i naš MuJoCo/JAX env.
+
 ## Najnovije — dijagnostika završena, pokrenut nastavak sa manjim LR
 
 Provera 2026-11-09: oba slučaja u `runs/stand_control_diagnostic_20261106`
@@ -33,8 +65,9 @@ PID 31584 pri startu. Tačna komanda je u susednom `.launch.json`; logovi su
 `comparison.json` potvrđuje `status=running`, `stage=training`,
 `robustness_requested=true`. Stvarni `resume/*/config.json` u potpunosti se
 poklapa sa WSL dry-run planom, uključujući LR, checkpoint i critic restore.
-Pri proveri u 14:52 parent/worker imaju WSL PID 432/433; konstrukcija okruženja
-je završena i worker radi reset dijagnostiku.
+Pri proveri u 14:52 parent/worker imaju WSL PID 432/433. Log je zatim zabeležio
+ulazak u PPO u 14:53, početnu evaluaciju u 15:04 i 204,800 trening koraka u
+15:12. To potvrđuje napredak procesa, ne fizički uspeh novog checkpoint-a.
 PID i status ponovo proveriti, jer još nema rezultata novog treninga.
 
 Sledeća tačka: prvo proveriti postojeći `comparison.json`, `resume_train.log`
@@ -330,15 +363,9 @@ Odeljci ispod, do završne kratke tačke nastavka, opisuju stanje pre prvog PPO
 poređenja. Aktuelni rezultati i sledeći eksperiment su iznad i u
 `docs/STAND_ABLATION.md`.
 
-## Poruka koju treba poslati novom chatu
-
-> Nastavi rad iz `NEW_CHAT_HANDOFF_2026-11-05.md`. Radi na grani
-> `skills_walking_with_anatomical_human_robot`. Prvo pročitaj handoff i
-> `docs/SKILLS_REVIEW.md`, proveri `git status` i poslednja tri commita. Nemoj
-> menjati finalnu natural-walk arhivu niti joystick granu. Sledeći cilj je
-> naučena stand veština, sa fizičkim gate-om od 500/500 koraka, a tek zatim
-> walk→brake→stand i A→B. Pre PPO run-a reši ispravno prenošenje actor/critic
-> težina i logging stand metrike; ne proglašavaj uspeh samo po reward-u.
+Aktuelna poruka za kopiranje nalazi se na vrhu dokumenta. Prenos actor/critic
+težina, stand logging i 500-step gate već su rešeni; ne ponavljati ih kao novi
+zadatak na osnovu arhiviranog opisa ispod.
 
 ## Glavni cilj projekta
 
@@ -744,7 +771,8 @@ završni success i dwell=10 s. Izabran je novi checkpoint 409,600 sa drift-om
 oko 2.1 cm. Sledeća duža provera otkrila je pad oko 19.4 s, pa je odrađen
 1M nastavak sa 60 s epizodama. On daje četiri uspešna 60 s checkpoint-a;
 poslednja dva prolaze i tri pravca potiska, ali svi još padaju pod -X.
-Pročitati najnoviji odeljak i `docs/STAND_HORIZON60_RESULTS.md`: sledeći
-kontrolisani test dodaje samo trening potiske u tom smeru. Ako taj run već
-postoji, prvo proveriti njegov proces/izveštaj, ne pokretati duplikat.
+Trening sa potiscima i naknadna dijagnostika već su završeni; njihov rezultat
+i aktivni nastavak sa manjim LR opisani su na vrhu. Pročitati najnoviji odeljak
+i `docs/STAND_PUSHX_RESULTS.md`, pa proveriti postojeći proces i izveštaj.
+Ne pokretati duplikat ili ponavljati prethodni eksperiment iz ovog sažetka.
 Walk→brake→stand i A→B ostaju odloženi.

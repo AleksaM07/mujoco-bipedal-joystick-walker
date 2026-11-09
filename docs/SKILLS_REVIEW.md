@@ -5,6 +5,50 @@ su u [STAND_ABLATION.md](STAND_ABLATION.md). Fresh-critic opcija, smislen loggin
 i fizički checkpoint gate sada su implementirani. Pregled ispod beleži početno
 stanje i neuspešne baselines, pre tog poređenja.
 
+## Dopuna 2026-11-09: stvarni status i postojeće implementacije
+
+Prirodan hod je završen. Sačuvani stand kandidati prolaze 60 s iz neutralnog
+reseta i potiske +X/±Y; preostaje -X oporavak. Trenutno radi jedan nastavak
+`stand_pushx_continue_20261109_1m_lr1e-4`. Walk→stand i A→B još nisu ugrađeni.
+Za trenutne dokaze koristiti vrh handoff-a i `STAND_PUSHX_RESULTS.md`; fizički
+neuspešni baselines opisani kasnije u ovom dokumentu su istorijski.
+
+Ranije je dokumentovan pregled DeepMimic/AMP/ASE radova. Audit repoa takođe
+beleži ranije privremene DeepMimic/MimicKit clone-ove; to samo po sebi nije
+dokaz da je njihov kompletan sistem veština prenet ili testiran na našem modelu.
+Ova dopuna beleži ograničen pregled zvanične dokumentacije i konkretnih task
+implementacija, bez pokretanja ili integracije njihovih trening sistema.
+
+| Izvor | Provereno u zvaničnom projektu | Šta to znači za naš kod |
+| --- | --- | --- |
+| [DeepMimic/AMP](https://github.com/xbpeng/DeepMimic) | Repozitorijum sadrži implementacije oba rada i sada upućuje na MimicKit. | Koristimo imitation princip i Brax PPO; ne tvrdimo da je originalni framework ili AMP ugrađen. |
+| [MimicKit](https://github.com/xbpeng/MimicKit) | Dokumentuje DeepMimic, AMP, ASE i druge metode, uz više simulator backenda. | Primarni kandidat za konkretno poređenje pri sledećoj arhitektonskoj odluci; zamena našeg JAX treninga nije već urađena niti benchmarkovana. |
+| [ASE](https://github.com/nv-tlabs/ASE#task-training) | Najpre se trenira low-level veština, zatim high-level politika za zadatak; među primerima je `HumanoidLocation`. | Hijerarhija je relevantan uzor, ali naš projekat nema latentni ASE kontroler. Ni stajanje ni walking checkpoint automatski ne postaju A→B sistem. |
+
+Za A→B su pregledani konkretni fajlovi:
+
+- [MimicKit task_location_env.py](https://github.com/xbpeng/MimicKit/blob/main/mimickit/envs/task_location_env.py):
+  `_compute_obs` dodaje cilj u lokalnim XY koordinatama; task reward meri
+  rastojanje, brzinu prema cilju i orijentaciju.
+- [ASE humanoid_location.py](https://github.com/nv-tlabs/ASE/blob/main/ase/env/tasks/humanoid_location.py):
+  takođe izlaže lokalni cilj i odvojeni location reward. Blizu cilja nagrade
+  za brzinu/orijentaciju postavlja na 1; taj izraz sam ne zahteva naš uslov
+  brzine ispod 0.15 m/s i neprekidnog dwell-a od 1 s.
+
+Praktičan zaključak za naredni razvoj: prilagoditi proverene obrasce lokalnog
+cilja, task reward-a i razdvajanja veštine od cilja, a posebno validirati naše
+zaustavljanje i tranzicije. Ne pisati novi navigacioni okvir pre poređenja sa
+ovim konkretnim primerima. Trenutni kod i dalje koristi `brax.training.agents.ppo`
+i `skills/stand.py`; AMP diskriminator, ASE embedding i high-level selektor nisu
+implementirani. Pregled izvora nije dokaz kompatibilnosti njihovih checkpoint-a
+sa našim anatomskim XML-om i observation/action rasporedom.
+
+Aktivni run završiti i oceniti po nepromenjenim kriterijumima. Ako ponovo ne
+reši -X, ne nizati identične 1M nastavke: prvo povezati neuspeh sa konkretnom
+hipotezom o treningu/kontroli i uporediti relevantnu implementaciju ili
+curriculum iz postojećeg projekta. Ovaj pregled ne dokazuje da je određena
+alternativa brža ili bolja na RTX 2060; to bi zahtevalo zasebno merenje.
+
 ## Polazna tačka koju sam sačuvao
 
 Napravio sam `skills_walking_with_anatomical_human_robot` od commita `2a6156e`.
