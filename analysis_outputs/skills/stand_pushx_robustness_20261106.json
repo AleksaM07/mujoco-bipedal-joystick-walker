@@ -1687,5 +1687,11 @@
     },
     "passed": false
   },
-  "conclusion": "No checkpoint passes the complete robustness suite. The first four fail negative-X recovery; the final checkpoint falls before the force pulse. Do not promote the last checkpoint or launch another identical training run."
+  "conclusion": "No checkpoint passes the complete robustness suite. The first four fail negative-X recovery; the final checkpoint falls before the force pulse. Do not promote the last checkpoint or launch another identical training run.",
+  "failure_video_review": {
+    "checkpoint": "000000409600",
+    "video": "runs/stand_pushx_20261106_1m_lr3e-4/robustness/000000409600/push_x_neg.mp4",
+    "method": "Inspected four-camera snapshots at reset, 5.0, 5.2, 5.5, 6.0 and terminal 6.94 seconds.",
+    "observation": "Upright pre-pulse, loss of balance after force release, then a fall consistent with the scalar trace."
+  }
 }

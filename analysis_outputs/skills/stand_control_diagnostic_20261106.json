@@ -1,0 +1,866 @@
+{
+  "analyzed_date_local": "2026-11-09",
+  "diagnostic_run": "runs/stand_control_diagnostic_20261106",
+  "diagnostic_source_commit": "f34efc29a91210255bab7d76e3be35d06fc57b3c",
+  "report_sha256": "b8426c0d497631c9f03416e615114587c3cd3448ec59eff7a0198675708c9862",
+  "method": "Read completed deterministic diagnostic CSVs; compare all physical summary values and every saved replay array with the original non-instrumented runs. Inspect controls during the same fixed [5.0, 6.0] s loss-of-balance window in both cases.",
+  "report": {
+    "protocol": "stand_robustness_v1",
+    "full_suite": false,
+    "requested_probes": [
+      "push_x_neg"
+    ],
+    "control_trace": true,
+    "status": "complete",
+    "seed": 11,
+    "environment": {
+      "env_version": "standard",
+      "locomotion_skill": "stand",
+      "stand_reward_mode": "balance_v1",
+      "playground_impl": "jax",
+      "physics_backend": "mjx_jax",
+      "warp_num_worlds": 1,
+      "warp_naconmax": null,
+      "warp_njmax": null,
+      "warp_graph_mode": "warp",
+      "command_profile": "walk",
+      "joystick_speed_center": 1.1,
+      "joystick_speed_radius": 0.05,
+      "joystick_yaw_limit": 0.0,
+      "joystick_reward_weight": 0.2,
+      "tracking_sigma": 0.25,
+      "tracking_yaw_sigma": 0.35,
+      "arm_reference_mode": "cmu_elbow_wrist_ik",
+      "reference_elbow_flexion_alpha": 1.0,
+      "recovery_physics_version": "consistent_v6",
+      "reference_motion_speed_scale": 1.0,
+      "reference_loop_closure": "bounded",
+      "reference_gait": "bvh",
+      "arm_actuators": true,
+      "reference_gait_file": [],
+      "reference_clip_ids": null,
+      "reference_forced_clip_id": 0,
+      "reference_target_observation": true,
+      "reference_action_mode": "residual",
+      "reference_action_center": "default",
+      "reference_action_range": "reference_targets",
+      "reference_action_range_scale": 1.1,
+      "reference_residual_scale": 1.0,
+      "bvh_target_observation_steps": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "reference_replay_target_step": 0,
+      "deepmimic_root_velocity_weight_scale": 1.0,
+      "deepmimic_arm_reward_weight": 1.0,
+      "reference_reset_min_steps_remaining": 25,
+      "reference_min_motion_length": 0.8,
+      "reference_loop_mode": "wrap",
+      "reference_root_xy_scale": 0.35,
+      "reference_lock_stance_feet": true,
+      "reference_foot_lock_height": 0.035,
+      "reference_stability_sagittal_alpha": 1.0,
+      "reference_stability_other_alpha": 0.35,
+      "reference_stability_arm_alpha": 1.0,
+      "deepmimic_reward_mode": "pure",
+      "deepmimic_key_bodies": [
+        "metatarsal_midpoint_right",
+        "metatarsal_midpoint_left"
+      ],
+      "pose_termination": false,
+      "pose_termination_dist": 1.0,
+      "reset_sample_attempts": 2,
+      "reset_projection_levels": [
+        1.0,
+        0.7,
+        0.45
+      ],
+      "policy_observation_size": null,
+      "policy_observation_dict": true,
+      "xml_path": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/prezentacija/5th_success_final_natural_walk/generated_models/human_male_180cm_75kg_standard_trainfast_v21_arms.xml",
+      "legacy_action_prior": false,
+      "action_smoothing": 0.2,
+      "init_qpos_file": null,
+      "accurate_physics": true
+    },
+    "results": [
+      {
+        "seed": 11,
+        "steps": 348,
+        "requested_steps": 1000,
+        "seconds": 6.96,
+        "finite": true,
+        "terminated": true,
+        "env_done": true,
+        "final_success": false,
+        "final_dwell_seconds": 0.0,
+        "max_dwell_seconds": 5.18,
+        "final_drift": 1.4704128503799438,
+        "max_drift": 1.4704128503799438,
+        "max_speed": 2.653141975402832,
+        "mean_speed": 0.22201321202135596,
+        "min_torso_up": 0.44897904992103577,
+        "min_height": 0.4196479618549347,
+        "min_height_ratio": 0.27916958928108215,
+        "eligible_fraction": 0.8074712643678161,
+        "reward": 813.3150519132614,
+        "passed": false,
+        "probe": {
+          "name": "push_x_neg",
+          "seconds": 20.0,
+          "direction": [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          "body_weight_fraction": 0.05,
+          "push_start_seconds": 5.0,
+          "push_duration_seconds": 0.2
+        },
+        "recovery_seconds": null,
+        "checkpoint": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/runs/stand_horizon60_20261106_1m_lr3e-4/resume/20261106_1414_stand_balance_v1_resume_1000000_lr0_0003_V1_steps-1m_reward-8554p6201_s/checkpoints/000001024000",
+        "trace": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/runs/stand_control_diagnostic_20261106/000001024000/push_x_neg.csv",
+        "replay": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/runs/stand_control_diagnostic_20261106/000001024000/push_x_neg_replay.npz",
+        "body": "thorax",
+        "mass_kg": 75.15,
+        "force_newtons": [
+          -36.86107635498047,
+          0.0,
+          0.0
+        ],
+        "applied_impulse_ns": [
+          -7.37221622467041,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "seed": 11,
+        "steps": 347,
+        "requested_steps": 1000,
+        "seconds": 6.94,
+        "finite": true,
+        "terminated": true,
+        "env_done": true,
+        "final_success": false,
+        "final_dwell_seconds": 0.0,
+        "max_dwell_seconds": 5.18,
+        "final_drift": 1.4844861030578613,
+        "max_drift": 1.4844861030578613,
+        "max_speed": 2.710456371307373,
+        "mean_speed": 0.22686954068693652,
+        "min_torso_up": 0.3471166789531708,
+        "min_height": 0.3651927709579468,
+        "min_height_ratio": 0.2429434210062027,
+        "eligible_fraction": 0.8040345821325648,
+        "reward": 809.4677426815033,
+        "passed": false,
+        "probe": {
+          "name": "push_x_neg",
+          "seconds": 20.0,
+          "direction": [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          "body_weight_fraction": 0.05,
+          "push_start_seconds": 5.0,
+          "push_duration_seconds": 0.2
+        },
+        "recovery_seconds": null,
+        "checkpoint": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/runs/stand_pushx_20261106_1m_lr3e-4/resume/20261106_1811_stand_balance_v1_resume_1000000_lr0_0003_V1_steps-1m_reward-8683p0273_s/checkpoints/000000409600",
+        "trace": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/runs/stand_control_diagnostic_20261106/000000409600/push_x_neg.csv",
+        "replay": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/runs/stand_control_diagnostic_20261106/000000409600/push_x_neg_replay.npz",
+        "body": "thorax",
+        "mass_kg": 75.15,
+        "force_newtons": [
+          -36.86107635498047,
+          0.0,
+          0.0
+        ],
+        "applied_impulse_ns": [
+          -7.37221622467041,
+          0.0,
+          0.0
+        ]
+      }
+    ],
+    "recovery_deadline_seconds": 5.0,
+    "limitation": "One fixed neutral start per case; deterministic world-frame pushes are not broad stochastic robustness or a walk-to-stand transition.",
+    "xml_sha256": "494cb6707a59a957a27e248f07d7d7597227250588a9c6ca70b6314709895ef4",
+    "control_dt": 0.02,
+    "thresholds": {
+      "max_speed": 0.15,
+      "max_distance": 0.25,
+      "min_torso_up": 0.9,
+      "min_height_ratio": 0.85,
+      "dwell_seconds": 1.0
+    },
+    "control_layout": [
+      {
+        "joint": "abdomen_x",
+        "reference_radians": 0.0,
+        "residual_half_range_radians": 0.07999999821186066,
+        "target_min_radians": -0.07999999821186066,
+        "target_max_radians": 0.07999999821186066,
+        "xml_ctrl_range": [
+          -0.18,
+          0.18
+        ],
+        "xml_force_range": [
+          -180.0,
+          180.0
+        ]
+      },
+      {
+        "joint": "abdomen_y",
+        "reference_radians": 0.0,
+        "residual_half_range_radians": 0.05999999865889549,
+        "target_min_radians": -0.05999999865889549,
+        "target_max_radians": 0.05999999865889549,
+        "xml_ctrl_range": [
+          -0.14,
+          0.14
+        ],
+        "xml_force_range": [
+          -180.0,
+          180.0
+        ]
+      },
+      {
+        "joint": "abdomen_z",
+        "reference_radians": 0.0,
+        "residual_half_range_radians": 0.07999999821186066,
+        "target_min_radians": -0.07999999821186066,
+        "target_max_radians": 0.07999999821186066,
+        "xml_ctrl_range": [
+          -0.18,
+          0.18
+        ],
+        "xml_force_range": [
+          -180.0,
+          180.0
+        ]
+      },
+      {
+        "joint": "pelvis_x",
+        "reference_radians": 0.0,
+        "residual_half_range_radians": 0.05000000074505806,
+        "target_min_radians": -0.05000000074505806,
+        "target_max_radians": 0.05000000074505806,
+        "xml_ctrl_range": [
+          -0.12,
+          0.12
+        ],
+        "xml_force_range": [
+          -240.0,
+          240.0
+        ]
+      },
+      {
+        "joint": "pelvis_y",
+        "reference_radians": 0.0,
+        "residual_half_range_radians": 0.03999999910593033,
+        "target_min_radians": -0.03999999910593033,
+        "target_max_radians": 0.03999999910593033,
+        "xml_ctrl_range": [
+          -0.1,
+          0.1
+        ],
+        "xml_force_range": [
+          -240.0,
+          240.0
+        ]
+      },
+      {
+        "joint": "pelvis_z",
+        "reference_radians": 0.0,
+        "residual_half_range_radians": 0.05000000074505806,
+        "target_min_radians": -0.05000000074505806,
+        "target_max_radians": 0.05000000074505806,
+        "xml_ctrl_range": [
+          -0.12,
+          0.12
+        ],
+        "xml_force_range": [
+          -240.0,
+          240.0
+        ]
+      },
+      {
+        "joint": "left_hip_x",
+        "reference_radians": 0.18000000715255737,
+        "residual_half_range_radians": 0.3499999940395355,
+        "target_min_radians": -0.16999998688697815,
+        "target_max_radians": 0.5299999713897705,
+        "xml_ctrl_range": [
+          -0.349066,
+          0.698132
+        ],
+        "xml_force_range": [
+          -360.0,
+          360.0
+        ]
+      },
+      {
+        "joint": "left_hip_y",
+        "reference_radians": 0.0,
+        "residual_half_range_radians": 0.11999999731779099,
+        "target_min_radians": -0.11999999731779099,
+        "target_max_radians": 0.11999999731779099,
+        "xml_ctrl_range": [
+          -0.383972,
+          0.383972
+        ],
+        "xml_force_range": [
+          -300.0,
+          300.0
+        ]
+      },
+      {
+        "joint": "left_hip_z",
+        "reference_radians": 0.029999999329447746,
+        "residual_half_range_radians": 0.14000000059604645,
+        "target_min_radians": -0.10999999940395355,
+        "target_max_radians": 0.17000000178813934,
+        "xml_ctrl_range": [
+          -0.523599,
+          1.047198
+        ],
+        "xml_force_range": [
+          -360.0,
+          360.0
+        ]
+      },
+      {
+        "joint": "left_knee_z",
+        "reference_radians": -0.15000000596046448,
+        "residual_half_range_radians": 0.550000011920929,
+        "target_min_radians": -0.7000000476837158,
+        "target_max_radians": 0.0,
+        "xml_ctrl_range": [
+          -2.356194,
+          0.0
+        ],
+        "xml_force_range": [
+          -420.0,
+          420.0
+        ]
+      },
+      {
+        "joint": "left_ankle_y",
+        "reference_radians": 0.05000000074505806,
+        "residual_half_range_radians": 0.23999999463558197,
+        "target_min_radians": -0.1899999976158142,
+        "target_max_radians": 0.28999999165534973,
+        "xml_ctrl_range": [
+          -0.436332,
+          0.436332
+        ],
+        "xml_force_range": [
+          -300.0,
+          300.0
+        ]
+      },
+      {
+        "joint": "left_ankle_z",
+        "reference_radians": 0.05000000074505806,
+        "residual_half_range_radians": 0.07999999821186066,
+        "target_min_radians": -0.029999997466802597,
+        "target_max_radians": 0.12999999523162842,
+        "xml_ctrl_range": [
+          -0.20944,
+          0.20944
+        ],
+        "xml_force_range": [
+          -260.0,
+          260.0
+        ]
+      },
+      {
+        "joint": "right_hip_x",
+        "reference_radians": -0.18000000715255737,
+        "residual_half_range_radians": 0.3499999940395355,
+        "target_min_radians": -0.5299999713897705,
+        "target_max_radians": 0.16999998688697815,
+        "xml_ctrl_range": [
+          -0.698132,
+          0.349066
+        ],
+        "xml_force_range": [
+          -360.0,
+          360.0
+        ]
+      },
+      {
+        "joint": "right_hip_y",
+        "reference_radians": 0.0,
+        "residual_half_range_radians": 0.11999999731779099,
+        "target_min_radians": -0.11999999731779099,
+        "target_max_radians": 0.11999999731779099,
+        "xml_ctrl_range": [
+          -0.383972,
+          0.383972
+        ],
+        "xml_force_range": [
+          -300.0,
+          300.0
+        ]
+      },
+      {
+        "joint": "right_hip_z",
+        "reference_radians": 0.029999999329447746,
+        "residual_half_range_radians": 0.14000000059604645,
+        "target_min_radians": -0.10999999940395355,
+        "target_max_radians": 0.17000000178813934,
+        "xml_ctrl_range": [
+          -0.523599,
+          1.047198
+        ],
+        "xml_force_range": [
+          -360.0,
+          360.0
+        ]
+      },
+      {
+        "joint": "right_knee_z",
+        "reference_radians": -0.15000000596046448,
+        "residual_half_range_radians": 0.550000011920929,
+        "target_min_radians": -0.7000000476837158,
+        "target_max_radians": 0.0,
+        "xml_ctrl_range": [
+          -2.356194,
+          0.0
+        ],
+        "xml_force_range": [
+          -420.0,
+          420.0
+        ]
+      },
+      {
+        "joint": "right_ankle_y",
+        "reference_radians": -0.05000000074505806,
+        "residual_half_range_radians": 0.23999999463558197,
+        "target_min_radians": -0.28999999165534973,
+        "target_max_radians": 0.1899999976158142,
+        "xml_ctrl_range": [
+          -0.436332,
+          0.436332
+        ],
+        "xml_force_range": [
+          -300.0,
+          300.0
+        ]
+      },
+      {
+        "joint": "right_ankle_z",
+        "reference_radians": 0.05000000074505806,
+        "residual_half_range_radians": 0.07999999821186066,
+        "target_min_radians": -0.029999997466802597,
+        "target_max_radians": 0.12999999523162842,
+        "xml_ctrl_range": [
+          -0.20944,
+          0.20944
+        ],
+        "xml_force_range": [
+          -260.0,
+          260.0
+        ]
+      },
+      {
+        "joint": "left_shoulder_x",
+        "reference_radians": 0.75,
+        "residual_half_range_radians": 0.3499999940395355,
+        "target_min_radians": 0.4000000059604645,
+        "target_max_radians": 1.100000023841858,
+        "xml_ctrl_range": [
+          -0.872665,
+          3.141593
+        ],
+        "xml_force_range": [
+          -120.0,
+          120.0
+        ]
+      },
+      {
+        "joint": "left_shoulder_y",
+        "reference_radians": 0.0,
+        "residual_half_range_radians": 0.2199999988079071,
+        "target_min_radians": -0.2199999988079071,
+        "target_max_radians": 0.2199999988079071,
+        "xml_ctrl_range": [
+          -1.570796,
+          1.570796
+        ],
+        "xml_force_range": [
+          -100.0,
+          100.0
+        ]
+      },
+      {
+        "joint": "left_shoulder_z",
+        "reference_radians": 0.0,
+        "residual_half_range_radians": 0.3499999940395355,
+        "target_min_radians": -0.3499999940395355,
+        "target_max_radians": 0.3499999940395355,
+        "xml_ctrl_range": [
+          -0.872665,
+          3.141593
+        ],
+        "xml_force_range": [
+          -120.0,
+          120.0
+        ]
+      },
+      {
+        "joint": "left_elbow_z",
+        "reference_radians": 0.0,
+        "residual_half_range_radians": 0.3499999940395355,
+        "target_min_radians": 0.0,
+        "target_max_radians": 0.3499999940395355,
+        "xml_ctrl_range": [
+          0.0,
+          2.617994
+        ],
+        "xml_force_range": [
+          -90.0,
+          90.0
+        ]
+      },
+      {
+        "joint": "right_shoulder_x",
+        "reference_radians": -0.75,
+        "residual_half_range_radians": 0.3499999940395355,
+        "target_min_radians": -1.100000023841858,
+        "target_max_radians": -0.4000000059604645,
+        "xml_ctrl_range": [
+          -3.141593,
+          0.872665
+        ],
+        "xml_force_range": [
+          -120.0,
+          120.0
+        ]
+      },
+      {
+        "joint": "right_shoulder_y",
+        "reference_radians": 0.0,
+        "residual_half_range_radians": 0.2199999988079071,
+        "target_min_radians": -0.2199999988079071,
+        "target_max_radians": 0.2199999988079071,
+        "xml_ctrl_range": [
+          -1.570796,
+          1.570796
+        ],
+        "xml_force_range": [
+          -100.0,
+          100.0
+        ]
+      },
+      {
+        "joint": "right_shoulder_z",
+        "reference_radians": 0.0,
+        "residual_half_range_radians": 0.3499999940395355,
+        "target_min_radians": -0.3499999940395355,
+        "target_max_radians": 0.3499999940395355,
+        "xml_ctrl_range": [
+          -0.872665,
+          3.141593
+        ],
+        "xml_force_range": [
+          -120.0,
+          120.0
+        ]
+      },
+      {
+        "joint": "right_elbow_z",
+        "reference_radians": 0.0,
+        "residual_half_range_radians": 0.3499999940395355,
+        "target_min_radians": 0.0,
+        "target_max_radians": 0.3499999940395355,
+        "xml_ctrl_range": [
+          0.0,
+          2.617994
+        ],
+        "xml_force_range": [
+          -90.0,
+          90.0
+        ]
+      }
+    ],
+    "passed": false,
+    "requested_cases_passed": false
+  },
+  "comparisons": [
+    {
+      "source_run": "stand_horizon60_20261106_1m_lr3e-4",
+      "checkpoint": "000001024000",
+      "fall_seconds": 6.96,
+      "metrics_differing_from_original": [],
+      "replay_arrays_exactly_equal": {
+        "qpos": true,
+        "qvel": true,
+        "steps": true,
+        "dt": true
+      },
+      "trace": "runs/stand_control_diagnostic_20261106/000001024000/push_x_neg.csv",
+      "trace_sha256": "03f924d6dbaeb0a1d84ef67e95809453df2b4cd43392873a5958d58a6080e3cd",
+      "replay": "runs/stand_control_diagnostic_20261106/000001024000/push_x_neg_replay.npz",
+      "replay_sha256": "14d03d1a7a08ea86786c3bb46efb0f25dafc3c1d8ffdd28eb102663bb5510534",
+      "window_seconds_inclusive": [
+        5.0,
+        6.0
+      ],
+      "samples": 51,
+      "joint_statistics": {
+        "left_ankle_z": {
+          "action_range": [
+            -0.015463565476238728,
+            0.5590302348136902
+          ],
+          "smoothed_action_range": [
+            -0.016845034435391426,
+            0.4842706620693207
+          ],
+          "target_range": [
+            0.04865239933133125,
+            0.08874165266752243
+          ],
+          "position_range": [
+            0.1344454139471054,
+            0.19525349140167236
+          ],
+          "force_range": [
+            -23.457048416137695,
+            -7.322091102600098
+          ],
+          "raw_action_abs_ge_0_99_fraction": 0.0,
+          "target_at_effective_lower_fraction": 0.0,
+          "target_at_effective_upper_fraction": 0.0,
+          "actuator_force_at_xml_limit_fraction": 0.0
+        },
+        "right_ankle_z": {
+          "action_range": [
+            -0.21642841398715973,
+            0.15300790965557098
+          ],
+          "smoothed_action_range": [
+            -0.21457289159297943,
+            0.1180228590965271
+          ],
+          "target_range": [
+            0.03283417224884033,
+            0.05944182723760605
+          ],
+          "position_range": [
+            0.10435456037521362,
+            0.14000427722930908
+          ],
+          "force_range": [
+            -17.1431941986084,
+            -7.359645843505859
+          ],
+          "raw_action_abs_ge_0_99_fraction": 0.0,
+          "target_at_effective_lower_fraction": 0.0,
+          "target_at_effective_upper_fraction": 0.0,
+          "actuator_force_at_xml_limit_fraction": 0.0
+        },
+        "left_knee_z": {
+          "action_range": [
+            -0.12916237115859985,
+            0.2079874575138092
+          ],
+          "smoothed_action_range": [
+            -0.13240934908390045,
+            0.16898465156555176
+          ],
+          "target_range": [
+            -0.22282513976097107,
+            -0.05705844610929489
+          ],
+          "position_range": [
+            -0.25387823581695557,
+            -0.10342518240213394
+          ],
+          "force_range": [
+            7.284374237060547,
+            14.199325561523438
+          ],
+          "raw_action_abs_ge_0_99_fraction": 0.0,
+          "target_at_effective_lower_fraction": 0.0,
+          "target_at_effective_upper_fraction": 0.0,
+          "actuator_force_at_xml_limit_fraction": 0.0
+        },
+        "right_knee_z": {
+          "action_range": [
+            -0.045532550662755966,
+            0.5051350593566895
+          ],
+          "smoothed_action_range": [
+            0.04819195345044136,
+            0.4446074366569519
+          ],
+          "target_range": [
+            -0.12349443137645721,
+            0.0
+          ],
+          "position_range": [
+            -0.13191890716552734,
+            0.002167708706110716
+          ],
+          "force_range": [
+            -7.900904655456543,
+            5.760612487792969
+          ],
+          "raw_action_abs_ge_0_99_fraction": 0.0,
+          "target_at_effective_lower_fraction": 0.0,
+          "target_at_effective_upper_fraction": 0.2549019607843137,
+          "actuator_force_at_xml_limit_fraction": 0.0
+        }
+      }
+    },
+    {
+      "source_run": "stand_pushx_20261106_1m_lr3e-4",
+      "checkpoint": "000000409600",
+      "fall_seconds": 6.94,
+      "metrics_differing_from_original": [],
+      "replay_arrays_exactly_equal": {
+        "qpos": true,
+        "qvel": true,
+        "steps": true,
+        "dt": true
+      },
+      "trace": "runs/stand_control_diagnostic_20261106/000000409600/push_x_neg.csv",
+      "trace_sha256": "f825195da61eafd2956fc4b429360499dfb0cbf892cba00fef38d8d485fe92af",
+      "replay": "runs/stand_control_diagnostic_20261106/000000409600/push_x_neg_replay.npz",
+      "replay_sha256": "d12754f3b1cf3f517941127568d7a637f5798a7cac5513cae7bd0a2b6d4978b9",
+      "window_seconds_inclusive": [
+        5.0,
+        6.0
+      ],
+      "samples": 51,
+      "joint_statistics": {
+        "left_ankle_z": {
+          "action_range": [
+            -0.4753093719482422,
+            0.3246130645275116
+          ],
+          "smoothed_action_range": [
+            -0.45603957772254944,
+            0.2786281406879425
+          ],
+          "target_range": [
+            0.013516835868358612,
+            0.07229024916887283
+          ],
+          "position_range": [
+            0.11361197382211685,
+            0.14092598855495453
+          ],
+          "force_range": [
+            -20.38456916809082,
+            -7.2577714920043945
+          ],
+          "raw_action_abs_ge_0_99_fraction": 0.0,
+          "target_at_effective_lower_fraction": 0.0,
+          "target_at_effective_upper_fraction": 0.0,
+          "actuator_force_at_xml_limit_fraction": 0.0
+        },
+        "right_ankle_z": {
+          "action_range": [
+            -0.5864562392234802,
+            0.07842633873224258
+          ],
+          "smoothed_action_range": [
+            -0.5852482914924622,
+            0.009429572150111198
+          ],
+          "target_range": [
+            0.0031801387667655945,
+            0.0507543683052063
+          ],
+          "position_range": [
+            0.07375252991914749,
+            0.11254711449146271
+          ],
+          "force_range": [
+            -17.48540687561035,
+            -6.8519487380981445
+          ],
+          "raw_action_abs_ge_0_99_fraction": 0.0,
+          "target_at_effective_lower_fraction": 0.0,
+          "target_at_effective_upper_fraction": 0.0,
+          "actuator_force_at_xml_limit_fraction": 0.0
+        },
+        "left_knee_z": {
+          "action_range": [
+            -0.03805588558316231,
+            0.19550563395023346
+          ],
+          "smoothed_action_range": [
+            -0.03610925003886223,
+            0.17754143476486206
+          ],
+          "target_range": [
+            -0.1698600947856903,
+            -0.052352212369441986
+          ],
+          "position_range": [
+            -0.18406826257705688,
+            -0.05828995257616043
+          ],
+          "force_range": [
+            1.7674455642700195,
+            9.782403945922852
+          ],
+          "raw_action_abs_ge_0_99_fraction": 0.0,
+          "target_at_effective_lower_fraction": 0.0,
+          "target_at_effective_upper_fraction": 0.0,
+          "actuator_force_at_xml_limit_fraction": 0.0
+        },
+        "right_knee_z": {
+          "action_range": [
+            0.05886613950133324,
+            0.6727209687232971
+          ],
+          "smoothed_action_range": [
+            0.06053388491272926,
+            0.580712080001831
+          ],
+          "target_range": [
+            -0.11670637130737305,
+            0.0
+          ],
+          "position_range": [
+            -0.11139337718486786,
+            0.0012552471598610282
+          ],
+          "force_range": [
+            -3.122058391571045,
+            2.140199661254883
+          ],
+          "raw_action_abs_ge_0_99_fraction": 0.0,
+          "target_at_effective_lower_fraction": 0.0,
+          "target_at_effective_upper_fraction": 0.37254901960784315,
+          "actuator_force_at_xml_limit_fraction": 0.0
+        }
+      }
+    }
+  ],
+  "conclusion": "Both negative-X failures reproduce exactly. Neither ankle-z raw action, effective target, nor sampled actuator force reaches its limit during [5.0, 6.0] s. This does not support ankle command saturation as the measured cause of early balance loss. The right knee target does reach its physical extension bound. These observations do not establish that every control constraint is irrelevant, or identify the cause of unsuccessful learning.",
+  "next_experiment": {
+    "output": "runs/stand_pushx_continue_20261109_1m_lr1e-4",
+    "source_checkpoint": "/mnt/c/Users/aleks/Desktop/Aleksie kerefeke/master/RS projekat - RL politika ucenja joystick/mujoco-bipedal-joystick-walker/runs/stand_pushx_20261106_1m_lr3e-4/resume/20261106_1811_stand_balance_v1_resume_1000000_lr0_0003_V1_steps-1m_reward-8683p0273_s/checkpoints/000000409600",
+    "source_lineage_steps": 3481600,
+    "requested_additional_steps": 1000000,
+    "learning_rate": 0.0001,
+    "episode_length": 3000,
+    "stand_push_max_fraction": 0.05,
+    "seed": 7,
+    "num_envs": 64,
+    "rationale": "Test a lower learning rate after late checkpoint regression, starting from push-trained 409600 which retains 60-second hold and three push directions. The reward, physics, action range, training pulse distribution and acceptance criteria remain the same. This is a continuation experiment with fresh optimizer, not a matched proof that learning rate caused the earlier regression.",
+    "automation": "All five new checkpoints: four-seed short gates, selected-candidate videos, and all 25 long-hold/push cases. No further automatic training."
+  }
+}

@@ -2,7 +2,39 @@
 
 Datum: 2026-11-05
 
-## Najnovije — push evaluacija završena, sledi dijagnostika komandi
+## Najnovije — dijagnostika završena, pripremljen nastavak sa manjim LR
+
+Provera 2026-11-09: oba slučaja u `runs/stand_control_diagnostic_20261106`
+su završena. Nema aktivnog prethodnog treninga/evaluacije. Izvorni horizon60
+checkpoint pada na 6.96 s, push-trained 409,600 na 6.94 s. Sve fizičke metrike
+i svi snimljeni qpos/qvel frejmovi tačno odgovaraju prethodnim evaluacijama:
+instrumentacija nije promenila ove putanje.
+
+U istom intervalu 5.0–6.0 s nijedna ankle-z komanda, PD cilj ili snimljeni
+moment ne dostiže svoju granicu. Maksimalne pozitivne sirove akcije levo/desno
+su 0.559/0.153 za izvor i 0.325/0.078 za push-trained kandidat. To ne podržava
+hipotezu zasićenja ankle komandi kao uzrok početnog gubitka balansa. Desno koleno
+dostiže fizički limit ekstenzije; ne tvrditi da su svi limiti nebitni.
+Dokazi: `analysis_outputs/skills/stand_control_diagnostic_20261106.json`.
+
+Pripremljen je **jedan novi 1M nastavak**, folder
+`runs/stand_pushx_continue_20261109_1m_lr1e-4`, iz push-trained 409,600
+(3,481,600 koraka u lancu). Taj izvor prolazi 60 s i +X/±Y, ali ne -X.
+LR je `1e-4` umesto `3e-4`; ista 60 s epizoda, `balance_v1`, seed 7, 64 env-a
+i isti trening potisci do 5% težine. Actor/critic/normalizer se vraćaju;
+optimizer je nov. Ovo proverava konzervativniji nastavak posle kasnije regresije,
+ne dokazuje da je LR njen uzrok. Nema promene fizike ili akcionog raspona.
+Stvarni WSL dry-run prolazi i potvrđuje izvor i konfiguraciju.
+
+Sledeća tačka: ako novi folder/proces već postoji, prvo proveriti
+`comparison.json`, `resume_train.log` i proces, bez dupliranja. Ako još nije
+pokrenut, sačuvati/pushovati proverene dokaze i pokrenuti taj jedan run iz čistog
+commita. Runner automatski radi kratke gate-ove, četiri videa i svih 25 dužih
+provera. Nijedan dosadašnji kandidat ne prolazi ceo robustness suite.
+Noćni red se ne pokreće ponovo; walk→stand i A→B ostaju odloženi.
+Natural-walk arhiva i joystick grana ostaju netaknute.
+
+## Prethodni korak — push evaluacija završena, pokrenuta dijagnostika komandi
 
 `runs/stand_pushx_20261106_1m_lr3e-4` je završio ceo pipeline i svih 25 provera.
 **Nijedan checkpoint ne prolazi pun robustness test.** Prva dva prolaze 60 s
@@ -17,17 +49,22 @@ je u `analysis_outputs/skills/stand_pushx_kinematics_20261106.json`: posle -X
 potiska težište nastavlja iza zadnjih kontakata stopala, uz ispravljanje kolena.
 Uski ankle residual raspon je hipoteza za proveru, ne još dokazan uzrok.
 
-Pripremljena je kratka evaluacija bez treninga: samo postojeći -X probe na
+Pokrenuta je kratka evaluacija bez treninga: samo postojeći -X probe na
 izvornom horizon60 finalnom checkpoint-u i push-trained 409,600, uz
 `--control-trace --probes push_x_neg`. Beleži akcije, smoothed akcije, stvarne
 PD ciljeve, uglove i momente, kao i efektivne/ XML granice. Ne menja težine,
 akcioni raspon ili fiziku. Podskup testova ne može se označiti kao pun prolaz.
 Petnaest fokusiranih testova i Ruff prolaze.
 
-Sledeća tačka: sačuvati proverene izmene i pokrenuti dijagnostiku u
-`runs/stand_control_diagnostic_20261106` iz čistog commita. Ako folder postoji,
-proveriti proces i izveštaj pre novog pokretanja. Sačekati oba slučaja,
-uporediti ciljeve/granice i tek onda odrediti sledeću kontrolisanu promenu.
+Rezultati su u commitu `a7f9f91`, dijagnostički alat u `f34efc2`; oba su
+pushovana. Dijagnostika je pokrenuta iz čistog `f34efc2` 2026-11-06 u 20:16 UTC
+(21:16 lokalno), Windows launcher PID 28940 pri startu, u
+`runs/stand_control_diagnostic_20261106`. Susedni `.launch.json` beleži tačne
+argumente. Početni `report.json` potvrđivao je `status=running`, `full_suite=false`,
+`requested_probes=[push_x_neg]` i `control_trace=true`.
+
+Tadašnja sledeća tačka bila je sačekati oba slučaja i uporediti ciljeve/granice;
+završeni rezultat i odluka opisani su u najnovijem odeljku iznad.
 Natural-walk arhiva i joystick grana ostaju netaknute; A→B ostaje odložen.
 
 ## Prethodna provera — kratki gate gotov, duža evaluacija u toku

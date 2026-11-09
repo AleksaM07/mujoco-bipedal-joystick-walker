@@ -77,6 +77,69 @@ and cannot produce `passed=true` for overall robustness, even if its requested
 cases pass. Fifteen focused tests pass, including JIT trace indexing and this
 subset-certification guard; Ruff, formatting and diff checks pass.
 
-Diagnostic output: `runs/stand_control_diagnostic_20261106`. Wait for its two
-cases and compare control limits before choosing the next training change.
-Walk-to-stand and A-to-B remain pending.
+Diagnostic output: `runs/stand_control_diagnostic_20261106`. Both cases are
+complete; the findings and next experiment are below. Walk-to-stand and A-to-B
+remain pending.
+
+The diagnostic was launched at 20:16 UTC (21:16 local) on 2026-11-06 from
+clean commit `f34efc2`, with hidden Windows launcher PID 28940 at startup.
+The sibling `.launch.json` contains the exact command. Its initial report
+confirms a diagnostic subset with control tracing and no full-suite claim.
+
+## Completed control diagnosis, reviewed 2026-11-09
+
+Saved evidence: `analysis_outputs/skills/stand_control_diagnostic_20261106.json`.
+The source falls at 6.96 s and push-trained 409,600 at 6.94 s. Every physical
+summary field and every replay array (`qpos`, `qvel`, `steps`, `dt`) agrees
+exactly with the original non-instrumented case. The report remains
+`full_suite=false`, `passed=false`.
+
+The same 51 control samples from 5.0 through 6.0 s cover the force pulse and
+initial balance loss in both cases. Neither ankle-z target reaches its
+effective range, neither raw ankle-z action reaches absolute 0.99, and neither
+sampled ankle-z actuator force reaches the XML force limit.
+
+| Candidate | Left/right maximum raw ankle-z action | Left/right maximum ankle-z target (rad) | Right knee target at extension bound |
+| --- | --- | --- | --- |
+| horizon60 final | 0.559 / 0.153 | 0.08874 / 0.05944 | 13 / 51 samples |
+| push-trained 409,600 | 0.325 / 0.078 | 0.07229 / 0.05075 | 19 / 51 samples |
+
+Both ankle-z target ranges are approximately [-0.03, 0.13] rad. These samples
+do not support ankle command saturation as the cause of early balance loss.
+They do not prove that all control constraints are irrelevant: the right knee
+target reaches its physical extension bound. No action-range or XML change is
+justified by the ankle saturation hypothesis on this evidence alone.
+
+## Next controlled continuation
+
+Run: `runs/stand_pushx_continue_20261109_1m_lr1e-4`.
+
+Continue push-trained checkpoint 409,600, which retains the 60-second hold and
++X/±Y recovery, with one additional 1M-step budget. Its lineage contains
+3,481,600 steps before this continuation. Change learning rate from `3e-4` to
+`1e-4`, retaining the reward, 3,000-step episodes, seed 7, 64 environments,
+training pulse distribution, physics, action mapping and acceptance criteria.
+Restore actor, critic and observation normalizer with a fresh optimizer.
+
+The late deterministic regression motivates testing smaller updates while
+continuing recovery training. This is a continuation from an earlier checkpoint,
+not a matched causal demonstration that learning rate caused the regression.
+The failed final checkpoint is not a training source. The actual WSL dry-run
+validates the source checkpoint, XML hash and matching environment/PPO settings.
+
+The existing runner performs four-seed short gates for all five new checkpoints,
+four selected-candidate videos, and all 25 long-hold/push cases automatically.
+Success requires a candidate in `robustness_candidates_passed` plus video review;
+pipeline completion or reward alone is insufficient. No additional training
+is queued after this single run.
+
+```powershell
+$sourceRun = @(Get-ChildItem runs/stand_pushx_20261106_1m_lr3e-4/resume -Directory)
+if ($sourceRun.Count -ne 1) { throw 'Expected one source run' }
+$sourcePath = $sourceRun[0].FullName.Substring((Get-Location).Path.Length + 1).Replace('\', '/')
+wsl -e env XLA_PYTHON_CLIENT_PREALLOCATE=false PYTHONUNBUFFERED=1 .venv/bin/python -u scripts/run_stand_ablation.py --variants resume --resume-from "$sourcePath/checkpoints/000000409600" --timesteps 1000000 --stand-reward-mode balance_v1 --learning-rate 0.0001 --episode-length 3000 --stand-push-max-fraction 0.05 --robustness-check --output runs/stand_pushx_continue_20261109_1m_lr1e-4
+```
+
+Before running this command, check whether that output/process already exists.
+The background launcher uses the same arguments with hidden Windows process
+execution and separate stdout/stderr logs.
