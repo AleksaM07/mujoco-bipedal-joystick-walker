@@ -13,23 +13,40 @@ from skills.stand import StandEnv
 class StandTrainingPushWrapper(wrapper.Wrapper):
     """Mix nominal episodes with short thorax forces, without changing observations.
 
-    Half of episodes are nominal in expectation. Other episodes sample a -world X
-    force uniformly up to ``max_fraction`` of body weight. One 0.2 s pulse repeats
-    every 10 s, with an episode-specific phase uniformly sampled from 2 to 8 s.
-    Neither the pulse phase nor force is added to the actor's observations.
+    Active episodes sample a -world X force uniformly between ``min_fraction``
+    and ``max_fraction`` of body weight. One 0.2 s pulse repeats every 10 s, with
+    an episode-specific phase uniformly sampled from 2 to 8 s. Neither the pulse
+    phase nor force is added to the actor's observations.
     """
 
-    def __init__(self, env: StandEnv, max_fraction: float) -> None:
-        if not math.isfinite(max_fraction) or not 0 <= max_fraction <= 0.05:
-            raise ValueError("Stand push fraction must be finite and in [0, 0.05].")
+    def __init__(
+        self,
+        env: StandEnv,
+        max_fraction: float,
+        *,
+        min_fraction: float = 0.0,
+        active_probability: float = 0.5,
+    ) -> None:
+        if not all(
+            math.isfinite(value)
+            for value in (min_fraction, max_fraction, active_probability)
+        ):
+            raise ValueError("Stand push distribution values must be finite.")
+        if not 0 <= min_fraction <= max_fraction <= 0.05:
+            raise ValueError(
+                "Stand push fractions must satisfy 0 <= min <= max <= 0.05."
+            )
+        if not 0 <= active_probability <= 1:
+            raise ValueError("Stand push probability must be in [0, 1].")
         if not isinstance(env, StandEnv) or env._config.physics_backend != "mjx_jax":
             raise ValueError("Training pushes require StandEnv with mjx_jax physics.")
         super().__init__(env)
-        self.max_force = (
-            max_fraction
-            * float(np.sum(env.mj_model.body_mass))
-            * float(np.linalg.norm(env.mj_model.opt.gravity))
+        model_weight = float(np.sum(env.mj_model.body_mass)) * float(
+            np.linalg.norm(env.mj_model.opt.gravity)
         )
+        self.min_force = min_fraction * model_weight
+        self.max_force = max_fraction * model_weight
+        self.active_probability = active_probability
         self.body_id = env.mj_model.body("thorax").id
         self.period_steps = round(10.0 / env.dt)
         self.duration_steps = round(0.2 / env.dt)
@@ -45,8 +62,12 @@ class StandTrainingPushWrapper(wrapper.Wrapper):
         """Sample a nominal/pushed episode, magnitude and pulse phase on each reset."""
         env_key, active_key, force_key, phase_key = jax.random.split(rng, 4)
         state = self.env.reset(env_key)
-        force = -self.max_force * jax.random.uniform(force_key)
-        force = jp.where(jax.random.bernoulli(active_key), force, 0.0)
+        force = -jax.random.uniform(
+            force_key, minval=self.min_force, maxval=self.max_force
+        )
+        force = jp.where(
+            jax.random.bernoulli(active_key, self.active_probability), force, 0.0
+        )
         start = jax.random.randint(
             phase_key, (), self.first_start_step, self.last_start_step + 1
         )

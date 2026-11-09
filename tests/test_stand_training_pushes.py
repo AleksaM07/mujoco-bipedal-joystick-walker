@@ -110,6 +110,22 @@ class StandTrainingPushTests(unittest.TestCase):
         _, later_forces = pulse(repeated)
         np.testing.assert_array_equal(forces, later_forces)
 
+    def test_hard_push_distribution_preserves_a_nominal_subset(self) -> None:
+        env = StandTrainingPushWrapper(
+            self.base,
+            0.05,
+            min_fraction=0.04,
+            active_probability=0.75,
+        )
+        keys = jax.random.split(jax.random.PRNGKey(19), 2048)
+        state = jax.jit(jax.vmap(env.reset))(keys)
+        force = np.asarray(state.info["stand_push_force_x"])
+        active = force < 0
+        self.assertGreater(np.mean(active), 0.70)
+        self.assertLess(np.mean(active), 0.80)
+        self.assertTrue(np.all(force[active] <= -(0.04 * 75 * 9.81)))
+        self.assertTrue(np.all(force[active] >= -(0.05 * 75 * 9.81)))
+
     def test_auto_reset_clears_counter_and_force_and_resamples_schedule(self) -> None:
         env = wrap_biomechanics_training(self.env, episode_length=2)
         state = jax.jit(env.reset)(jax.random.split(jax.random.PRNGKey(11), 8))
@@ -145,12 +161,21 @@ class StandTrainingPushTests(unittest.TestCase):
         default_wrap = make_wrap_env_fn(evaluation)
         nominal = default_wrap(self.base, episode_length=500).reset(keys)
         self.assertNotIn("stand_push_steps", nominal.info)
+        self.assertEqual(TrainConfig().stand_push_min_fraction, 0)
         self.assertEqual(TrainConfig().stand_push_max_fraction, 0)
+        self.assertEqual(TrainConfig().stand_push_probability, 0.5)
 
     def test_invalid_fraction_and_non_stand_training_are_rejected(self) -> None:
         for value in (-0.01, 0.06, float("nan"), float("inf")):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 StandTrainingPushWrapper(self.base, value)
+        with self.assertRaises(ValueError):
+            StandTrainingPushWrapper(self.base, 0.04, min_fraction=0.05)
+        for probability in (-0.01, 1.01, float("nan")):
+            with self.subTest(probability=probability), self.assertRaises(ValueError):
+                StandTrainingPushWrapper(
+                    self.base, 0.05, active_probability=probability
+                )
         with self.assertRaisesRegex(ValueError, "locomotion_skill=stand"):
             run_training(
                 EnvConfig(), TrainConfig(stand_push_max_fraction=0.05), Path("unused")

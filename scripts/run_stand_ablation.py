@@ -34,7 +34,9 @@ def build_configs(
     learning_rate: float = 2e-5,
     resume_from: Path | None = None,
     episode_length: int = 500,
+    stand_push_min_fraction: float = 0.0,
     stand_push_max_fraction: float = 0.0,
+    stand_push_probability: float = 0.5,
 ) -> tuple[EnvConfig, TrainConfig]:
     """Keep archived physics/PPO settings with explicit initialization and reward."""
     if variant not in ALL_VARIANTS or timesteps <= 0:
@@ -47,11 +49,19 @@ def build_configs(
         raise ValueError("learning_rate must be finite and positive.")
     if episode_length < 500:
         raise ValueError("Stand training episodes must contain at least 500 steps.")
-    if (
-        not math.isfinite(stand_push_max_fraction)
-        or not 0 <= stand_push_max_fraction <= 0.05
+    if not all(
+        math.isfinite(value)
+        for value in (
+            stand_push_min_fraction,
+            stand_push_max_fraction,
+            stand_push_probability,
+        )
     ):
-        raise ValueError("Stand push fraction must be finite and in [0, 0.05].")
+        raise ValueError("Stand push distribution values must be finite.")
+    if not 0 <= stand_push_min_fraction <= stand_push_max_fraction <= 0.05:
+        raise ValueError("Stand push fractions must satisfy 0 <= min <= max <= 0.05.")
+    if not 0 <= stand_push_probability <= 1:
+        raise ValueError("Stand push probability must be in [0, 1].")
     saved = json.loads((ARCHIVE / "config.json").read_text(encoding="utf-8"))
     environment = replace(
         EnvConfig(**saved["env"]),
@@ -84,7 +94,9 @@ def build_configs(
         training_metrics_steps=50000,
         enable_erfi=False,
         enable_domain_randomization=False,
+        stand_push_min_fraction=stand_push_min_fraction,
         stand_push_max_fraction=stand_push_max_fraction,
+        stand_push_probability=stand_push_probability,
         bare=True,
         save_checkpoints=True,
         checkpoint_out=None,
@@ -130,7 +142,9 @@ def build_configs(
             "resume_from",
             "restore_value_fn",
             "episode_length",
+            "stand_push_min_fraction",
             "stand_push_max_fraction",
+            "stand_push_probability",
         ):
             source_training.pop(key)
             target_training.pop(key)
@@ -201,7 +215,9 @@ def run_variant(
     learning_rate: float = 2e-5,
     resume_from: Path | None = None,
     episode_length: int = 500,
+    stand_push_min_fraction: float = 0.0,
     stand_push_max_fraction: float = 0.0,
+    stand_push_probability: float = 0.5,
 ) -> dict[str, Any]:
     """Train one variant, then physically check every saved checkpoint."""
     command = [
@@ -219,8 +235,12 @@ def run_variant(
         str(learning_rate),
         "--episode-length",
         str(episode_length),
+        "--stand-push-min-fraction",
+        str(stand_push_min_fraction),
         "--stand-push-max-fraction",
         str(stand_push_max_fraction),
+        "--stand-push-probability",
+        str(stand_push_probability),
     ]
     result: dict[str, Any] = {"variant": variant, "training_command": command}
     if resume_from is not None:
@@ -274,7 +294,9 @@ def main() -> int:
     parser.add_argument("--timesteps", type=int, default=1_000_000)
     parser.add_argument("--learning-rate", type=float, default=2e-5)
     parser.add_argument("--episode-length", type=int, default=500)
+    parser.add_argument("--stand-push-min-fraction", type=float, default=0.0)
     parser.add_argument("--stand-push-max-fraction", type=float, default=0.0)
+    parser.add_argument("--stand-push-probability", type=float, default=0.5)
     parser.add_argument("--robustness-check", action="store_true")
     parser.add_argument("--variants", choices=ALL_VARIANTS, nargs="+", default=VARIANTS)
     parser.add_argument("--resume-from", type=Path)
@@ -312,7 +334,9 @@ def main() -> int:
                 args.learning_rate,
                 args.resume_from,
                 args.episode_length,
+                args.stand_push_min_fraction,
                 args.stand_push_max_fraction,
+                args.stand_push_probability,
             )
         except (OSError, ValueError) as exc:
             parser.error(str(exc))
@@ -334,7 +358,9 @@ def main() -> int:
             args.learning_rate,
             args.resume_from,
             args.episode_length,
+            args.stand_push_min_fraction,
             args.stand_push_max_fraction,
+            args.stand_push_probability,
         )
         run_training(env, training, output)
         return 0
@@ -357,7 +383,9 @@ def main() -> int:
             args.learning_rate,
             args.resume_from,
             args.episode_length,
+            args.stand_push_min_fraction,
             args.stand_push_max_fraction,
+            args.stand_push_probability,
         )
         report["variants"].append(result)
         write_report(output / "comparison.json", report)

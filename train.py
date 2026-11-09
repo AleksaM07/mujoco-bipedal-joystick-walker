@@ -666,10 +666,22 @@ def run_training(
     out_dir: Path,
 ) -> Path:
     """Pokrece MuJoCo Playground env kroz Brax PPO/MJX training pipeline."""
-    if not np.isfinite(train_config.stand_push_max_fraction) or not (
-        0 <= train_config.stand_push_max_fraction <= 0.05
+    push_values = (
+        train_config.stand_push_min_fraction,
+        train_config.stand_push_max_fraction,
+        train_config.stand_push_probability,
+    )
+    if not all(np.isfinite(value) for value in push_values):
+        raise ValueError("Stand push distribution values must be finite.")
+    if not (
+        0
+        <= train_config.stand_push_min_fraction
+        <= train_config.stand_push_max_fraction
+        <= 0.05
     ):
-        raise ValueError("Stand push fraction must be finite and in [0, 0.05].")
+        raise ValueError("Stand push fractions must satisfy 0 <= min <= max <= 0.05.")
+    if not 0 <= train_config.stand_push_probability <= 1:
+        raise ValueError("Stand push probability must be in [0, 1].")
     if train_config.stand_push_max_fraction and (
         env_config.locomotion_skill != "stand"
         or env_config.physics_backend != "mjx_jax"
@@ -858,10 +870,12 @@ def run_training(
         logger.info("domain randomization disabled for this run")
     if train_config.stand_push_max_fraction:
         logger.info(
-            "stand training pushes | -world X | max body-weight fraction={} | "
-            "nominal episode probability=0.5 | pulse=0.2s every 10s | "
+            "stand training pushes | -world X | body-weight fraction={}..{} | "
+            "active episode probability={} | pulse=0.2s every 10s | "
             "random phase=2..8s | nominal evaluation unchanged",
+            train_config.stand_push_min_fraction,
             train_config.stand_push_max_fraction,
+            train_config.stand_push_probability,
         )
 
     if train_config.debug_run:
@@ -887,7 +901,10 @@ def run_training(
                 restore_checkpoint_path=restore_checkpoint_path,
                 restore_value_fn=train_config.restore_value_fn,
                 wrap_env_fn=make_wrap_env_fn(
-                    eval_env, stand_push_max_fraction=train_config.stand_push_max_fraction
+                    eval_env,
+                    stand_push_min_fraction=train_config.stand_push_min_fraction,
+                    stand_push_max_fraction=train_config.stand_push_max_fraction,
+                    stand_push_probability=train_config.stand_push_probability,
                 ),
                 **train_kwargs_extra,
                 **train_kwargs,
@@ -918,7 +935,13 @@ def run_training(
     return success_dir
 
 
-def make_wrap_env_fn(eval_env, *, stand_push_max_fraction: float = 0.0):
+def make_wrap_env_fn(
+    eval_env,
+    *,
+    stand_push_min_fraction: float = 0.0,
+    stand_push_max_fraction: float = 0.0,
+    stand_push_probability: float = 0.5,
+):
     """Return Brax wrapper with nominal eval and reset-time DR for training."""
 
     def wrap_env(
@@ -942,7 +965,12 @@ def make_wrap_env_fn(eval_env, *, stand_push_max_fraction: float = 0.0):
 
             if randomization_fn is not None:
                 raise ValueError("Stand push experiment requires nominal model physics.")
-            wrapped_env = StandTrainingPushWrapper(wrapped_env, stand_push_max_fraction)
+            wrapped_env = StandTrainingPushWrapper(
+                wrapped_env,
+                stand_push_max_fraction,
+                min_fraction=stand_push_min_fraction,
+                active_probability=stand_push_probability,
+            )
         return wrap_biomechanics_training(
             wrapped_env,
             episode_length=episode_length,
@@ -2972,10 +3000,22 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--stand-push-min-fraction",
+        type=float,
+        default=0.0,
+        help="Minimum training-only -X thorax push fraction of body weight (0..0.05).",
+    )
+    parser.add_argument(
         "--stand-push-max-fraction",
         type=float,
         default=0.0,
         help="Training-only -X thorax pushes up to this fraction of body weight (0..0.05).",
+    )
+    parser.add_argument(
+        "--stand-push-probability",
+        type=float,
+        default=0.5,
+        help="Probability that a training episode receives -X thorax pushes (0..1).",
     )
     parser.add_argument(
         "--restore-value-fn",
@@ -3237,7 +3277,9 @@ def main() -> None:
             else debug_defaults.get("learning_rate")
         ),
         distribution_type=args.distribution_type,
+        stand_push_min_fraction=args.stand_push_min_fraction,
         stand_push_max_fraction=args.stand_push_max_fraction,
+        stand_push_probability=args.stand_push_probability,
         enable_erfi=args.erfi,
         enable_domain_randomization=(
             args.domain_randomization

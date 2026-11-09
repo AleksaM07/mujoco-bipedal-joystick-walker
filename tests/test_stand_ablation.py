@@ -151,15 +151,21 @@ class StandAblationTests(unittest.TestCase):
                     3e-4,
                     checkpoint,
                     episode_length=3000,
+                    stand_push_min_fraction=0.04,
                     stand_push_max_fraction=0.05,
+                    stand_push_probability=0.75,
                 )
                 self.assertEqual(longer_env, pushed_env)
                 pushed_values, longer_values = (
                     asdict(pushed_training),
                     asdict(longer_training),
                 )
+                self.assertEqual(pushed_values.pop("stand_push_min_fraction"), 0.04)
+                self.assertEqual(longer_values.pop("stand_push_min_fraction"), 0.0)
                 self.assertEqual(pushed_values.pop("stand_push_max_fraction"), 0.05)
                 self.assertEqual(longer_values.pop("stand_push_max_fraction"), 0.0)
+                self.assertEqual(pushed_values.pop("stand_push_probability"), 0.75)
+                self.assertEqual(longer_values.pop("stand_push_probability"), 0.5)
                 self.assertEqual(pushed_values, longer_values)
                 output = io.StringIO()
                 arguments = [
@@ -207,7 +213,9 @@ class StandAblationTests(unittest.TestCase):
                 3e-4,
                 checkpoint,
                 episode_length=3000,
+                stand_push_min_fraction=0.04,
                 stand_push_max_fraction=0.05,
+                stand_push_probability=0.75,
             )
         self.assertEqual(result["status"], "training_failed")
         command = run.call_args.args[0]
@@ -217,13 +225,33 @@ class StandAblationTests(unittest.TestCase):
         self.assertEqual(command[command.index("--learning-rate") + 1], "0.0003")
         self.assertEqual(command[command.index("--episode-length") + 1], "3000")
         self.assertEqual(
+            command[command.index("--stand-push-min-fraction") + 1], "0.04"
+        )
+        self.assertEqual(
             command[command.index("--stand-push-max-fraction") + 1], "0.05"
+        )
+        self.assertEqual(
+            command[command.index("--stand-push-probability") + 1], "0.75"
         )
 
     def test_push_fraction_is_explicit_and_bounded(self) -> None:
         for fraction in (-0.01, 0.06, float("nan"), float("inf")):
             with self.subTest(fraction=fraction), self.assertRaises(ValueError):
                 build_configs("scratch", 1_000_000, stand_push_max_fraction=fraction)
+        with self.assertRaises(ValueError):
+            build_configs(
+                "scratch",
+                1_000_000,
+                stand_push_min_fraction=0.05,
+                stand_push_max_fraction=0.04,
+            )
+        for probability in (-0.01, 1.01, float("nan")):
+            with self.subTest(probability=probability), self.assertRaises(ValueError):
+                build_configs(
+                    "scratch",
+                    1_000_000,
+                    stand_push_probability=probability,
+                )
 
     def test_long_episode_requires_at_least_original_gate_length(self) -> None:
         with self.assertRaisesRegex(ValueError, "at least 500"):
