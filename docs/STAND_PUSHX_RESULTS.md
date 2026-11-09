@@ -150,6 +150,19 @@ startup: 31584; WSL parent/worker at the 14:52 check: 432/433. The sibling
 `.launch.json` records the exact command and source commit. `comparison.json`
 records `status=running`, `stage=training`, `robustness_requested=true`.
 The saved `resume/*/config.json` matches the WSL dry-run plan in every env and
-train field. The environment is constructed and reset diagnostics are running;
-no new physical result is available yet. Check this existing process/report
-before restarting.
+train field.
+
+At the 15:57 local check on 2026-11-09, training has completed all 1,024,000
+steps and exited with code 0 at 15:52. The final stochastic PPO evaluation
+reports a 3,000-step average episode with no falls; this is not an acceptance
+gate. The parent is running `evaluate_stand.py` over the five checkpoints
+(WSL parent/evaluator PID 432/6708 at that check). The first seed-11 rollout
+passes 500/500 steps with final dwell 10 s and max drift 0.018938 m. The full
+short gates and long robustness suite are not complete yet. The parent report
+still says `stage=training` until the variant advances, so inspect
+`resume_gate.log`, stdout and the process as well as `comparison.json`.
+
+The user's latest scope is to finish this existing run and its automatic
+checks only, then transfer to a new chat. No further training is queued or
+authorized by that latest instruction. Save the completed results and video
+review before proposing another experiment.

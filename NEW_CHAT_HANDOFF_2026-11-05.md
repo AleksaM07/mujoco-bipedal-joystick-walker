@@ -12,6 +12,8 @@ kao prethodni/arhivirani služe istoriji i ne nalažu ponavljanje završenog rad
 > `docs/SKILLS_REVIEW.md`, proveri git status i poslednja četiri commita.
 > Prvo proveri postojeći run `runs/stand_pushx_continue_20261109_1m_lr1e-4`,
 > njegove procese, `comparison.json` i logove; ne pokreći duplikat.
+> Poslednje uputstvo korisnika: završi samo ovaj run i njegove provere;
+> ne pokreći dodatni trening bez novog uputstva.
 > Sada radimo stand recovery posle -X potiska. Prirodan hod i 60 s mirnog
 > stajanja već postoje; walk→stand i A→B još nisu implementirani.
 > Nakon run-a pregledaj sve fizičke provere i video. Pre novih promena koristi
@@ -34,7 +36,25 @@ ugrađenog koda dopunjen je 2026-11-09 u `docs/SKILLS_REVIEW.md`. U ovom repou
 još nema AMP diskriminatora, ASE latentnih veština ili naučenog high-level
 kontrolera. Koristimo Brax PPO i naš MuJoCo/JAX env.
 
-## Najnovije — dijagnostika završena, pokrenut nastavak sa manjim LR
+## Najnovije — trening završen, nezavisne kratke provere u toku
+
+Provera 2026-11-09 oko 15:57 lokalno: aktivni nastavak završio je svih
+1,024,000 trening koraka i izašao sa kodom 0 u 15:52. Završna PPO evaluacija
+ima prosečnu dužinu 3,000 koraka i bez padova, ali to nije nezavisni gate.
+Parent sada izvršava `tools/evaluate_stand.py` nad svih pet checkpoint-a;
+WSL parent/evaluator PID pri proveri su 432/6708. `resume_gate.log` beleži prvi
+uspešan rollout seed-a 11: 500/500 koraka, završni dwell 10 s, max drift
+0.018938 m. Ostali seed-ovi/checkpoint-i još nisu završeni. Nijedan potpuni
+novi gate ili robustness rezultat još nije potvrđen.
+
+`comparison.json` pri toj proveri još nosi `stage=training`, iako stdout
+potvrđuje završetak treninga i početak `resume_gate.log`; za trenutnu podfazu
+proveriti i log/proces. Posle kratkih provera runner automatski pravi četiri
+videa i radi 25 dužih stand/push provera. Korisnik je tražio da nastavimo
+**samo ovaj run i njegove provere**, pa prelazi u novi chat. Ne pokretati
+dodatni trening. Handoff prenosi status i to ograničenje; proces radi u pozadini.
+
+## Pokretanje ovog nastavka i prethodna dijagnostika
 
 Provera 2026-11-09: oba slučaja u `runs/stand_control_diagnostic_20261106`
 su završena. Nema aktivnog prethodnog treninga/evaluacije. Izvorni horizon60
@@ -65,16 +85,17 @@ PID 31584 pri startu. Tačna komanda je u susednom `.launch.json`; logovi su
 `comparison.json` potvrđuje `status=running`, `stage=training`,
 `robustness_requested=true`. Stvarni `resume/*/config.json` u potpunosti se
 poklapa sa WSL dry-run planom, uključujući LR, checkpoint i critic restore.
-Pri proveri u 14:52 parent/worker imaju WSL PID 432/433. Log je zatim zabeležio
+Pri proveri u 14:52 parent/worker imali su WSL PID 432/433. Log je zatim zabeležio
 ulazak u PPO u 14:53, početnu evaluaciju u 15:04 i 204,800 trening koraka u
 15:12. To potvrđuje napredak procesa, ne fizički uspeh novog checkpoint-a.
-PID i status ponovo proveriti, jer još nema rezultata novog treninga.
+Trening je naknadno završen; trenutni status provera je u najnovijem odeljku.
 
 Sledeća tačka: prvo proveriti postojeći `comparison.json`, `resume_train.log`
 i proces, **bez pokretanja duplikata**. Runner automatski radi kratke gate-ove,
 četiri videa i svih 25 dužih provera. Posle završetka pregledati potpuni
-`robustness/report.json`, `robustness_candidates_passed` i snimak pre izbora
-narednog koraka. Nijedan dosadašnji kandidat ne prolazi ceo robustness suite.
+`robustness/report.json`, `robustness_candidates_passed` i snimak, pa sačuvati
+rezultate. Novi trening čeka novo uputstvo korisnika. Nijedan dosadašnji
+kandidat ne prolazi ceo robustness suite.
 Noćni red se ne pokreće ponovo; walk→stand i A→B ostaju odloženi.
 Natural-walk arhiva i joystick grana ostaju netaknute.
 
