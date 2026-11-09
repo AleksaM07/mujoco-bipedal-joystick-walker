@@ -36,6 +36,51 @@ ugrađenog koda dopunjen je 2026-11-09 u `docs/SKILLS_REVIEW.md`. U ovom repou
 još nema AMP diskriminatora, ASE latentnih veština ili naučenog high-level
 kontrolera. Koristimo Brax PPO i naš MuJoCo/JAX env.
 
+## Najnovije — lower-rate run pao, pokrenut konkretan 2M hard-push test
+
+Run `runs/stand_pushx_continue_20261109_1m_lr1e-4` je završio ceo pipeline:
+1,024,000 novih koraka, svih 20 kratkih gate rollout-a, četiri videa i svih
+25 dužih provera. Svih pet checkpoint-a prolazi 10 s gate, ali **nijedan ne
+prolazi pun robustness suite**. Svi padaju pod -X za 6.78–6.84 s i svi gube
+60 s nominalni hold za 32.84–56.96 s. `robustness_candidates_passed` je prazan.
+Ne nastavljati poslednje težine. Kompletan pregled je u
+`docs/STAND_PUSHX_CONTINUE_RESULTS.md`, a kratki rezultati u
+`analysis_outputs/skills/stand_pushx_continue_short_gates_20261109.json`.
+
+Renderovan je sačuvani -X replay checkpoint-a 409,600, bez nove simulacije.
+Robot je uspravan pri prestanku impulsa u 5.2 s, ali zatim nastavlja unazad bez
+dovoljne korekcije/koraka i pada u 6.84 s. Video i kontaktni list su u `review/`
+folderu završenog run-a. To potvrđuje isti obrazac kao ranija kinematička analiza.
+
+Korisnik je zatim izričito tražio konkretan veći test. Implementirani su
+`stand_push_min_fraction` i `stand_push_probability`, uz postojeći maksimum;
+stari default ostaje 0–5% u 50% epizoda. Prošlo je svih 415 testova i stvarni
+WSL dry-run. Implementacija i plan su pushovani u commitu `1d77e7a`.
+
+Pokrenut je **jedan novi 2M run** iz ranijeg stabilnog push-trained checkpoint-a
+409,600, koji prolazi 60 s i +X/±Y, ali ne -X:
+
+`runs/stand_pushx_hard_20261109_2m_lr5e-5`
+
+Start: 2026-11-09 20:16:55 UTC (21:16 lokalno), skriveni Windows launcher PID
+16076; početni WSL parent/worker PID 436/437. Tačna komanda i puni source commit
+su u susednom `.launch.json`. Trening koristi LR `5e-5`, 2M traženih koraka,
+60 s epizode, seed 7, 64 env-a i -X potiske 4–5% težine u 75% epizoda; preostalih
+25% su nominalne. Faza ostaje nasumična 2–8 s, impuls 0.2 s svakih 10 s.
+Actor/critic/normalizer se vraćaju, optimizer je nov. Reward, fizika, XML,
+akcioni prostor i acceptance suite su nepromenjeni.
+
+Stvarni sačuvani config potvrđuje sve navedene vrednosti, tačan source checkpoint,
+critic restore i XML SHA256 `494cb670...9895ef4`. Pri poslednjoj proveri parent i
+worker rade, env konstrukcija je završena i reset dijagnostika je u toku. Prvo
+proveriti ovaj postojeći proces, `comparison.json`, `resume_train.log` i stvarni
+config; **ne pokretati duplikat**. Runner automatski radi gate-ove, video i svih
+25 dužih slučajeva. Novi test proverava hipotezu da je prethodna raspodela bila
+preslaba: njen očekivani potisak preko svih epizoda bio je 1.25% težine, dok je
+acceptance uvek 5%. Ovo nije dokaz da više koraka samo po sebi rešava recovery.
+Walk→stand i A→B i dalje nisu implementirani. Natural-walk arhiva i joystick
+grana ostaju netaknute.
+
 ## Najnovije — trening završen, nezavisne kratke provere u toku
 
 Provera 2026-11-09 oko 15:57 lokalno: aktivni nastavak završio je svih

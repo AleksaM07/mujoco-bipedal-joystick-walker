@@ -75,6 +75,14 @@ source's 6.94 s. It also did not retain the source's confirmed 60-second hold.
 The source checkpoint remains the safer starting point because it passes the
 nominal hold and +X/±Y probes.
 
+The saved -X replay for new checkpoint 409,600 was rendered offline without a
+new physics rollout. Reviewed steps 0, 250, 260, 275, 300 and terminal step 342.
+The robot remains upright through the force release at 5.2 s, continues moving
+backward without a sufficient corrective step, leans behind its support by
+5.5–6.0 s and falls at 6.84 s. The video and contact sheet are in the run's
+`review/robustness_409600_push_x_neg.*` files. This agrees with the prior
+kinematic diagnosis rather than revealing a different failure mode.
+
 The training distribution explains the next controlled hypothesis. Half of
 episodes are nominal; pushed episodes draw force uniformly from zero to 5% of
 body weight. The expected training force is therefore only 1.25% of body
