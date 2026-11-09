@@ -861,6 +861,47 @@
     "seed": 7,
     "num_envs": 64,
     "rationale": "Test a lower learning rate after late checkpoint regression, starting from push-trained 409600 which retains 60-second hold and three push directions. The reward, physics, action range, training pulse distribution and acceptance criteria remain the same. This is a continuation experiment with fresh optimizer, not a matched proof that learning rate caused the earlier regression.",
-    "automation": "All five new checkpoints: four-seed short gates, selected-candidate videos, and all 25 long-hold/push cases. No further automatic training."
+    "automation": "All five new checkpoints: four-seed short gates, selected-candidate videos, and all 25 long-hold/push cases. No further automatic training.",
+    "launch": {
+      "started_utc": "2026-11-09T13:51:49.9187601Z",
+      "source_commit": "4373829540fd052cce80af2917154c74e7b34c78",
+      "windows_launcher_pid": 31584,
+      "arguments": [
+        "-e",
+        "env",
+        "XLA_PYTHON_CLIENT_PREALLOCATE=false",
+        "PYTHONUNBUFFERED=1",
+        ".venv/bin/python",
+        "-u",
+        "scripts/run_stand_ablation.py",
+        "--variants",
+        "resume",
+        "--resume-from",
+        "runs/stand_pushx_20261106_1m_lr3e-4/resume/20261106_1811_stand_balance_v1_resume_1000000_lr0_0003_V1_steps-1m_reward-8683p0273_s/checkpoints/000000409600",
+        "--timesteps",
+        "1000000",
+        "--stand-reward-mode",
+        "balance_v1",
+        "--learning-rate",
+        "0.0001",
+        "--episode-length",
+        "3000",
+        "--stand-push-max-fraction",
+        "0.05",
+        "--robustness-check",
+        "--output",
+        "runs/stand_pushx_continue_20261109_1m_lr1e-4"
+      ],
+      "output": "runs/stand_pushx_continue_20261109_1m_lr1e-4",
+      "requested_additional_steps": 1000000,
+      "max_additional_training_runs": 1
+    },
+    "verified_at_start": {
+      "status": "running",
+      "stage": "training",
+      "robustness_requested": true,
+      "saved_config_matches_dry_run": true,
+      "physical_result_available": false
+    }
   }
 }

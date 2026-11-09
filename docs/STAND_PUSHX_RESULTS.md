@@ -110,7 +110,7 @@ They do not prove that all control constraints are irrelevant: the right knee
 target reaches its physical extension bound. No action-range or XML change is
 justified by the ankle saturation hypothesis on this evidence alone.
 
-## Next controlled continuation
+## Active controlled continuation
 
 Run: `runs/stand_pushx_continue_20261109_1m_lr1e-4`.
 
@@ -143,3 +143,13 @@ wsl -e env XLA_PYTHON_CLIENT_PREALLOCATE=false PYTHONUNBUFFERED=1 .venv/bin/pyth
 Before running this command, check whether that output/process already exists.
 The background launcher uses the same arguments with hidden Windows process
 execution and separate stdout/stderr logs.
+
+Launched on 2026-11-09 at 13:51:49 UTC (14:51 local) from clean commit
+`4373829`, after pushing the diagnosis and plan. Windows launcher PID at
+startup: 31584; WSL parent/worker at the 14:52 check: 432/433. The sibling
+`.launch.json` records the exact command and source commit. `comparison.json`
+records `status=running`, `stage=training`, `robustness_requested=true`.
+The saved `resume/*/config.json` matches the WSL dry-run plan in every env and
+train field. The environment is constructed and reset diagnostics are running;
+no new physical result is available yet. Check this existing process/report
+before restarting.

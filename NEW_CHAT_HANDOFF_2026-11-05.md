@@ -2,7 +2,7 @@
 
 Datum: 2026-11-05
 
-## Najnovije — dijagnostika završena, pripremljen nastavak sa manjim LR
+## Najnovije — dijagnostika završena, pokrenut nastavak sa manjim LR
 
 Provera 2026-11-09: oba slučaja u `runs/stand_control_diagnostic_20261106`
 su završena. Nema aktivnog prethodnog treninga/evaluacije. Izvorni horizon60
@@ -17,7 +17,7 @@ hipotezu zasićenja ankle komandi kao uzrok početnog gubitka balansa. Desno kol
 dostiže fizički limit ekstenzije; ne tvrditi da su svi limiti nebitni.
 Dokazi: `analysis_outputs/skills/stand_control_diagnostic_20261106.json`.
 
-Pripremljen je **jedan novi 1M nastavak**, folder
+Pokrenut je **jedan novi 1M nastavak**, folder
 `runs/stand_pushx_continue_20261109_1m_lr1e-4`, iz push-trained 409,600
 (3,481,600 koraka u lancu). Taj izvor prolazi 60 s i +X/±Y, ali ne -X.
 LR je `1e-4` umesto `3e-4`; ista 60 s epizoda, `balance_v1`, seed 7, 64 env-a
@@ -26,11 +26,22 @@ optimizer je nov. Ovo proverava konzervativniji nastavak posle kasnije regresije
 ne dokazuje da je LR njen uzrok. Nema promene fizike ili akcionog raspona.
 Stvarni WSL dry-run prolazi i potvrđuje izvor i konfiguraciju.
 
-Sledeća tačka: ako novi folder/proces već postoji, prvo proveriti
-`comparison.json`, `resume_train.log` i proces, bez dupliranja. Ako još nije
-pokrenut, sačuvati/pushovati proverene dokaze i pokrenuti taj jedan run iz čistog
-commita. Runner automatski radi kratke gate-ove, četiri videa i svih 25 dužih
-provera. Nijedan dosadašnji kandidat ne prolazi ceo robustness suite.
+Dokazi i plan su sačuvani i pushovani u `4373829`. Run je pokrenut iz tog čistog
+commita 2026-11-09 u 13:51:49 UTC (14:51 lokalno), skriveni Windows launcher
+PID 31584 pri startu. Tačna komanda je u susednom `.launch.json`; logovi su
+`.stdout.log`, `.stderr.log` i `resume_train.log` unutar foldera.
+`comparison.json` potvrđuje `status=running`, `stage=training`,
+`robustness_requested=true`. Stvarni `resume/*/config.json` u potpunosti se
+poklapa sa WSL dry-run planom, uključujući LR, checkpoint i critic restore.
+Pri proveri u 14:52 parent/worker imaju WSL PID 432/433; konstrukcija okruženja
+je završena i worker radi reset dijagnostiku.
+PID i status ponovo proveriti, jer još nema rezultata novog treninga.
+
+Sledeća tačka: prvo proveriti postojeći `comparison.json`, `resume_train.log`
+i proces, **bez pokretanja duplikata**. Runner automatski radi kratke gate-ove,
+četiri videa i svih 25 dužih provera. Posle završetka pregledati potpuni
+`robustness/report.json`, `robustness_candidates_passed` i snimak pre izbora
+narednog koraka. Nijedan dosadašnji kandidat ne prolazi ceo robustness suite.
 Noćni red se ne pokreće ponovo; walk→stand i A→B ostaju odloženi.
 Natural-walk arhiva i joystick grana ostaju netaknute.
 
