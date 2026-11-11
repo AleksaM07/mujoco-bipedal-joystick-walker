@@ -121,6 +121,23 @@ class StandAblationTests(unittest.TestCase):
                     before.pop(key)
                     after.pop(key)
                 self.assertEqual(before, after)
+                recovery_env, recovery_training = build_configs(
+                    "resume",
+                    1_000_000,
+                    "recovery_v2",
+                    3e-4,
+                    checkpoint,
+                )
+                self.assertEqual(recovery_env.stand_reward_mode, "recovery_v2")
+                source_values = asdict(environment)
+                recovery_values = asdict(recovery_env)
+                source_values.pop("stand_reward_mode")
+                recovery_values.pop("stand_reward_mode")
+                self.assertEqual(source_values, recovery_values)
+                self.assertTrue(recovery_training.restore_value_fn)
+                self.assertEqual(
+                    recovery_training.resume_from, str(checkpoint.resolve())
+                )
                 longer_env, longer_training = build_configs(
                     "resume",
                     1_000_000,
@@ -197,6 +214,35 @@ class StandAblationTests(unittest.TestCase):
                 manifest_path.write_text('{"xml_sha256": "wrong"}', encoding="utf-8")
                 with self.assertRaisesRegex(ValueError, "matching source XML"):
                     build_configs("resume", 1_000_000, "balance_v1", 3e-4, checkpoint)
+
+    def test_resume_rejects_uncontrolled_reward_migration(self) -> None:
+        environment, training = build_configs("scratch", 1_000_000, "imitation")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkpoint = root / "source/checkpoints/000001024000"
+            checkpoint.mkdir(parents=True)
+            (checkpoint / "ppo_network_config.json").write_text("{}", encoding="utf-8")
+            (checkpoint.parent.parent / "config.json").write_text(
+                json.dumps({"env": asdict(environment), "train": asdict(training)}),
+                encoding="utf-8",
+            )
+            (checkpoint.parent.parent / "xml_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "xml_sha256": sha256(
+                            Path(environment.xml_path).read_bytes()
+                        ).hexdigest()
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with (
+                patch("scripts.run_stand_ablation.RUNS_DIR", root),
+                self.assertRaisesRegex(ValueError, "balance_v1 to recovery_v2"),
+            ):
+                build_configs(
+                    "resume", 1_000_000, "recovery_v2", 3e-4, checkpoint
+                )
 
     def test_resume_is_explicit_and_forwarded_to_worker(self) -> None:
         with self.assertRaisesRegex(ValueError, "requires --resume-from"):

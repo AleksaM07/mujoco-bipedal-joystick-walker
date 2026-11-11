@@ -102,18 +102,32 @@ class StandEnvironmentTests(unittest.TestCase):
             float(reward(fallen, action, action, state.info)), env.FALL_REWARD
         )
 
+    def test_recovery_reward_preserves_environment_layout(self):
+        balance = make_environment(
+            replace(stand_config(), stand_reward_mode="balance_v1")
+        )
+        recovery = make_environment(
+            replace(stand_config(), stand_reward_mode="recovery_v2")
+        )
+        self.assertEqual(recovery.action_size, balance.action_size)
+        self.assertEqual(recovery.observation_size, balance.observation_size)
+        self.assertEqual(recovery._config["stand_reward_mode"], "recovery_v2")
+        np.testing.assert_allclose(recovery._init_q, balance._init_q)
+
     def test_old_configs_keep_imitation_and_balance_mode_is_stand_only(self):
         restored = restore_saved_env_config({"env": {"locomotion_skill": "stand"}})
         self.assertEqual(restored.stand_reward_mode, "imitation")
-        for factory in (make_environment, make_training_environment):
-            with self.assertRaisesRegex(ValueError, "locomotion_skill=stand"):
-                factory(
-                    replace(
-                        stand_config(),
-                        locomotion_skill="walk",
-                        stand_reward_mode="balance_v1",
-                    )
-                )
+        for reward_mode in ("balance_v1", "recovery_v2"):
+            for factory in (make_environment, make_training_environment):
+                with self.subTest(reward_mode=reward_mode, factory=factory):
+                    with self.assertRaisesRegex(ValueError, "locomotion_skill=stand"):
+                        factory(
+                            replace(
+                                stand_config(),
+                                locomotion_skill="walk",
+                                stand_reward_mode=reward_mode,
+                            )
+                        )
 
 
 if __name__ == "__main__":

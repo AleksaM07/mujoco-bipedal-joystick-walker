@@ -2637,9 +2637,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--stand-reward-mode",
-        choices=["imitation", "balance_v1"],
+        choices=["imitation", "balance_v1", "recovery_v2"],
         default=EnvConfig.stand_reward_mode,
-        help="Versioned stand reward; balance_v1 adds dense physical balance feedback.",
+        help=(
+            "Versioned stand reward; recovery_v2 keeps dense state feedback while "
+            "allowing temporary corrective foot lift."
+        ),
     )
     parser.add_argument(
         "--reference-gait",

@@ -13,7 +13,7 @@ from mujoco_playground._src import mjx_env
 from biomechanics_env import BiomechanicsJoystickEnv
 from bvh_reference import LoopMode
 from skills.stand_metrics import StandThresholds, update_stand_metrics
-from skills.stand_rewards import stand_balance_score
+from skills.stand_rewards import stand_balance_score, stand_recovery_score
 
 
 class StandEnv(BiomechanicsJoystickEnv):
@@ -28,8 +28,11 @@ class StandEnv(BiomechanicsJoystickEnv):
         if self._config.get("stand_reward_mode", "imitation") not in {
             "imitation",
             "balance_v1",
+            "recovery_v2",
         }:
-            raise ValueError("stand_reward_mode must be imitation or balance_v1.")
+            raise ValueError(
+                "stand_reward_mode must be imitation, balance_v1 or recovery_v2."
+            )
         if (
             self._config.get("reference_gait") != "bvh"
             or self._config.get("deepmimic_reward_mode") != "pure"
@@ -75,11 +78,16 @@ class StandEnv(BiomechanicsJoystickEnv):
         )
 
     def _balance_score(self, data: mjx.Data, info: dict[str, jax.Array]) -> jax.Array:
-        return stand_balance_score(
+        common = (
             jp.linalg.norm(data.qvel[:2]),
             jp.linalg.norm(data.qpos[:2] - info["stand_anchor_xy"]),
             self._torso_up(data),
             data.qpos[2] / self._init_q[2],
+        )
+        if self._config.get("stand_reward_mode") == "recovery_v2":
+            return stand_recovery_score(*common, self.thresholds)
+        return stand_balance_score(
+            *common,
             jp.all(self._foot_contact(data, info) > 0),
             self.thresholds,
         )

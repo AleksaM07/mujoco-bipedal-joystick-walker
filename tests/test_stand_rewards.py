@@ -7,7 +7,7 @@ import jax.numpy as jp
 import numpy as np
 
 from skills.stand_metrics import StandThresholds
-from skills.stand_rewards import stand_balance_score
+from skills.stand_rewards import stand_balance_score, stand_recovery_score
 
 
 class StandRewardTests(unittest.TestCase):
@@ -41,6 +41,34 @@ class StandRewardTests(unittest.TestCase):
         self.assertEqual(self.score(both_feet_contact=0), 0.0)
         self.assertLess(self.score(speed=0.45), 0.001)
         self.assertLess(self.score(distance=0.75), 0.001)
+
+    def test_recovery_reward_allows_a_temporary_corrective_step(self) -> None:
+        recovery = stand_recovery_score(
+            jp.array(0.0),
+            jp.array(0.0),
+            jp.array(1.0),
+            jp.array(1.0),
+        )
+        self.assertEqual(float(recovery), 1.0)
+        self.assertEqual(self.score(both_feet_contact=0), 0.0)
+
+    def test_recovery_reward_still_penalizes_state_errors_and_nonfinite_values(
+        self,
+    ) -> None:
+        speed_error = stand_recovery_score(
+            jp.array(0.15),
+            jp.array(0.0),
+            jp.array(1.0),
+            jp.array(1.0),
+        )
+        invalid = stand_recovery_score(
+            jp.array(float("nan")),
+            jp.array(0.0),
+            jp.array(1.0),
+            jp.array(1.0),
+        )
+        self.assertAlmostEqual(float(speed_error), np.exp(-1), places=5)
+        self.assertEqual(float(invalid), 0.0)
 
     def test_invalid_state_cannot_receive_balance_reward(self) -> None:
         for field in ("speed", "distance", "torso_up", "height_ratio"):
