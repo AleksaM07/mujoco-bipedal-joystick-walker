@@ -71,13 +71,16 @@ Actor/critic/normalizer se vraćaju, optimizer je nov. Reward, fizika, XML,
 akcioni prostor i acceptance suite su nepromenjeni.
 
 Stvarni sačuvani config potvrđuje sve navedene vrednosti, tačan source checkpoint,
-critic restore i XML SHA256 `494cb670...9895ef4`. Pri poslednjoj proveri parent i
-worker rade, env konstrukcija je završena i reset dijagnostika je u toku. Prvo
-proveriti ovaj postojeći proces, `comparison.json`, `resume_train.log` i stvarni
-config; **ne pokretati duplikat**. Runner automatski radi gate-ove, video i svih
-25 dužih slučajeva. Novi test proverava hipotezu da je prethodna raspodela bila
-preslaba: njen očekivani potisak preko svih epizoda bio je 1.25% težine, dok je
-acceptance uvek 5%. Ovo nije dokaz da više koraka samo po sebi rešava recovery.
+critic restore i XML SHA256 `494cb670...9895ef4`. Računar/WSL je zatim bio
+uspavan skoro dva dana; isti proces se 2026-11-11 uredno nastavio bez novog run-a.
+Pri poslednjoj proveri trening je napredovao sa 819,200 na 870,400 od 2,000,000
+koraka, worker je aktivan, a stderr prazan. PPO evaluacija na 808,960 još nije
+fizički gate i imala je padove, pa rezultat ostaje nepoznat. Prvo proveriti ovaj
+postojeći proces, `comparison.json`, `resume_train.log` i stvarni config;
+**ne pokretati duplikat**. Runner automatski radi gate-ove, video i svih 25 dužih
+slučajeva. Novi test proverava hipotezu da je prethodna raspodela bila preslaba:
+njen očekivani potisak preko svih epizoda bio je 1.25% težine, dok je acceptance
+uvek 5%. Ovo nije dokaz da više koraka samo po sebi rešava recovery.
 Walk→stand i A→B i dalje nisu implementirani. Natural-walk arhiva i joystick
 grana ostaju netaknute.
 
