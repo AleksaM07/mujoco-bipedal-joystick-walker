@@ -2,7 +2,7 @@
 
 Datum: 2026-11-05
 
-Poslednje ažuriranje: 2026-11-09. Aktuelni status je na vrhu; odeljci označeni
+Poslednje ažuriranje: 2026-11-11. Aktuelni status je na vrhu; odeljci označeni
 kao prethodni/arhivirani služe istoriji i ne nalažu ponavljanje završenog rada.
 
 ## Poruka za novi chat — aktuelna
@@ -10,10 +10,11 @@ kao prethodni/arhivirani služe istoriji i ne nalažu ponavljanje završenog rad
 > Nastavi iz `NEW_CHAT_HANDOFF_2026-11-05.md` na grani
 > `skills_walking_with_anatomical_human_robot`. Pročitaj ceo handoff i
 > `docs/SKILLS_REVIEW.md`, proveri git status i poslednja četiri commita.
-> Prvo proveri postojeći run `runs/stand_pushx_continue_20261109_1m_lr1e-4`,
-> njegove procese, `comparison.json` i logove; ne pokreći duplikat.
-> Poslednje uputstvo korisnika: završi samo ovaj run i njegove provere;
-> ne pokreći dodatni trening bez novog uputstva.
+> Prvo proveri postojeći run `runs/stand_pushx_hard_20261109_2m_lr5e-5`,
+> njegov proces 436, `comparison.json` i logove; ne pokreći duplikat.
+> Ograničeni red `runs/stand_recovery_queue_20261111_2x2m` već čeka taj proces
+> i sme da pokrene najviše dva unapred definisana 2M recovery testa. Ne pokreći
+> ih ručno i ne menjaj red dok radi.
 > Sada radimo stand recovery posle -X potiska. Prirodan hod i 60 s mirnog
 > stajanja već postoje; walk→stand i A→B još nisu implementirani.
 > Nakon run-a pregledaj sve fizičke provere i video. Pre novih promena koristi
@@ -35,6 +36,45 @@ Pregled spoljnih implementacija i razlika između razmatranog pristupa i stvarno
 ugrađenog koda dopunjen je 2026-11-09 u `docs/SKILLS_REVIEW.md`. U ovom repou
 još nema AMP diskriminatora, ASE latentnih veština ili naučenog high-level
 kontrolera. Koristimo Brax PPO i naš MuJoCo/JAX env.
+
+## Najnovije — aktivan 2M run i pokrenut ograničeni recovery red
+
+Korisnik je 2026-11-11 izričito odobrio da se posle aktivnog testa automatski
+izvedu još najviše dva konkretna testa. Aktivni run ostaje samo
+`runs/stand_pushx_hard_20261109_2m_lr5e-5`, WSL parent/worker PID 436/437. Pri
+poslednjoj proveri pre pokretanja reda imao je checkpoint 1,617,920/2,000,000;
+PPO eval je izdržao 60 s, ali to nije nezavisni acceptance rezultat. Runner će
+sam završiti kratke gate-ove, četiri videa i svih 25 robustness proba.
+
+U commitu `11afd3b` dodat je `recovery_v2`: dense speed/drift/posture/height
+feedback se više ne nulira pri privremenom podizanju jednog stopala, kako bi
+korektivni korak mogao da se nauči. Nezavisni success gate nije olabavljen:
+i dalje zahteva oba kontakta i dwell od jedne sekunde. Promena je proverljiva
+hipoteza izvedena iz sačuvanog -X videa; fizika, XML, akcioni i observation
+prostor ostaju isti. Ciljani reward/env/resume/queue testovi i Windows i WSL
+dry-run prolaze. Detalji su u `docs/STAND_RECOVERY_QUEUE.md`.
+
+Pokrenut je čekajući red:
+
+`runs/stand_recovery_queue_20261111_2x2m`
+
+Start 2026-11-11 22:11:31 UTC (23:11 lokalno), Windows launcher PID 2460, WSL
+queue PID 13042. `queue.json` potvrđuje `status=waiting`, dependency PID 436 i
+puni source commit `11afd3bb...`. Provera procesa pokazuje samo postojeći
+train worker 437 i čekajući queue; nema duplikata. Red prvo zahteva kompletan
+rezultat aktivnog run-a, uključujući pet checkpoint-a × pet robustness slučajeva.
+Ako bilo koji checkpoint aktivnog run-a prođe svih pet, red staje bez novog
+treninga. U suprotnom, oba sledeća testa kreću nezavisno iz istog stabilnog
+checkpoint-a 409,600, koriste LR `5e-5`, 2M koraka i 60 s epizode:
+
+1. `run_1_recovery_broad`: `recovery_v2`, potisak 0–5% u 50% epizoda.
+2. `run_2_recovery_hard`: `recovery_v2`, potisak 4–5% u 75% epizoda.
+
+Red staje na prvom punom robustness uspehu, `STOP` fajlu, tehničkoj grešci ili
+posle ova dva testa. `queue.json` i `summary.md` se čuvaju posle svake faze.
+Ne menjati tracked fajlove/branch dok red čeka ili radi, jer je to namerna
+zaštita reproduktivnosti. Natural-walk arhiva i joystick grana nisu menjane.
+Walk→stand i A→B još nisu implementirani.
 
 ## Najnovije — lower-rate run pao, pokrenut konkretan 2M hard-push test
 
