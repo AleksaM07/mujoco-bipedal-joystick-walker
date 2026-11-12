@@ -2,25 +2,59 @@
 
 Datum: 2026-11-05
 
-Poslednje ažuriranje: 2026-11-11. Aktuelni status je na vrhu; odeljci označeni
+Poslednje ažuriranje: 2026-11-12. Aktuelni status je na vrhu; odeljci označeni
 kao prethodni/arhivirani služe istoriji i ne nalažu ponavljanje završenog rada.
 
 ## Poruka za novi chat — aktuelna
 
 > Nastavi iz `NEW_CHAT_HANDOFF_2026-11-05.md` na grani
 > `skills_walking_with_anatomical_human_robot`. Pročitaj ceo handoff i
-> `docs/SKILLS_REVIEW.md`, proveri git status i poslednja četiri commita.
-> Prvo proveri postojeći run `runs/stand_pushx_hard_20261109_2m_lr5e-5`,
-> njegov proces 436, `comparison.json` i logove; ne pokreći duplikat.
-> Ograničeni red `runs/stand_recovery_queue_20261111_2x2m` već čeka taj proces
-> i sme da pokrene najviše dva unapred definisana 2M recovery testa. Ne pokreći
-> ih ručno i ne menjaj red dok radi.
-> Sada radimo stand recovery posle -X potiska. Prirodan hod i 60 s mirnog
-> stajanja već postoje; walk→stand i A→B još nisu implementirani.
-> Nakon run-a pregledaj sve fizičke provere i video. Pre novih promena koristi
-> zabeleženo poređenje DeepMimic/MimicKit/ASE; ne ponavljaj isti neuspešni run
-> bez nove proverljive hipoteze. Ne menjaj finalnu natural-walk arhivu niti
-> joystick granu. Push skills grane je korisnik već izričito odobrio.
+> `docs/SKILLS_REVIEW.md`, zatim `docs/PROJECT_GOALS.md` i
+> `docs/FRAMEWORK_COMPARISON_2026-11-12.md`. Proveri git status i poslednja
+> četiri commita. Raniji 1M nastavak, hard 2M i oba dodatna recovery testa su
+> završeni; `runs/stand_recovery_queue_20261112_2x2m_v2/queue.json` ima
+> `budget_exhausted`, bez punog robustness prolaza. Ne pokreći duplikate ili
+> nove testove na osnovu istorijskih PID-eva/komandi ispod.
+> Korisnik je definisao faze: 1) sačuvani hod i postojeći stand baseline;
+> 2) prirodan A→B, stop/dwell, prelazi, 60 s stajanja i push recovery;
+> 3) prepreke, ustajanje i izbegavanje dolazećih objekata kao buduća proširenja.
+> Walk→stand i A→B još nisu implementirani; -X recovery ostaje nerešen.
+> Poslednji zahtev je definisanje ciljeva i pregled postojećih rešenja.
+> Sledeći predlog je ograničen test kompatibilnosti, sa MimicKit-om kao prvim
+> kandidatom, uz ProtoMotions/mjlab alternative i PHC recovery analizu.
+> Framework još nije konačno izabran niti prenet. Ne menjaj finalnu natural-walk
+> arhivu niti joystick granu. Push skills grane je već odobren.
+
+## Najnovije — završen recovery red i dogovorene tri faze
+
+Oba odobrena dodatna 2M testa završena su 2026-11-12. Red je završio u
+14:16:42 UTC (15:16 lokalno), sa `status=budget_exhausted`. Zavisni
+`stand_pushx_hard_20261109_2m_lr5e-5`, `run_1_recovery_broad` i
+`run_2_recovery_hard` svi imaju prazan `robustness_candidates_passed`.
+`best_checkpoint` iz kratkog gate-a nije potvrda punog recovery uspeha.
+Dokazi su u `runs/stand_recovery_queue_20261112_2x2m_v2/queue.json` i
+`summary.md`; ne ponavljati potrošeni budžet.
+
+Naknadni control-trace izveštaji u
+`runs/stand_recovery_control_diagnostic_20261112_broad/report.json` i
+`runs/stand_recovery_control_diagnostic_20261112_hard/report.json` su završeni.
+To su samo -X probe-ovi (`full_suite=false`). Pokazuju izostanak dovoljne
+korekcije/koraka; konflikt sa statičnom imitacijom je hipoteza, a ne dokazani
+jedini uzrok. Ne tvrditi da odsustvo torque saturacije isključuje fizičke,
+PD ili action-mapping probleme.
+
+Aktuelni obim i kriterijumi su u [PROJECT_GOALS.md](docs/PROJECT_GOALS.md).
+[Prošireni pregled](docs/FRAMEWORK_COMPARISON_2026-11-12.md) razdvaja dostupni
+kod, rezultate radova i potrebnu prilagodbu našem modelu. Obuhvata i konkretne
+phase-3 izvore HoST/HumanUP, LP-NavOA i PAC-MAN. MimicKit ima relevantne
+algoritme, ali i konkretne importer rizike za naš XML. ProtoMotions daje širi
+generativni pravac; mjlab ima MuJoCo infrastrukturu i relevantne zasebne task
+projekte. Nijedan nije još benchmarkovan na našem humanoidu.
+
+Važan preduslov faze 3: arhivirani XML ima isključene sudare na 14 geometrija
+tela, uz aktivna dva đona. Ustajanje i full-body collision testovi traže zasebnu
+verziju kontaktnog modela i regresiju; arhivu ne menjati. Ovim dokumentacionim
+korakom nije pokrenut novi trening, migracija ili izmena fizike.
 
 ## Mapa veština
 
@@ -28,7 +62,7 @@ kao prethodni/arhivirani služe istoriji i ne nalažu ponavljanje završenog rad
 | --- | --- |
 | Prirodan hod po referenci | Završen i zamrznut; nije upravljanje proizvoljnim XY ciljem. |
 | Stajanje iz neutralne poze | 60 s prolazi na sačuvanim kandidatima. |
-| Stand oporavak posle potiska | +X/±Y prolaze; -X još pada. To je aktivni trening. |
+| Stand oporavak posle potiska | Sačuvani kandidati prolaze +X/±Y; -X još pada. Odobreni recovery red je završen. |
 | Prelaz hod→kočenje→stajanje | Još nije implementiran/proveren. |
 | Dolazak A→B sa zaustavljanjem | Još nije implementiran/proveren. |
 
@@ -37,7 +71,10 @@ ugrađenog koda dopunjen je 2026-11-09 u `docs/SKILLS_REVIEW.md`. U ovom repou
 još nema AMP diskriminatora, ASE latentnih veština ili naučenog high-level
 kontrolera. Koristimo Brax PPO i naš MuJoCo/JAX env.
 
-## Najnovije — aktivan 2M run i pokrenut ograničeni recovery red
+## Istorija — pokretanje sada završenog 2M run-a i recovery reda
+
+Svi odeljci ispod beleže ranija stanja. Njihovi navodi o aktivnom run-u,
+PID-evima i sledećim treninzima nisu aktuelni nalog za izvršavanje.
 
 Korisnik je 2026-11-11 izričito odobrio da se posle aktivnog testa automatski
 izvedu još najviše dva konkretna testa. Aktivni run ostaje samo

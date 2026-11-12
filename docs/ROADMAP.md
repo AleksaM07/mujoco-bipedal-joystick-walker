@@ -1,29 +1,29 @@
 # Roadmap
 
-Radimo sposobnosti redom; ne menjamo više velikih stvari u istom eksperimentu.
+Ažurirano 2026-11-12. Merljivi ciljevi i granice faza su u
+[PROJECT_GOALS.md](PROJECT_GOALS.md). Izbor pristupa je obrazložen u
+[FRAMEWORK_COMPARISON_2026-11-12.md](FRAMEWORK_COMPARISON_2026-11-12.md).
 
-1. **Završni prirodni hod — završeno 2026-11-05**
-   - elbow curriculum 25/50/75/100% prošao je sve gate-ove;
-   - finalni checkpoint, config, XML, BVH, dokazi i video su zamrznuti;
-   - dodatni seedovi ostaju opciona robusnost, ne uslov za početak A→B.
-2. **Čist A→B zadatak**
-   - napraviti novi sistem od nule;
-   - koristiti relativni cilj u lokalnom frame-u, željenu brzinu i završnu
-     orijentaciju;
-   - ne preuzimati ništa iz odbačenog bullet/A→B projekta.
-3. **Integracija**
-   - koristiti zaštićenu joystick-only granu;
-   - napraviti čist interfejs za izbor joystick ili A→B moda;
-   - spojiti ih u novu integracionu granu tek kada oba imaju zasebne testove.
-4. **Više locomotion skillova**
-   - proceniti više BVH klipova i AMP/MimicKit pristup;
-   - odvojiti walk, run i stand metrike i prelaze.
-5. **Ustajanje**
-   - posebna reset distribucija i success kriterijum;
-   - prelaz `fallen → stand → walk`.
-6. **Avoidance**
-   - tek nakon stabilne locomotion arhitekture;
-   - prepreke i projektili ostaju novi modul, ne nasleđe starog projekta.
+1. **Faza 1 — sačuvani rezultati.** Prirodan referentni hod je završen i
+   zamrznut. Postoji i zaseban 60 s stand. -X recovery nije rešen; ograničeni
+   red sa dva dodatna 2M testa je završen bez punog robustness prolaza.
+2. **Faza 2 — prirodan A→B sa zaustavljanjem i stabilnim prelazima.** Najpre
+   ograničen test kompatibilnosti i komandovane politike u izabranom pristupu,
+   sa MimicKit-om kao prvim kandidatom. Proveriti model, podatke, kontrolu i
+   mali task pre većeg treninga. Zatim naučiti polazak, hod, kočenje i stand,
+   dodati prostorni cilj i proveriti povezane dolaske bez fizičkog reseta.
+   Obavezni su očuvana prirodnost, 60 s stand, definisani potisci i raznovrsna
+   nezavisna evaluacija. Postojeće implementacije koristiti kada odgovaraju.
+3. **Faza 3 — buduća proširenja.** Predloženi redosled: obilazak prepreka,
+   ustajanje posle pada, zatim izbegavanje dolazećih objekata. Svaki zadatak
+   dobija poseban curriculum i fizički test. Pre ustajanja/udara pripremiti
+   verzionisani kontaktni model celog tela i regresije prethodnih sposobnosti.
 
-Za svaku fazu čuvamo checkpoint, konfiguraciju, najmanje četiri deterministička
-rollout-a i kratak rezultat neuspelih ablations.
+Joystick integracija je odvojena kasnija opcija, na novoj integracionoj grani
+tek posle zasebnih testova oba moda. Zaštićena joystick grana i finalna
+natural-walk arhiva se ne menjaju. Odbačeni bullet/A→B projekat se ne koristi.
+
+Za svaki eksperiment sačuvati konfiguraciju, source commit, model/data poreklo,
+checkpoint, pune fizičke rezultate i reprezentativne snimke, uključujući
+neuspehe. Novi framework nije automatski bolji rezultat, a viši reward nije
+zamena za prolaz dogovorenih kriterijuma.

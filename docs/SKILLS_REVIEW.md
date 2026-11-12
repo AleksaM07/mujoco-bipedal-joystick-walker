@@ -1,5 +1,21 @@
 # Skills: pregled i prvi korak — 2026-11-05
 
+## Aktuelna dopuna — 2026-11-12
+
+Dogovorene tri faze su u [PROJECT_GOALS.md](PROJECT_GOALS.md), a prošireno
+poređenje MimicKit/ASE, PHC, ProtoMotions, mjlab i drugih relevantnih pristupa
+u [FRAMEWORK_COMPARISON_2026-11-12.md](FRAMEWORK_COMPARISON_2026-11-12.md).
+To su aktuelni ciljevi i osnova za izbor sledećeg eksperimenta.
+
+Run `stand_pushx_continue_20261109_1m_lr1e-4`, naredni hard 2M i oba naknadna
+recovery testa su završeni. Red `stand_recovery_queue_20261112_2x2m_v2` ima
+`budget_exhausted`, bez potpuno robustnog checkpoint-a. Ne pokretati ih ponovo
+iz istorijskih instrukcija ispod. Sačuvani hod i 60 s stand postoje;
+walk→stand i A→B još nisu implementirani. Spoljni framework-i nisu ovim
+pregledom integrisani ili benchmarkovani na našem modelu.
+
+## Istorijski pregled i implementacija
+
 Nastavak implementacije i komande za kontrolisano stand PPO poređenje opisani
 su u [STAND_ABLATION.md](STAND_ABLATION.md). Fresh-critic opcija, smislen logging
 i fizički checkpoint gate sada su implementirani. Pregled ispod beleži početno
