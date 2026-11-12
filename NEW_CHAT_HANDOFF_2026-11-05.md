@@ -54,15 +54,20 @@ hipoteza izvedena iz sačuvanog -X videa; fizika, XML, akcioni i observation
 prostor ostaju isti. Ciljani reward/env/resume/queue testovi i Windows i WSL
 dry-run prolaze. Detalji su u `docs/STAND_RECOVERY_QUEUE.md`.
 
-Pokrenut je čekajući red:
+Prvi pokušaj čekajućeg reda:
 
 `runs/stand_recovery_queue_20261111_2x2m`
 
 Start 2026-11-11 22:11:31 UTC (23:11 lokalno), Windows launcher PID 2460, WSL
-queue PID 13042. `queue.json` potvrđuje `status=waiting`, dependency PID 436 i
-puni source commit `11afd3bb...`. Provera procesa pokazuje samo postojeći
-train worker 437 i čekajući queue; nema duplikata. Red prvo zahteva kompletan
-rezultat aktivnog run-a, uključujući pet checkpoint-a × pet robustness slučajeva.
+queue PID 13042. Ovaj proces se zaštitno ugasio pre treninga jer je WSL Git
+pogrešno prikazao CRLF radnu kopiju kao 23 tracked izmene, dok je Windows Git
+ispravno bio čist. Nijedan recovery run nije pokrenut i nema duplikata. Provera
+je zatim ispravljena da u WSL-u koristi isti `core.autocrlf=true` sadržajni
+pogled. Zamenski red koristi svež folder
+`runs/stand_recovery_queue_20261112_2x2m_v2` i isti unapred definisan plan.
+
+Red prvo zahteva kompletan rezultat aktivnog run-a, uključujući pet
+checkpoint-a × pet robustness slučajeva.
 Ako bilo koji checkpoint aktivnog run-a prođe svih pet, red staje bez novog
 treninga. U suprotnom, oba sledeća testa kreću nezavisno iz istog stabilnog
 checkpoint-a 409,600, koriste LR `5e-5`, 2M koraka i 60 s epizode:

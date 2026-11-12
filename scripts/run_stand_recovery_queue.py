@@ -149,7 +149,14 @@ def check_repository() -> None:
     if branch != BRANCH:
         raise RuntimeError(f"Expected branch {BRANCH}, found {branch}.")
     changed = subprocess.check_output(
-        ["git", "status", "--porcelain", "--untracked-files=no"],
+        [
+            "git",
+            "-c",
+            "core.autocrlf=true",
+            "status",
+            "--porcelain",
+            "--untracked-files=no",
+        ],
         cwd=PROJECT_ROOT,
         text=True,
     ).strip()

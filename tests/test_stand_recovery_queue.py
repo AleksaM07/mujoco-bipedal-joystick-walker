@@ -11,6 +11,7 @@ from scripts.run_stand_ablation import write_report
 from scripts.run_stand_recovery_queue import (
     RUNS,
     build_command,
+    check_repository,
     run_queue,
     validate_completed_report,
 )
@@ -56,6 +57,20 @@ def robust_report(root: Path, passed: bool = False) -> dict:
 
 
 class StandRecoveryQueueTests(unittest.TestCase):
+    def test_repository_check_normalizes_windows_line_endings_under_wsl(self) -> None:
+        with patch(
+            "scripts.run_stand_recovery_queue.subprocess.check_output",
+            side_effect=[
+                "skills_walking_with_anatomical_human_robot\n",
+                "",
+            ],
+        ) as check:
+            check_repository()
+        status_command = check.call_args_list[1].args[0]
+        self.assertEqual(
+            status_command[:4], ["git", "-c", "core.autocrlf=true", "status"]
+        )
+
     def test_commands_are_a_matched_two_run_push_distribution_test(self) -> None:
         source = Path("runs/source/checkpoints/000000409600")
         output = Path("runs/night")
