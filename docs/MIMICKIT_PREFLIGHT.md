@@ -256,3 +256,39 @@ python -m venv .venv-mimickit-newton
 $env:WARP_CACHE_PATH = (Join-Path $PWD '.warp-cache-newton')
 ./.venv-mimickit-newton/Scripts/python.exe tools/check_mimickit_newton_engine.py --steps 200 --output runs/navigation_mimickit_newton_repro/engine.json
 ```
+
+## Zatvorena petlja i stand-recovery gate — 2026-11-13
+
+[stand_policy_controller.py](../tools/stand_policy_controller.py) drži zamrznuti
+JAX actor u odvojenom procesu, a
+[evaluate_newton_stand_closed_loop.py](../tools/evaluate_newton_stand_closed_loop.py)
+izvršava istu politiku nad native MuJoCo ili Newton/MuJoCo-Warp fizikom. Kontrola
+ostaje na 20 ms, sa četiri fizička podkoraka od 5 ms i postojećim smoothingom,
+action mapom i controller `info` stanjem.
+
+Prenos samo `qpos/qvel` nije dovoljan. `mjx.step` i `mj_step` vraćaju konačne
+koordinate, ali izvedena body polja ostaju vremenski poravnata sa stanjem pre
+poslednje integracije. Ponovni `forward` je zato menjao actor observation već u
+prvom koraku do `0,0604`, a u prvih deset koraka do `0,1257`. Continuous
+reference dodatno čita `xquat` direktno. Konačni protokol prenosi `qpos`, `qvel`,
+`xpos`, `xquat`, `xmat` i `cvel`; na direktnom MJX oracle-u reprodukuje actor
+observation sa maksimalnom greškom `0` u proveri. Nezavisni 10-koračni trace
+reprodukuje stvarne actuator targets sa maksimalnom greškom `5,96e-8`; nijedan
+korak ne prelazi toleranciju `1e-6`.
+
+Sa tim egzaktnim mostom dobijeni su sledeći rezultati za checkpoint `409600`:
+
+| Gate | Rezultat |
+| --- | --- |
+| Native MuJoCo 3.10, neutralno 60 s | Pad na 37,46 s; najduži dwell 36,24 s. |
+| Newton 1.0 / MuJoCo-Warp 3.5.0.2, neutralno 60 s | Pad na 37,44 s; najduži dwell 36,22 s. |
+| Newton, −X potisak 5% BW tokom 0,2 s | Pad na 6,84 s; nema recovery-a. |
+| Newton, +X potisak istog intenziteta | Prolaz 20 s; recovery za 1,0 s; drift 7,8 cm. |
+
+Poklapanje native/Newton terminala unutar 20 ms pokazuje da GPU bridge nije
+uzrok dugoročne nestabilnosti. Sačuvani checkpoint je uzak van svog trening MJX
+backenda i izrazito smerno asimetričan. Zbog toga veliki navigation trening još
+nije pokrenut. Sledeći trening mora da koristi ciljni backend ili physics
+randomization i prvo da prođe neutralnih 60 s i bidirekcioni push suite. Sažet
+trajni report je u
+[mimickit_newton_closed_loop_20261113.json](../analysis_outputs/skills/mimickit_newton_closed_loop_20261113.json).

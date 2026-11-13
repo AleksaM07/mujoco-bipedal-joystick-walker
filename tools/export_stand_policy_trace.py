@@ -52,9 +52,17 @@ def main() -> None:
         validate_observation_compatibility(checkpoint, state.obs)
         initial_qpos = np.asarray(state.data.qpos)
         initial_qvel = np.asarray(state.data.qvel)
+        initial_xpos = np.asarray(state.data.xpos)
+        initial_xquat = np.asarray(state.data.xquat)
+        initial_xmat = np.asarray(state.data.xmat)
+        initial_cvel = np.asarray(state.data.cvel)
         controls = []
         qpos = []
         qvel = []
+        xpos = []
+        xquat = []
+        xmat = []
+        cvel = []
         samples = []
         for _ in range(args.steps):
             key, action_key = jax.random.split(key)
@@ -65,6 +73,10 @@ def main() -> None:
             controls.append(np.asarray(state.data.ctrl))
             qpos.append(np.asarray(state.data.qpos))
             qvel.append(np.asarray(state.data.qvel))
+            xpos.append(np.asarray(state.data.xpos))
+            xquat.append(np.asarray(state.data.xquat))
+            xmat.append(np.asarray(state.data.xmat))
+            cvel.append(np.asarray(state.data.cvel))
             samples.append(host_sample)
             if host_sample["physical_failure"] or host_sample["done"]:
                 break
@@ -100,9 +112,17 @@ def main() -> None:
         metadata=json.dumps(metadata),
         initial_qpos=initial_qpos,
         initial_qvel=initial_qvel,
+        initial_xpos=initial_xpos,
+        initial_xquat=initial_xquat,
+        initial_xmat=initial_xmat,
+        initial_cvel=initial_cvel,
         controls=np.asarray(controls),
         source_qpos=np.asarray(qpos),
         source_qvel=np.asarray(qvel),
+        source_xpos=np.asarray(xpos),
+        source_xquat=np.asarray(xquat),
+        source_xmat=np.asarray(xmat),
+        source_cvel=np.asarray(cvel),
     )
     print(json.dumps(metadata, indent=2))
     raise SystemExit(0 if metadata["passed_source_policy_rollout"] else 1)

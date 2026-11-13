@@ -1,0 +1,74 @@
+{
+  "scope": "closed_loop_stand_policy_bridge_and_cross_engine_gate",
+  "date": "2026-11-13",
+  "branch": "navigation_walking_with_anatomical_human_robot",
+  "checkpoint": "runs/stand_pushx_continue_20261109_1m_lr1e-4/resume/20261109_1452_stand_balance_v1_resume_1000000_lr0_0001_V1_steps-1m_reward-8797p8408_s/checkpoints/000000409600",
+  "observation_bridge": {
+    "qpos_qvel_only_first_step_max_abs_error": 0.0604027658700943,
+    "qpos_qvel_only_ten_step_max_abs_error": 0.12574705481529236,
+    "qpos_qvel_only_ten_step_max_cvel_error": 0.6559348106384277,
+    "qpos_qvel_only_ten_step_max_xmat_error": 0.016986215487122536,
+    "exact_bridge_first_step_max_abs_error": 0.0,
+    "ten_step_max_control_target_error": 5.960464477539063e-08,
+    "ten_step_controls_over_1e_6": 0,
+    "transferred_state": [
+      "qpos",
+      "qvel",
+      "xpos",
+      "xquat",
+      "xmat",
+      "cvel"
+    ],
+    "cause": "MJX and MuJoCo keep derived body fields at the pre-final-integration stage. Re-running forward from final qpos/qvel time-shifted the actor observation. Continuous reference observation also reads xquat directly.",
+    "observation_evidence": "runs/navigation_mimickit_newton_probe_20261113/observation_reconstruction_exact_xquat_1step.json",
+    "control_trace_evidence": "runs/navigation_mimickit_newton_probe_20261113/stand_policy_exact_derived_trace_validation_10steps.json"
+  },
+  "neutral_60_seconds": {
+    "native_mujoco_3_10": {
+      "completed_steps": 1873,
+      "requested_steps": 3000,
+      "maximum_continuous_dwell_seconds": 36.24,
+      "physical_failure_seconds": 37.46,
+      "passed": false,
+      "evidence": "runs/navigation_mimickit_newton_probe_20261113/closed_loop_native310_exact_observation_stand_60s.json"
+    },
+    "newton_1_0_mujoco_warp_3_5_0_2": {
+      "completed_steps": 1872,
+      "requested_steps": 3000,
+      "maximum_continuous_dwell_seconds": 36.22,
+      "physical_failure_seconds": 37.44,
+      "passed": false,
+      "evidence": "runs/navigation_mimickit_newton_probe_20261113/closed_loop_newton_exact_observation_stand_60s.json"
+    }
+  },
+  "newton_push_suite": {
+    "force_body_weight_fraction": 0.05,
+    "force_newtons_magnitude": 36.86107500000001,
+    "start_seconds": 5.0,
+    "duration_seconds": 0.2,
+    "negative_x": {
+      "completed_steps": 342,
+      "requested_steps": 1000,
+      "physical_failure_seconds": 6.84,
+      "recovery_seconds": null,
+      "passed": false,
+      "evidence": "runs/navigation_mimickit_newton_probe_20261113/closed_loop_newton_exact_observation_push_x_neg_20s.json"
+    },
+    "positive_x": {
+      "completed_steps": 1000,
+      "requested_steps": 1000,
+      "recovery_seconds": 1.0,
+      "maximum_drift_m": 0.07787468836003499,
+      "minimum_torso_up": 0.9981413294334607,
+      "passed": true,
+      "evidence": "runs/navigation_mimickit_newton_probe_20261113/closed_loop_newton_exact_observation_push_x_pos_20s.json"
+    }
+  },
+  "conclusion": {
+    "engine_bridge_validated": true,
+    "newton_matches_native_long_horizon": true,
+    "checkpoint_cross_engine_gate_passed": false,
+    "training_started": false,
+    "next_action": "Train or fine-tune stand recovery with the target backend or physics randomization, preserving the exact derived-state observation semantics. Require neutral 60 s and bidirectional push recovery before A-to-B training."
+  }
+}
