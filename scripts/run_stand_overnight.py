@@ -30,7 +30,7 @@ from scripts.run_stand_ablation import (
 )
 
 logger = logging.getLogger(__name__)
-BRANCH = "skills_walking_with_anatomical_human_robot"
+BRANCH = "navigation_walking_with_anatomical_human_robot"
 LEARNING_RATES = (6e-5, 1e-4, 2e-4, 3e-4)
 
 

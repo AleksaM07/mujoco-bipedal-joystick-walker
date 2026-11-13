@@ -135,7 +135,8 @@ ne sme se tiho uneti u finalnu natural-walk arhivu.
 
 ## Granice i sačuvani rezultati
 
-- Razvoj ostaje na skills grani; joystick grana ostaje zaštićena. Eventualna
+- Razvoj je na `navigation_walking_with_anatomical_human_robot` (preimenovana
+  skills grana); joystick grana ostaje zaštićena. Eventualna
   integracija joystick komandi dolazi kasnije, u zasebnoj integracionoj grani.
 - Odbačeni `bipedal-humanoid-bullet-avoidance` kod se ne koristi.
 - Koristiti postojeće javne metode i implementacije gde odgovaraju cilju;

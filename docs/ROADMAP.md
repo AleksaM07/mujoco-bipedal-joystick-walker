@@ -4,6 +4,11 @@ Ažurirano 2026-11-12. Merljivi ciljevi i granice faza su u
 [PROJECT_GOALS.md](PROJECT_GOALS.md). Izbor pristupa je obrazložen u
 [FRAMEWORK_COMPARISON_2026-11-12.md](FRAMEWORK_COMPARISON_2026-11-12.md).
 
+Aktivna grana je `navigation_walking_with_anatomical_human_robot`.
+[MimicKit preflight](MIMICKIT_PREFLIGHT.md) je implementiran i izvršen:
+kinematika i walking frejmovi prolaze; slede simulator/PD/action paritet,
+kontinuitet reference i mali fizički task pre većeg treninga.
+
 1. **Faza 1 — sačuvani rezultati.** Prirodan referentni hod je završen i
    zamrznut. Postoji i zaseban 60 s stand. -X recovery nije rešen; ograničeni
    red sa dva dodatna 2M testa je završen bez punog robustness prolaza.

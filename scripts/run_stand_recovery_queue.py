@@ -31,7 +31,7 @@ from scripts.run_stand_overnight import completed_result
 
 logger = logging.getLogger(__name__)
 
-BRANCH = "skills_walking_with_anatomical_human_robot"
+BRANCH = "navigation_walking_with_anatomical_human_robot"
 TIMESTEPS = 2_000_000
 LEARNING_RATE = 5e-5
 EPISODE_LENGTH = 3_000

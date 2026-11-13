@@ -61,7 +61,7 @@ class StandRecoveryQueueTests(unittest.TestCase):
         with patch(
             "scripts.run_stand_recovery_queue.subprocess.check_output",
             side_effect=[
-                "skills_walking_with_anatomical_human_robot\n",
+                "navigation_walking_with_anatomical_human_robot\n",
                 "",
             ],
         ) as check:

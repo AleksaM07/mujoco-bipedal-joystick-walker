@@ -1,0 +1,10 @@
+# Optional CPU-only kinematic probe; separate from the Brax training environment.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.9.1+cpu
+numpy==2.3.5
+mujoco==3.10.0
+PyYAML==6.0.3
+pytest==9.2.0
+ruff==0.17.5
+setuptools==84.2.1
+mpmath==1.3.0

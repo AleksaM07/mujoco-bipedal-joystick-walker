@@ -5,6 +5,10 @@ Zadatak je definisan u [PROJECT_GOALS.md](PROJECT_GOALS.md).
 Ovo proširuje [raniji pregled](SKILLS_REVIEW.md); nije benchmark izvršenih
 spoljnih framework-a na našem humanoidu.
 
+Naknadno je izvršen [prvi MimicKit preflight](MIMICKIT_PREFLIGHT.md):
+adapter čuva serijske hinge koordinate i walking frejmove. To rešava prvi
+kinematički korak; simulator, action/PD semantika i trening ostaju za proveru.
+
 ## Preporuka
 
 **MimicKit je prvi kandidat za ograničen test kompatibilnosti i faze 2,

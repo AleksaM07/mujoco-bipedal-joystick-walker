@@ -5,6 +5,8 @@ Aktuelna dokumentacija je namerno mala:
 - [PROJECT_GOALS.md](PROJECT_GOALS.md): dogovorene tri faze i kriterijumi uspeha;
 - [FRAMEWORK_COMPARISON_2026-11-12.md](FRAMEWORK_COMPARISON_2026-11-12.md):
   pregled postojećih pristupa, izvori i predlog praktičnog poređenja;
+- [MIMICKIT_PREFLIGHT.md](MIMICKIT_PREFLIGHT.md): implementirani adapter,
+  izvršene provere anatomije/reference i preostale provere pre treninga;
 - [WORKFLOW.md](WORKFLOW.md): pokretanje, praćenje i evaluacija;
 - [REPOSITORY.md](REPOSITORY.md): mapa koda i podataka;
 - [ROADMAP.md](ROADMAP.md): redosled sledećih sposobnosti;

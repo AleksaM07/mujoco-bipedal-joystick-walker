@@ -1,0 +1,511 @@
+{
+  "scope": "kinematics_only_not_physics_or_policy_compatibility",
+  "mimickit_commit": "fbe1a36e878f036d6bf5521defb8eb3b8ab4170d",
+  "xml_sha256": "494cb6707a59a957a27e248f07d7d7597227250588a9c6ca70b6314709895ef4",
+  "versions": {
+    "mujoco": "3.10.0",
+    "torch": "2.9.1+cpu",
+    "numpy": "2.3.5"
+  },
+  "seed": 11,
+  "physical_bodies": 16,
+  "kinematic_nodes": 34,
+  "hinge_coordinates": 33,
+  "actuators": 26,
+  "mass_kg": 75.15,
+  "unmodified_upstream_import": {
+    "passed": false,
+    "error": "Series joints are not supported."
+  },
+  "actuator_mapping": [
+    {
+      "actuator": "abdomen_x_position",
+      "joint": "abdomen_x",
+      "qpos_index": 10,
+      "kinematic_dof_index": 3,
+      "ctrlrange": [
+        -0.18,
+        0.18
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "abdomen_y_position",
+      "joint": "abdomen_y",
+      "qpos_index": 11,
+      "kinematic_dof_index": 4,
+      "ctrlrange": [
+        -0.14,
+        0.14
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "abdomen_z_position",
+      "joint": "abdomen_z",
+      "qpos_index": 12,
+      "kinematic_dof_index": 5,
+      "ctrlrange": [
+        -0.18,
+        0.18
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "pelvis_x_position",
+      "joint": "pelvis_x",
+      "qpos_index": 13,
+      "kinematic_dof_index": 6,
+      "ctrlrange": [
+        -0.12,
+        0.12
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "pelvis_y_position",
+      "joint": "pelvis_y",
+      "qpos_index": 14,
+      "kinematic_dof_index": 7,
+      "ctrlrange": [
+        -0.1,
+        0.1
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "pelvis_z_position",
+      "joint": "pelvis_z",
+      "qpos_index": 15,
+      "kinematic_dof_index": 8,
+      "ctrlrange": [
+        -0.12,
+        0.12
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "left_hip_x_position",
+      "joint": "left_hip_x",
+      "qpos_index": 16,
+      "kinematic_dof_index": 9,
+      "ctrlrange": [
+        -0.349066,
+        0.698132
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "left_hip_y_position",
+      "joint": "left_hip_y",
+      "qpos_index": 17,
+      "kinematic_dof_index": 10,
+      "ctrlrange": [
+        -0.383972,
+        0.383972
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "left_hip_z_position",
+      "joint": "left_hip_z",
+      "qpos_index": 18,
+      "kinematic_dof_index": 11,
+      "ctrlrange": [
+        -0.523599,
+        1.047198
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "left_knee_z_position",
+      "joint": "left_knee_z",
+      "qpos_index": 19,
+      "kinematic_dof_index": 12,
+      "ctrlrange": [
+        -2.356194,
+        0.0
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "left_ankle_y_position",
+      "joint": "left_ankle_y",
+      "qpos_index": 20,
+      "kinematic_dof_index": 13,
+      "ctrlrange": [
+        -0.436332,
+        0.436332
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "left_ankle_z_position",
+      "joint": "left_ankle_z",
+      "qpos_index": 21,
+      "kinematic_dof_index": 14,
+      "ctrlrange": [
+        -0.20944,
+        0.20944
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "right_hip_x_position",
+      "joint": "right_hip_x",
+      "qpos_index": 22,
+      "kinematic_dof_index": 15,
+      "ctrlrange": [
+        -0.698132,
+        0.349066
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "right_hip_y_position",
+      "joint": "right_hip_y",
+      "qpos_index": 23,
+      "kinematic_dof_index": 16,
+      "ctrlrange": [
+        -0.383972,
+        0.383972
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "right_hip_z_position",
+      "joint": "right_hip_z",
+      "qpos_index": 24,
+      "kinematic_dof_index": 17,
+      "ctrlrange": [
+        -0.523599,
+        1.047198
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "right_knee_z_position",
+      "joint": "right_knee_z",
+      "qpos_index": 25,
+      "kinematic_dof_index": 18,
+      "ctrlrange": [
+        -2.356194,
+        0.0
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "right_ankle_y_position",
+      "joint": "right_ankle_y",
+      "qpos_index": 26,
+      "kinematic_dof_index": 19,
+      "ctrlrange": [
+        -0.436332,
+        0.436332
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "right_ankle_z_position",
+      "joint": "right_ankle_z",
+      "qpos_index": 27,
+      "kinematic_dof_index": 20,
+      "ctrlrange": [
+        -0.20944,
+        0.20944
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "left_shoulder_x_position",
+      "joint": "left_shoulder_x",
+      "qpos_index": 28,
+      "kinematic_dof_index": 21,
+      "ctrlrange": [
+        -0.872665,
+        3.141593
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "left_shoulder_y_position",
+      "joint": "left_shoulder_y",
+      "qpos_index": 29,
+      "kinematic_dof_index": 22,
+      "ctrlrange": [
+        -1.570796,
+        1.570796
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "left_shoulder_z_position",
+      "joint": "left_shoulder_z",
+      "qpos_index": 30,
+      "kinematic_dof_index": 23,
+      "ctrlrange": [
+        -0.872665,
+        3.141593
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "left_elbow_z_position",
+      "joint": "left_elbow_z",
+      "qpos_index": 31,
+      "kinematic_dof_index": 24,
+      "ctrlrange": [
+        0.0,
+        2.617994
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "right_shoulder_x_position",
+      "joint": "right_shoulder_x",
+      "qpos_index": 34,
+      "kinematic_dof_index": 27,
+      "ctrlrange": [
+        -3.141593,
+        0.872665
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "right_shoulder_y_position",
+      "joint": "right_shoulder_y",
+      "qpos_index": 35,
+      "kinematic_dof_index": 28,
+      "ctrlrange": [
+        -1.570796,
+        1.570796
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "right_shoulder_z_position",
+      "joint": "right_shoulder_z",
+      "qpos_index": 36,
+      "kinematic_dof_index": 29,
+      "ctrlrange": [
+        -0.872665,
+        3.141593
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "actuator": "right_elbow_z_position",
+      "joint": "right_elbow_z",
+      "qpos_index": 37,
+      "kinematic_dof_index": 30,
+      "ctrlrange": [
+        0.0,
+        2.617994
+      ],
+      "gear": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "cases": {
+    "neutral_and_random": {
+      "pose_count": 1025,
+      "max_position_error_m": 2.398461491078969e-06,
+      "max_rotation_error_rad": 1.4240053995670657e-06,
+      "passed": true
+    },
+    "runs\\stand_recovery_control_diagnostic_20261112_broad\\000000808960\\push_x_neg_replay.npz": {
+      "pose_count": 70,
+      "max_position_error_m": 1.5634955519602215e-06,
+      "max_rotation_error_rad": 1.39630606184887e-06,
+      "passed": true,
+      "sha256": "f90ff5f75a51317de401eb8e86e1af7388c25dea7d42b4a123ee02df5b0646ca"
+    }
+  },
+  "passed": true,
+  "remaining_gates": [
+    "simulator and PD/action mapping",
+    "walking motion conversion",
+    "commanded policy training and physical evaluation"
+  ]
+}

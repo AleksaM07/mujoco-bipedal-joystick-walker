@@ -7,6 +7,11 @@ poređenje MimicKit/ASE, PHC, ProtoMotions, mjlab i drugih relevantnih pristupa
 u [FRAMEWORK_COMPARISON_2026-11-12.md](FRAMEWORK_COMPARISON_2026-11-12.md).
 To su aktuelni ciljevi i osnova za izbor sledećeg eksperimenta.
 
+Grana je preimenovana u `navigation_walking_with_anatomical_human_robot`.
+Naknadno su implementirani i izvršeni adapter anatomije i prenos reference
+kroz MimicKit; [preflight](MIMICKIT_PREFLIGHT.md) čuva rezultate i komande.
+To još nije integracija simulatora/treninga niti rešeno A→B ponašanje.
+
 Run `stand_pushx_continue_20261109_1m_lr1e-4`, naredni hard 2M i oba naknadna
 recovery testa su završeni. Red `stand_recovery_queue_20261112_2x2m_v2` ima
 `budget_exhausted`, bez potpuno robustnog checkpoint-a. Ne pokretati ih ponovo

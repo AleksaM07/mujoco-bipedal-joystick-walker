@@ -1,10 +1,14 @@
 # MuJoCo humanoid locomotion
 
-Na grani `skills_walking_with_anatomical_human_robot` započeo sam novu fazu:
-stand → kočenje → A→B. Pregled arhitekture, prvi fizički nalazi i komande su u
-[docs/SKILLS_REVIEW.md](docs/SKILLS_REVIEW.md). Stand okruženje je implementirano;
-naučeno stajanje i navigacija još nisu završeni. Zamrznuti hod označio sam tagom
-`natural-walk-v1.0`.
+Na grani `navigation_walking_with_anatomical_human_robot` razvijamo fazu 2:
+prirodan A→B, zaustavljanje, prelaze i push recovery. Sačuvani hod i zaseban
+60 s stand postoje; -X recovery, walk→stand i A→B još nisu završeni.
+[Ciljevi](docs/PROJECT_GOALS.md) i [poređenje pristupa](docs/FRAMEWORK_COMPARISON_2026-11-12.md)
+određuju naredni razvoj. Zamrznuti hod označen je tagom `natural-walk-v1.0`.
+
+Prvi [MimicKit test kompatibilnosti](docs/MIMICKIT_PREFLIGHT.md) je izvršen:
+adapter anatomije i prenos walking reference prolaze proveru kinematike.
+Slede provere fizičke kontrole i mali komandovani task pre većeg treninga.
 
 Treniramo humanoida u MuJoCo/MJX simulatoru pomoću PPO-a i BVH motion
 reference. Projekat ima dve zaštićene linije rada:

@@ -1,0 +1,134 @@
+# MimicKit: provera anatomije i walking reference
+
+Izvršeno 2026-11-12 na grani
+`navigation_walking_with_anatomical_human_robot` (preimenovana skills grana).
+Ovo je prvi implementirani korak iz [poređenja pristupa](FRAMEWORK_COMPARISON_2026-11-12.md),
+za [fazu 2](PROJECT_GOALS.md). Kinematika i prenos reference prolaze;
+kompatibilnost simulatora, kontrole i politika još nije dokazana.
+
+## Implementacija
+
+- [mimickit_adapter.py](../skills/mimickit_adapter.py) gradi referentni skelet
+  preko stvarnog upstream `KinCharModel`, uz eksplicitno mapiranje MuJoCo
+  koordinata. Serijske hinge zglobove predstavlja virtuelnim kinematičkim
+  čvorovima; fizički XML, mase i aktuatori se ne menjaju. Čuva svih 33 hinge
+  koordinata, uključujući sedam pasivnih; fizički model ima 16 tela i 26 aktuatora.
+- [check_mimickit_model.py](../tools/check_mimickit_model.py) poredi položaj i
+  orijentaciju svakog fizičkog tela sa nezavisnim native MuJoCo `mj_forward`.
+  Proverava i nasumične root orijentacije, zglobne opsege i sačuvane replay poze.
+  Izveštaj beleži originalni redosled aktuatora, limite i gear.
+- [export_navigation_reference.py](../tools/export_navigation_reference.py)
+  koristi postojeći environment, arhivirani config/XML/BVH i pripremljene
+  reference. Time zadržava postojeći retargeting, prior, poravnanje poda i
+  pripremu ciklusa. Izvozi referentne frejmove, ne ponašanje naučene politike.
+- [convert_mimickit_motion.py](../tools/convert_mimickit_motion.py) zapisuje
+  upstream motion format i učitava ga stvarnim `MotionLib`. Poredi uzorkovanje
+  na vremenima izvornih frejmova i proverava konačnost brzina.
+
+Adapter je namerno ograničen na jedan free root i hinge/fixed potomke.
+Nepodržani slider/ball zglobovi i nenulti hinge anchors daju jasnu grešku.
+Kompajlirani MuJoCo transforms obuhvataju `euler`, defaults i `ref` uglove.
+
+Upstream je pinovan na
+[`fbe1a36e878f036d6bf5521defb8eb3b8ab4170d`](https://github.com/xbpeng/MimicKit/tree/fbe1a36e878f036d6bf5521defb8eb3b8ab4170d).
+Alat odbija drugi commit ili izmenjen checkout. U ovom commitu originalni
+MJCF importer pada sa `Series joints are not supported.` na našem XML-u.
+Njegovo pretvaranje tri hinge zgloba u spherical nije zamena za očuvanje
+naših koordinata. Zato je dodat odvojen kinematički adapter.
+
+## Izmereni rezultati
+
+CPU probe: Python 3.12, MuJoCo 3.10.0, Torch 2.9.1+cpu, NumPy 2.3.5.
+Prag FK testa je `1e-5 m` i `1e-5 rad` po telu.
+
+| Provera | Obim | Najveće odstupanje položaja | Rezultat |
+| --- | --- | --- | --- |
+| Native MuJoCo naspram MimicKit FK | Neutralna + 1.024 nasumične poze, seed 11 | 2,40 µm | Prolaz |
+| Stvarni -X replay iz prethodnog recovery testa | 70 sačuvanih poza | 1,56 µm | Prolaz kinematike; sama epizoda je neuspešan recovery |
+| Izvezeni walking klip | 134 izvorna frejma | 1,72 µm | Prolaz FK |
+| Izvorni `MotionLib` | 133 vremena frejmova | 1,58 mm | Pad testa očuvanja frejmova |
+| `MotionLib` sa eksplicitnom SLERP ispravkom | Ista 133 vremena i isti motion podaci | 3,11 µm | Prolaz |
+
+Trajni izveštaji:
+
+- [kinematika i actuator mapa](../analysis_outputs/skills/mimickit_kinematics_mj310_20261112.json);
+- [originalna interpolacija](../analysis_outputs/skills/mimickit_motion_upstream_20261112.json);
+- [ispravljena interpolacija](../analysis_outputs/skills/mimickit_motion_corrected_20261112.json).
+
+Uzrok razlike je upstream `util.torch_util.slerp`: za veoma bliske rotacije
+vraća konstantnu sredinu čak i kada je fraction nula. Lokalna funkcija
+`interpolate_quaternions` koristi ponderisanu, normalizovanu interpolaciju
+za mali ugao i shortest-arc SLERP inače. Konverter je uključuje isključivo
+uz `--correct-small-angle-slerp`, u svom procesu; upstream checkout ostaje čist.
+Obe varijante proizvode isti motion SHA256
+`1fc8e4fdfd6339b8043baf7480ed48330aadd0bfedc1cb20de2278e0a908979d`.
+
+Testovi adaptera uključuju rotirane lokalne ose, pasivan zglob, `ref` offsets,
+fixed potomka, quaternion znak/skalu, nevažeća stanja i namerno pogrešan
+transform koji oracle mora da prepozna. Ukupno prolazi 13 pytest slučajeva,
+uz 12 postojećih queue/overnight regresionih testova posle promene naziva grane.
+
+Lokalni paketi su u `runs/navigation_mimickit_preflight_20261112/`:
+`reference_v2.npz`, `motion_upstream_v2/` i `motion_corrected/`.
+Početna FK provera sa MuJoCo 3.8.1 sačuvana je kao
+`kinematics_preliminary_mj381.json`; gornji kanonski rezultat je sa 3.10.0.
+Izveštaji eksplicitno beleže da je exporter pokrenut iz radnog stabla tokom
+implementacije (`working_tree_dirty=true`), parent commit i hash tadašnjeg
+exportera. Naknadno su uklonjeni samo suvišni lint komentari u exporteru.
+
+## Reprodukcija
+
+Koristiti izdvojeni CPU environment; ne menjati Brax/JAX trening okruženje.
+Prva instalacija, iz root-a repoa:
+
+```powershell
+python -m venv .venv-mimickit-probe
+./.venv-mimickit-probe/Scripts/python.exe -m pip install -r requirements-mimickit-probe.txt
+git clone --depth 1 https://github.com/xbpeng/MimicKit.git .tmp_mimickit_navigation
+git -C .tmp_mimickit_navigation fetch --depth 1 origin fbe1a36e878f036d6bf5521defb8eb3b8ab4170d
+git -C .tmp_mimickit_navigation checkout --detach fbe1a36e878f036d6bf5521defb8eb3b8ab4170d
+```
+
+Probe zavisnosti su pinovane odvojeno u
+[requirements-mimickit-probe.txt](../requirements-mimickit-probe.txt).
+To nije instalacija kompletnog GPU training stack-a. Sledeće komande koriste
+nov izlazni folder; ponavljanje zahteva drugi naziv da sačuva prethodne dokaze.
+
+```powershell
+./.venv-mimickit-probe/Scripts/python.exe tools/check_mimickit_model.py --mimickit .tmp_mimickit_navigation --samples 1024 --output runs/navigation_mimickit_repro/kinematics.json
+./.venv-win/Scripts/python.exe tools/export_navigation_reference.py --output runs/navigation_mimickit_repro/reference.npz
+./.venv-mimickit-probe/Scripts/python.exe tools/convert_mimickit_motion.py --mimickit .tmp_mimickit_navigation --reference runs/navigation_mimickit_repro/reference.npz --correct-small-angle-slerp --output-dir runs/navigation_mimickit_repro/motion_corrected
+./.venv-mimickit-probe/Scripts/python.exe -m pytest tests/mimickit -q
+./.venv-win/Scripts/python.exe -m unittest tests.test_stand_recovery_queue tests.test_stand_overnight -q
+```
+
+Za isti replay dodati FK komandi
+`--replay runs/stand_recovery_control_diagnostic_20261112_broad/000000808960/push_x_neg_replay.npz`
+ako je lokalni paket prisutan. Za reprodukciju upstream greške pokrenuti
+konverter bez `--correct-small-angle-slerp`, sa zasebnim izlaznim folderom;
+očekivani exit code je 1 i čuva se neuspešan report. Pytest preskače testove
+koji zahtevaju upstream kada checkout nije dostupan; preskok nije prolaz.
+
+## Sledeće obavezne provere pre treninga
+
+1. **Dinamika i kontrola.** Proveriti originalnih 26 position aktuatora,
+   njihov gear/gain/bias, clipping i raspored, kao i sedam pasivnih zglobova,
+   opruge, damping, limite i kontakte. Upstream Newton `_build_controls`
+   uzima PD gains iz `dof_passive_stiffness/damping`, pa nulira te pasivne
+   koeficijente. To nije dokaz ekvivalentnosti našem modelu koji odvojeno ima
+   position actuators i pasivne sile. Prvo uporediti sile i kratke odzive pod
+   istim ciljevima/stanjima, zatim rollout. Ovaj adapter ne rešava action prostor.
+2. **Kontinuitet reference.** Proveriti vremena između frejmova, root pomeraj,
+   prelaz ciklusa i brzine naspram sadašnje Hermite reference. Poslednji frejm
+   wrap ciklusa izuzet je iz MotionLib poređenja jer pripada sledećem ciklusu.
+   Konačne brzine nisu dokaz njihovog poklapanja. Pasivni uglovi u izvezenoj
+   referenci ostaju u postojećoj početnoj pozi; to ne zamrzava pasivnu fiziku.
+3. **Mali fizički zadatak.** Reprodukovati zvanični demo u izabranom engine-u,
+   izmeriti throughput/memoriju, zatim naš kratki hod/stand/promenu komande.
+   Proveriti podatke za idle/start/stop i korektivni korak. Tek onda odrediti
+   veći trening budžet i uključiti nezavisni A→B stop/dwell i push suite.
+
+Lokalno je potvrđen RTX 2060 sa 6.144 MiB kroz WSL. Korisnik je 2026-11-13
+potvrdio da server još nije povezan; lokalne provere se nastavljaju. Nema
+pokrenutog novog RL treninga niti server procesa. Stari recovery redovi su završeni i ne ponavljaju
+se. Natural-walk arhiva, njena grana i joystick grana ostaju nepromenjene.

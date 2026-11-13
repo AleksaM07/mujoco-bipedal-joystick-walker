@@ -1,16 +1,17 @@
-# Handoff za novi chat — skills, stand i budući A→B
+# Handoff za novi chat — navigation, stand i budući A→B
 
 Datum: 2026-11-05
 
-Poslednje ažuriranje: 2026-11-12. Aktuelni status je na vrhu; odeljci označeni
+Poslednje ažuriranje: 2026-11-13. Aktuelni status je na vrhu; odeljci označeni
 kao prethodni/arhivirani služe istoriji i ne nalažu ponavljanje završenog rada.
 
 ## Poruka za novi chat — aktuelna
 
 > Nastavi iz `NEW_CHAT_HANDOFF_2026-11-05.md` na grani
-> `skills_walking_with_anatomical_human_robot`. Pročitaj ceo handoff i
+> `navigation_walking_with_anatomical_human_robot`. Pročitaj ceo handoff i
 > `docs/SKILLS_REVIEW.md`, zatim `docs/PROJECT_GOALS.md` i
-> `docs/FRAMEWORK_COMPARISON_2026-11-12.md`. Proveri git status i poslednja
+> `docs/FRAMEWORK_COMPARISON_2026-11-12.md` i `docs/MIMICKIT_PREFLIGHT.md`.
+> Proveri git status i poslednja
 > četiri commita. Raniji 1M nastavak, hard 2M i oba dodatna recovery testa su
 > završeni; `runs/stand_recovery_queue_20261112_2x2m_v2/queue.json` ima
 > `budget_exhausted`, bez punog robustness prolaza. Ne pokreći duplikate ili
@@ -19,13 +20,50 @@ kao prethodni/arhivirani služe istoriji i ne nalažu ponavljanje završenog rad
 > 2) prirodan A→B, stop/dwell, prelazi, 60 s stajanja i push recovery;
 > 3) prepreke, ustajanje i izbegavanje dolazećih objekata kao buduća proširenja.
 > Walk→stand i A→B još nisu implementirani; -X recovery ostaje nerešen.
-> Poslednji zahtev je definisanje ciljeva i pregled postojećih rešenja.
-> Sledeći predlog je ograničen test kompatibilnosti, sa MimicKit-om kao prvim
-> kandidatom, uz ProtoMotions/mjlab alternative i PHC recovery analizu.
-> Framework još nije konačno izabran niti prenet. Ne menjaj finalnu natural-walk
-> arhivu niti joystick granu. Push skills grane je već odobren.
+> Poslednji zahtev je preimenovanje u navigation i konkretna implementacija
+> sledećih koraka. Lokalna i remote grana su preimenovane uz očuvanje istorije.
+> MimicKit adapter i prenos walking reference su implementirani i provereni;
+> slede simulator/PD/action paritet, kontinuitet reference i mali fizički task.
+> Ne ponavljati već završene probe bez nove izmene ili konkretne potrebe.
+> Framework još nije konačno izabran niti integrisan u RL trening. Ne menjaj
+> finalnu natural-walk arhivu niti joystick granu. Push razvojne grane je odobren.
 
-## Najnovije — završen recovery red i dogovorene tri faze
+## Najnovije — implementiran prvi MimicKit preflight
+
+Grana je sada `navigation_walking_with_anatomical_human_robot` lokalno i na
+origin-u; stari skills naziv je uklonjen sa remote-a. Zaštićene natural-walk
+i joystick grane ostaju na `2a6156e` i `80edb67`, arhiva nije menjana.
+
+Novi kod i komande su u [MIMICKIT_PREFLIGHT.md](docs/MIMICKIT_PREFLIGHT.md).
+Upstream `.tmp_mimickit_navigation` je čist i pinovan na
+`fbe1a36e878f036d6bf5521defb8eb3b8ab4170d`; `.venv-mimickit-probe` je zasebni
+CPU environment, bez izmene Brax/JAX okruženja. Adapter koristi stvarni
+MimicKit `KinCharModel` i čuva svih 33 hinge koordinata, 16 fizičkih tela i
+originalni raspored 26 aktuatora. Originalni importer ne podržava naš XML.
+
+Izvršeno: 1.025 neutralnih/nasumičnih poza i 70 poza sačuvanog -X pada,
+uz nezavisni native MuJoCo FK oracle. Najveća greška položaja je 2,40 µm.
+Izvezen je pripremljeni walking klip od 134 frejma; 133 vremena proverena su
+kroz stvarni MotionLib. Originalni small-angle SLERP menja i početni frejm
+(do 1,58 mm greške); lokalna eksplicitna ispravka spušta grešku na 3,11 µm.
+Obe varijante i neuspešan originalni rezultat su sačuvani. Prolaze 13 novih
+pytest i 12 postojećih queue/overnight testova.
+
+Trajni JSON izveštaji su `analysis_outputs/skills/mimickit_*_20261112.json`;
+lokalni NPZ/PKL paketi su u `runs/navigation_mimickit_preflight_20261112/`.
+To su kinematičke provere, ne fizički tracking ili dokaz recovery uspeha.
+Poslednji wrap frejm, međufrejmovi i jednakost brzina nisu još provereni.
+
+Sledeći konkretni problem: upstream Newton `_build_controls` koristi pasivne
+stiffness/damping koeficijente za PD, pa ih nulira. Naš model ima zasebne
+position actuators i pasivne sile. Potrebno je proveriti sile/odzive i action
+mapu, očuvati sedam pasivnih zglobova, a zatim proveriti engine rollout i
+mali komandovani zadatak. Ne tvrditi da trenutni kinematički adapter to rešava.
+Novi RL trening nije pokrenut. Lokalni GPU je RTX 2060, 6.144 MiB. Korisnik je
+2026-11-13 potvrdio da server još nije povezan i tražio nastavak lokalnog rada;
+server provere dolaze po povezivanju.
+
+## Prethodni korak — završen recovery red i dogovorene tri faze
 
 Oba odobrena dodatna 2M testa završena su 2026-11-12. Red je završio u
 14:16:42 UTC (15:16 lokalno), sa `status=budget_exhausted`. Zavisni
@@ -49,7 +87,8 @@ kod, rezultate radova i potrebnu prilagodbu našem modelu. Obuhvata i konkretne
 phase-3 izvore HoST/HumanUP, LP-NavOA i PAC-MAN. MimicKit ima relevantne
 algoritme, ali i konkretne importer rizike za naš XML. ProtoMotions daje širi
 generativni pravac; mjlab ima MuJoCo infrastrukturu i relevantne zasebne task
-projekte. Nijedan nije još benchmarkovan na našem humanoidu.
+projekte. Nijedan još nije fizički benchmarkovan na našem humanoidu; noviji
+MimicKit kinematički rezultat opisan je iznad.
 
 Važan preduslov faze 3: arhivirani XML ima isključene sudare na 14 geometrija
 tela, uz aktivna dva đona. Ustajanje i full-body collision testovi traže zasebnu

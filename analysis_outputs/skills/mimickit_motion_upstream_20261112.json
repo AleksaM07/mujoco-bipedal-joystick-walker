@@ -1,0 +1,37 @@
+{
+  "mimickit_commit": "fbe1a36e878f036d6bf5521defb8eb3b8ab4170d",
+  "small_angle_slerp_correction": false,
+  "versions": {
+    "mujoco": "3.10.0",
+    "torch": "2.9.1+cpu"
+  },
+  "source": {
+    "scope": "prepared_reference_knots_not_policy_rollout",
+    "code_commit": "e98e6d70fa39f2e600688a9a6027c490d4f7c259",
+    "working_tree_dirty": true,
+    "exporter_sha256": "292db3e7ed58f10a1db7fe92b49bd2afcf8d9de11b46d482b2f9ed17b5854224",
+    "xml_sha256": "494cb6707a59a957a27e248f07d7d7597227250588a9c6ca70b6314709895ef4",
+    "bvh_sha256": "6c958f1fe020b2d3c6380daa2fea24f58ca01959bc218454adc9220d54157ccd",
+    "config_sha256": "95c9b10b039b3983a5ef28945e073e596d3f28eba3e70c4b2a09edc5be004b93",
+    "clip": 0,
+    "frames": 134,
+    "frame_dt": 0.008333300240337849,
+    "loop_mode": 1,
+    "passive_joints": "fixed at the existing environment initial pose",
+    "limitation": "MimicKit interpolation/velocities differ from the current Hermite reference and need separate validation"
+  },
+  "reference_sha256": "22e1510de92e2a3da04d73e8ad88c6a465c658e4b15a65b3c7d293c59d0cb9ec",
+  "motion_sha256": "1fc8e4fdfd6339b8043baf7480ed48330aadd0bfedc1cb20de2278e0a908979d",
+  "reference_fk": {
+    "pose_count": 134,
+    "max_position_error_m": 1.7203626209168208e-06,
+    "max_rotation_error_rad": 1.5697520328414995e-06,
+    "passed": true
+  },
+  "sampled_frames": 133,
+  "motionlib_max_position_error_m": 0.0015811584889888763,
+  "motionlib_max_quaternion_chord_error": 0.0010188571177423,
+  "motionlib_velocities_finite": true,
+  "passed": false,
+  "scope": "source_knots_only_not_velocity_parity_or_physical_tracking"
+}

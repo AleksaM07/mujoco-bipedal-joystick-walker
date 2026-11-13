@@ -6,9 +6,12 @@
 | --- | --- |
 | `natural_walking_with_anatomical_human_robot` | Finalni DeepMimic/natural-walk rezultat. |
 | `joystick_walking_with_anatomical_human_robot` | Kopija potvrđenog joystick `main` stanja. |
+| `navigation_walking_with_anatomical_human_robot` | Aktivni razvoj faze 2: A→B, stop, prelazi i recovery. |
 
-Sve eksperimentalne i istorijske remote grane uklanjamo nakon što su ove dve
-grane push-ovane. Potrebna istorija ostaje u Git commitima i recovery bundle-u.
+Grana `skills_walking_with_anatomical_human_robot` preimenovana je 2026-11-12
+u `navigation_walking_with_anatomical_human_robot`, lokalno i na origin-u,
+sa očuvanom istorijom. Stari naziv ostaje samo u istorijskim izveštajima.
+Natural-walk i joystick grane se ne menjaju tokom ovog razvoja.
 
 Lokalni `newrepo` remote za odbačeni bullet/A→B projekat je uklonjen. Spoljašnji
 repository time nije obrisan.
