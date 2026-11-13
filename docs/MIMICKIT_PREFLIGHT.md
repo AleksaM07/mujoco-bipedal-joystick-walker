@@ -188,3 +188,71 @@ Reprodukcija sa novim report nazivom:
 Ako reference paket nije prisutan, prvo ga napraviti exporterom iz prethodnog
 odeljka i proslediti novu putanju. Bez `--reference` izvršavaju se random force
 provera i neutralna putanja; dve walking početne poze tada nisu proverene.
+
+## Newton/MuJoCo-Warp fizički gate — 2026-11-13
+
+Pinovani GPU probe koristi Newton `1.0.0`, `newton-actuators 0.1.0`, Warp
+`1.12.0`, MuJoCo `3.5.0` i MuJoCo-Warp `3.5.0.2`. Newton 1.0 README navodi
+Warp 1.12; noviji Warp 1.19 ne radi sa ovim izdanjem (`warp.config.verbose`
+nedostaje), zato je environment odvojen i verzije su eksplicitne u
+[requirements-mimickit-newton-probe.txt](../requirements-mimickit-newton-probe.txt).
+
+[check_mimickit_newton_engine.py](../tools/check_mimickit_newton_engine.py)
+uvozi neizmenjeni arhivirani XML sa sledećim obaveznim izborima:
+
+- `convert_3d_hinge_to_ball_joints=False`, čime ostaju `nq=40`, `nv=39` i svih
+  33 hinge koordinata;
+- `ctrl_direct=True`, čime ostaje originalni red i fizika 26 MuJoCo position
+  aktuatora;
+- `enable_self_collisions=True`, jer je pod u istom MJCF-u kao robot, dok sam
+  XML već isključuje neželjene parove. `False` bi uklonio i pod–đon kontakte;
+- `impratio=1`, kao u izvornom modelu, umesto MimicKit hardkodovanih 10.
+
+Newton 1.0 pogrešno tretira MuJoCo `damping` i `stiffness` pod
+`compiler angle="degree"` kao per-degree vrednosti. Sirovi import zato odstupa
+do 675,55 za damping i 3.940,70 za stiffness. Runtime adapter vraća kompajlirane
+MuJoCo koeficijente pre pravljenja solvera i zadržava pozitivni izvorni
+`jnt_solref=(0.02, 1)`. Arhivirani XML se ne menja.
+
+Gate od 200 fizičkih koraka / 1 s prolazi na RTX 2060:
+
+| Provera | Rezultat |
+| --- | --- |
+| Tela/zglobovi/koordinate/aktuatori | `17/34/40/39/26` u izvornom i izvedenom modelu. |
+| Kontakti | 2–4 u oba engine-a, prisutni u svih 200 koraka. |
+| CPU MuJoCo oracle | Maks. `qpos` greška `6,23e-7`, `qvel` `4,46e-5`. |
+| RTX MuJoCo-Warp | Maks. `qpos` greška `2,81e-6`, `qvel` `1,99e-4`. |
+| Fizički parametri | Damping, stiffness, solref i actuator gain/bias/gear/force range prolaze tolerancije. |
+
+Kompletan rezultat je u
+[mimickit_newton_engine_20261113.json](../analysis_outputs/skills/mimickit_newton_engine_20261113.json).
+Solver izostavlja 14 collision-disabled vizuelnih geometrija (`ngeom=3` umesto
+17), ali čuva tela, mase i inercije. Imena aktuatora se gube; njihov red i svi
+fizički nizovi ostaju isti.
+
+Izvršen je i veći, namerno stroži test. Najbolji sačuvani stand checkpoint
+`409600` prošao je izvorni zatvoreni MJX rollout od 500 kontrolnih koraka / 10 s.
+[export_stand_policy_trace.py](../tools/export_stand_policy_trace.py) sačuvao je
+stvarno primenjene targets, a
+[check_stand_policy_trace_newton.py](../tools/check_stand_policy_trace_newton.py)
+ih je ponovio open-loop u native MuJoCo-u i Newtonu. Prvih 1 s ostaje blisko
+(`qpos 5,52e-6`, `qvel 2,44e-4`), ali oba open-loop replay-a zatim padaju jer
+više ne dobijaju feedback aktora. To nije Newton-only kvar: native MuJoCo se
+od izvornog MJX traga raziđe do 2,90 u mešovitim `qpos` komponentama. Neuspešan,
+ali informativan rezultat je u
+[mimickit_newton_policy_trace_20261113.json](../analysis_outputs/skills/mimickit_newton_policy_trace_20261113.json).
+
+Sledeći obavezni korak nije veći slepi trening. Potrebna je zatvorena petlja:
+Newton stanje → postojeći observation builder i `last_action`/command stanje →
+zamrznuti actor → postojeća action smoothing/residual mapa → četiri fizička
+podkoraka. Tek kada neutralni stand i definisani -X push prođu u toj petlji,
+ima smisla meriti multi-world throughput i pustiti trening na serveru.
+
+Reprodukcija kratkog engine gate-a:
+
+```powershell
+python -m venv .venv-mimickit-newton
+./.venv-mimickit-newton/Scripts/python.exe -m pip install -r requirements-mimickit-newton-probe.txt
+$env:WARP_CACHE_PATH = (Join-Path $PWD '.warp-cache-newton')
+./.venv-mimickit-newton/Scripts/python.exe tools/check_mimickit_newton_engine.py --steps 200 --output runs/navigation_mimickit_newton_repro/engine.json
+```

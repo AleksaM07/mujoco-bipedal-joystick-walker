@@ -15,6 +15,7 @@ dist/
 # Virtual environments
 .venv/
 .venv-*/
+.warp-cache-newton/
 .uv-cache/
 venv/
 env/

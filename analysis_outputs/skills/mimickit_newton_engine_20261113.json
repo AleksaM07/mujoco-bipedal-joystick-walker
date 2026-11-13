@@ -1,0 +1,119 @@
+{
+  "scope": "MimicKit_Newton_1_engine_import_and_GPU_dynamics_gate_not_policy_training",
+  "code_commit": "6b564844464dc4a3350e746467af1e8350189c0f",
+  "working_tree_dirty": true,
+  "versions": {
+    "newton": "1.0.0",
+    "newton-actuators": "0.1.0",
+    "warp-lang": "1.12.0",
+    "mujoco": "3.5.0",
+    "mujoco-warp": "3.5.0.2"
+  },
+  "device": "cuda:0",
+  "xml_sha256": "494cb6707a59a957a27e248f07d7d7597227250588a9c6ca70b6314709895ef4",
+  "xml_unchanged": true,
+  "import_options": {
+    "enable_self_collisions": true,
+    "convert_3d_hinge_to_ball_joints": false,
+    "ctrl_direct": true,
+    "impratio": 1.0
+  },
+  "raw_import_diagnostics": {
+    "raw_damping_max_error": 675.5493774414062,
+    "raw_stiffness_max_error": 3940.70458984375
+  },
+  "property_parity": {
+    "counts": {
+      "source": {
+        "nbody": 17,
+        "njnt": 34,
+        "nq": 40,
+        "nv": 39,
+        "nu": 26,
+        "ngeom": 17
+      },
+      "exported": {
+        "nbody": 17,
+        "njnt": 34,
+        "nq": 40,
+        "nv": 39,
+        "nu": 26,
+        "ngeom": 3
+      }
+    },
+    "max_absolute_errors": {
+      "qpos0": 5.0754870528635365e-08,
+      "body_mass": 7.629394538355427e-07,
+      "body_inertia": 1.0842809816669075e-08,
+      "dof_damping": 0.0,
+      "jnt_stiffness": 0.0,
+      "jnt_solref": 4.470348362317633e-10,
+      "actuator_gainprm": 0.0,
+      "actuator_biasprm": 0.0,
+      "actuator_gear": 0.0,
+      "actuator_ctrlrange": 7.005310065366643e-08,
+      "actuator_forcerange": 0.0
+    },
+    "actuator_names_preserved": false,
+    "passed": true
+  },
+  "cpu_rollout": {
+    "steps": 200,
+    "seconds": 1.0,
+    "source_contact_range": [
+      2,
+      4
+    ],
+    "exported_contact_range": [
+      2,
+      4
+    ],
+    "source_contact_steps": 200,
+    "exported_contact_steps": 200,
+    "fall_height_m": 0.4556440677966101,
+    "source_minimum_root_height_m": 1.4733009768259082,
+    "exported_minimum_root_height_m": 1.4733008640805054,
+    "source_minimum_torso_up": 0.9954162142363138,
+    "exported_minimum_torso_up": 0.9954162112987056,
+    "parity_window_steps": 200,
+    "parity_window_max_qpos_component_error": 6.230469418444518e-07,
+    "parity_window_max_qvel_component_error": 4.4647067172221e-05,
+    "max_qpos_component_error": 6.230469418444518e-07,
+    "max_qvel_component_error": 4.4647067172221e-05,
+    "passed": true
+  },
+  "gpu_rollout": {
+    "device": "cuda:0",
+    "steps": 200,
+    "seconds": 1.0,
+    "source_contact_range": [
+      2,
+      4
+    ],
+    "gpu_contact_range": [
+      2,
+      4
+    ],
+    "source_contact_steps": 200,
+    "gpu_contact_steps": 200,
+    "fall_height_m": 0.4556440677966101,
+    "source_minimum_root_height_m": 1.4733009768259082,
+    "gpu_minimum_root_height_m": 1.473300576210022,
+    "source_minimum_torso_up": 0.9954162142363138,
+    "gpu_minimum_torso_up": 0.9950600954381035,
+    "first_step_qpos_component_error": 6.416823583599296e-08,
+    "first_step_qvel_component_error": 8.437058268695452e-07,
+    "parity_window_steps": 200,
+    "parity_window_max_qpos_component_error": 2.807405153286424e-06,
+    "parity_window_max_qvel_component_error": 0.0001993514865161125,
+    "max_qpos_component_error": 2.807405153286424e-06,
+    "max_qvel_component_error": 0.0001993514865161125,
+    "passed": true
+  },
+  "known_nonsemantic_export_differences": [
+    "collision-disabled visual geoms are omitted from the solver model",
+    "actuator names are not preserved, but source order and arrays are preserved",
+    "Newton exports a non-binding joint actuator-force range"
+  ],
+  "passed": true
+}

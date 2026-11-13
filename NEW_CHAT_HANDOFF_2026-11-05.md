@@ -23,13 +23,33 @@ kao prethodni/arhivirani služe istoriji i ne nalažu ponavljanje završenog rad
 > Poslednji zahtev je preimenovanje u navigation i konkretna implementacija
 > sledećih koraka. Lokalna i remote grana su preimenovane uz očuvanje istorije.
 > MimicKit adapter i prenos walking reference su implementirani i provereni;
-> native MuJoCo control-to-torque provera takođe prolazi. Slede isti test u
-> novom simulatoru, policy action mapa, kontinuitet reference i mali fizički task.
+> native MuJoCo control-to-torque i kratki Newton/MuJoCo-Warp fizički gate
+> takođe prolaze. Slede zatvorena policy/observation petlja, kontinuitet
+> reference i mali komandovani fizički task.
 > Ne ponavljati već završene probe bez nove izmene ili konkretne potrebe.
 > Framework još nije konačno izabran niti integrisan u RL trening. Ne menjaj
 > finalnu natural-walk arhivu niti joystick granu. Push razvojne grane je odobren.
 
 ## Najnovije — implementiran prvi MimicKit preflight
+
+Dopuna 2026-11-13: konkretan Newton 1.0/MuJoCo-Warp GPU gate je implementiran.
+Pinovi su u `requirements-mimickit-newton-probe.txt`, a trajni prolaz u
+`analysis_outputs/skills/mimickit_newton_engine_20261113.json`. Adapter čuva
+`nq=40`, `nv=39`, 26 direct MuJoCo aktuatora, `impratio=1` i pod–đon kontakte.
+Zaobilazi dve potvrđene Newton 1.0 greške: degree importer menja fizičke
+damping/stiffness vrednosti, a positive `solref` se prevodi u drugi format.
+Originalni XML nije menjan. Na RTX 2060, 200 koraka / 1 s daje maksimalnu
+`qpos` grešku `2,81e-6` i `qvel` `1,99e-4` prema native MuJoCo-u.
+
+Veći test je takođe stvarno pokrenut. Izvorni zatvoreni MJX rollout najboljeg
+stand checkpointa `409600` prolazi 500 kontrolnih koraka / 10 s. Njegovi
+stvarni controls su potom ponovljeni open-loop u native MuJoCo-u i Newtonu.
+Prvih 1 s ostaje blisko (`qpos 5,52e-6`, `qvel 2,44e-4`), ali oba open-loop
+replay-a padaju kada izgube feedback. Dokaz je
+`analysis_outputs/skills/mimickit_newton_policy_trace_20261113.json`. Ovo ne
+opovrgava engine gate; precizno pokazuje sledeći blocker: Newton state mora u
+postojeći observation builder, zamrznuti actor i action smoothing/residual mapu
+na svakih 20 ms. Ne puštati veći trening pre neutralnog i -X closed-loop gate-a.
 
 Dopuna 2026-11-13: commit `278f7dd` sa prvim adapterom/referencom i rename-om
 je pushovan. Korisnik traži nastavak lokalno dok server ne bude povezan.

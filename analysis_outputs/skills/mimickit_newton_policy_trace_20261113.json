@@ -1,0 +1,50 @@
+{
+  "scope": "open_loop_saved_stand_policy_controls_native_MuJoCo_vs_Newton_GPU",
+  "versions": {
+    "newton": "1.0.0",
+    "newton-actuators": "0.1.0",
+    "warp-lang": "1.12.0",
+    "mujoco": "3.5.0",
+    "mujoco-warp": "3.5.0.2"
+  },
+  "trace": "runs\\navigation_mimickit_newton_probe_20261113\\stand_policy_409600_seed11_10s.npz",
+  "trace_metadata": {
+    "scope": "saved_MJX_policy_control_trace_for_open_loop_engine_replay",
+    "checkpoint": "C:\\Users\\aleks\\Desktop\\Aleksie kerefeke\\master\\RS projekat - RL politika ucenja joystick\\mujoco-bipedal-joystick-walker\\runs\\stand_pushx_continue_20261109_1m_lr1e-4\\resume\\20261109_1452_stand_balance_v1_resume_1000000_lr0_0001_V1_steps-1m_reward-8797p8408_s\\checkpoints\\000000409600",
+    "checkpoint_metadata_sha256": "3108062cdff6d0e3fccb3d4ea95e61f94168bcda28b9dcaed5f25f796a4e07a2",
+    "xml_path": "C:\\Users\\aleks\\Desktop\\Aleksie kerefeke\\master\\RS projekat - RL politika ucenja joystick\\mujoco-bipedal-joystick-walker\\generated_models\\human_male_180cm_75kg_standard_trainfast_v21_arms.xml",
+    "xml_sha256": "494cb6707a59a957a27e248f07d7d7597227250588a9c6ca70b6314709895ef4",
+    "seed": 11,
+    "requested_steps": 500,
+    "recorded_steps": 500,
+    "control_dt": 0.02,
+    "simulation_dt": 0.005,
+    "passed_source_policy_rollout": true,
+    "limitation": "Controls are replayed open-loop in another engine; this validates control/physics transfer, not closed-loop observation transfer."
+  },
+  "xml_sha256": "494cb6707a59a957a27e248f07d7d7597227250588a9c6ca70b6314709895ef4",
+  "raw_import_diagnostics": {
+    "raw_damping_max_error": 675.5493774414062,
+    "raw_stiffness_max_error": 3940.70458984375
+  },
+  "control_steps": 500,
+  "physics_substeps_per_control": 4,
+  "seconds": 10.0,
+  "source_contact_physics_steps": 1953,
+  "gpu_contact_physics_steps": 1956,
+  "fall_height_m": 0.4556440677966101,
+  "source_minimum_root_height_m": -1.4168310891517024,
+  "gpu_minimum_root_height_m": -1.424338698387146,
+  "source_minimum_torso_up": -0.9998944798530729,
+  "gpu_minimum_torso_up": -0.9988979183852373,
+  "source_open_loop_stable": false,
+  "gpu_open_loop_stable": false,
+  "parity_window_seconds": 1.0,
+  "parity_window_max_qpos_component_error": 5.51980222431199e-06,
+  "parity_window_max_qvel_component_error": 0.00024400893284558418,
+  "full_horizon_max_qpos_component_error": 1.395898306009758,
+  "full_horizon_max_qvel_component_error": 15.734296644849573,
+  "native_MuJoCo_vs_source_MJX_max_qpos_component_error": 2.901772690904937,
+  "limitation": "Controls are replayed open-loop in another engine; this validates control/physics transfer, not closed-loop observation transfer.",
+  "passed": false
+}
