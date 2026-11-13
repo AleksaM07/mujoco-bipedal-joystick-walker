@@ -37,6 +37,7 @@ def build_configs(
     stand_push_min_fraction: float = 0.0,
     stand_push_max_fraction: float = 0.0,
     stand_push_probability: float = 0.5,
+    stand_push_direction: str = "negative",
 ) -> tuple[EnvConfig, TrainConfig]:
     """Keep archived physics/PPO settings with explicit initialization and reward."""
     if variant not in ALL_VARIANTS or timesteps <= 0:
@@ -62,6 +63,10 @@ def build_configs(
         raise ValueError("Stand push fractions must satisfy 0 <= min <= max <= 0.05.")
     if not 0 <= stand_push_probability <= 1:
         raise ValueError("Stand push probability must be in [0, 1].")
+    if stand_push_direction not in {"negative", "positive", "bidirectional"}:
+        raise ValueError(
+            "Stand push direction must be negative, positive or bidirectional."
+        )
     saved = json.loads((ARCHIVE / "config.json").read_text(encoding="utf-8"))
     environment = replace(
         EnvConfig(**saved["env"]),
@@ -97,6 +102,7 @@ def build_configs(
         stand_push_min_fraction=stand_push_min_fraction,
         stand_push_max_fraction=stand_push_max_fraction,
         stand_push_probability=stand_push_probability,
+        stand_push_direction=stand_push_direction,
         bare=True,
         save_checkpoints=True,
         checkpoint_out=None,
@@ -157,6 +163,7 @@ def build_configs(
             "stand_push_min_fraction",
             "stand_push_max_fraction",
             "stand_push_probability",
+            "stand_push_direction",
         ):
             source_training.pop(key)
             target_training.pop(key)
@@ -230,6 +237,7 @@ def run_variant(
     stand_push_min_fraction: float = 0.0,
     stand_push_max_fraction: float = 0.0,
     stand_push_probability: float = 0.5,
+    stand_push_direction: str = "negative",
 ) -> dict[str, Any]:
     """Train one variant, then physically check every saved checkpoint."""
     command = [
@@ -253,6 +261,8 @@ def run_variant(
         str(stand_push_max_fraction),
         "--stand-push-probability",
         str(stand_push_probability),
+        "--stand-push-direction",
+        stand_push_direction,
     ]
     result: dict[str, Any] = {"variant": variant, "training_command": command}
     if resume_from is not None:
@@ -309,6 +319,11 @@ def main() -> int:
     parser.add_argument("--stand-push-min-fraction", type=float, default=0.0)
     parser.add_argument("--stand-push-max-fraction", type=float, default=0.0)
     parser.add_argument("--stand-push-probability", type=float, default=0.5)
+    parser.add_argument(
+        "--stand-push-direction",
+        choices=("negative", "positive", "bidirectional"),
+        default="negative",
+    )
     parser.add_argument("--robustness-check", action="store_true")
     parser.add_argument("--variants", choices=ALL_VARIANTS, nargs="+", default=VARIANTS)
     parser.add_argument("--resume-from", type=Path)
@@ -351,6 +366,7 @@ def main() -> int:
                 args.stand_push_min_fraction,
                 args.stand_push_max_fraction,
                 args.stand_push_probability,
+                args.stand_push_direction,
             )
         except (OSError, ValueError) as exc:
             parser.error(str(exc))
@@ -375,6 +391,7 @@ def main() -> int:
             args.stand_push_min_fraction,
             args.stand_push_max_fraction,
             args.stand_push_probability,
+            args.stand_push_direction,
         )
         run_training(env, training, output)
         return 0
@@ -400,6 +417,7 @@ def main() -> int:
             args.stand_push_min_fraction,
             args.stand_push_max_fraction,
             args.stand_push_probability,
+            args.stand_push_direction,
         )
         report["variants"].append(result)
         write_report(output / "comparison.json", report)

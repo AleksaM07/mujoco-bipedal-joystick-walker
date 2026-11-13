@@ -682,6 +682,14 @@ def run_training(
         raise ValueError("Stand push fractions must satisfy 0 <= min <= max <= 0.05.")
     if not 0 <= train_config.stand_push_probability <= 1:
         raise ValueError("Stand push probability must be in [0, 1].")
+    if train_config.stand_push_direction not in {
+        "negative",
+        "positive",
+        "bidirectional",
+    }:
+        raise ValueError(
+            "Stand push direction must be negative, positive or bidirectional."
+        )
     if train_config.stand_push_max_fraction and (
         env_config.locomotion_skill != "stand"
         or env_config.physics_backend != "mjx_jax"
@@ -870,9 +878,11 @@ def run_training(
         logger.info("domain randomization disabled for this run")
     if train_config.stand_push_max_fraction:
         logger.info(
-            "stand training pushes | -world X | body-weight fraction={}..{} | "
+            "stand training pushes | direction={} world X | "
+            "body-weight fraction={}..{} | "
             "active episode probability={} | pulse=0.2s every 10s | "
             "random phase=2..8s | nominal evaluation unchanged",
+            train_config.stand_push_direction,
             train_config.stand_push_min_fraction,
             train_config.stand_push_max_fraction,
             train_config.stand_push_probability,
@@ -905,6 +915,7 @@ def run_training(
                     stand_push_min_fraction=train_config.stand_push_min_fraction,
                     stand_push_max_fraction=train_config.stand_push_max_fraction,
                     stand_push_probability=train_config.stand_push_probability,
+                    stand_push_direction=train_config.stand_push_direction,
                 ),
                 **train_kwargs_extra,
                 **train_kwargs,
@@ -941,6 +952,7 @@ def make_wrap_env_fn(
     stand_push_min_fraction: float = 0.0,
     stand_push_max_fraction: float = 0.0,
     stand_push_probability: float = 0.5,
+    stand_push_direction: str = "negative",
 ):
     """Return Brax wrapper with nominal eval and reset-time DR for training."""
 
@@ -970,6 +982,7 @@ def make_wrap_env_fn(
                 stand_push_max_fraction,
                 min_fraction=stand_push_min_fraction,
                 active_probability=stand_push_probability,
+                direction=stand_push_direction,
             )
         return wrap_biomechanics_training(
             wrapped_env,
@@ -3021,6 +3034,12 @@ def main() -> None:
         help="Probability that a training episode receives -X thorax pushes (0..1).",
     )
     parser.add_argument(
+        "--stand-push-direction",
+        choices=("negative", "positive", "bidirectional"),
+        default="negative",
+        help="Training-only world-X thorax push direction.",
+    )
+    parser.add_argument(
         "--restore-value-fn",
         action=argparse.BooleanOptionalAction,
         default=TrainConfig.restore_value_fn,
@@ -3283,6 +3302,7 @@ def main() -> None:
         stand_push_min_fraction=args.stand_push_min_fraction,
         stand_push_max_fraction=args.stand_push_max_fraction,
         stand_push_probability=args.stand_push_probability,
+        stand_push_direction=args.stand_push_direction,
         enable_erfi=args.erfi,
         enable_domain_randomization=(
             args.domain_randomization

@@ -126,6 +126,23 @@ class StandTrainingPushTests(unittest.TestCase):
         self.assertTrue(np.all(force[active] <= -(0.04 * 75 * 9.81)))
         self.assertTrue(np.all(force[active] >= -(0.05 * 75 * 9.81)))
 
+    def test_bidirectional_distribution_samples_both_world_x_signs(self) -> None:
+        env = StandTrainingPushWrapper(
+            self.base,
+            0.05,
+            min_fraction=0.04,
+            active_probability=1.0,
+            direction="bidirectional",
+        )
+        keys = jax.random.split(jax.random.PRNGKey(23), 2048)
+        force = np.asarray(
+            jax.jit(jax.vmap(env.reset))(keys).info["stand_push_force_x"]
+        )
+        self.assertGreater(np.mean(force > 0), 0.45)
+        self.assertLess(np.mean(force > 0), 0.55)
+        self.assertTrue(np.all(np.abs(force) >= 0.04 * 75 * 9.81))
+        self.assertTrue(np.all(np.abs(force) <= 0.05 * 75 * 9.81))
+
     def test_auto_reset_clears_counter_and_force_and_resamples_schedule(self) -> None:
         env = wrap_biomechanics_training(self.env, episode_length=2)
         state = jax.jit(env.reset)(jax.random.split(jax.random.PRNGKey(11), 8))
@@ -164,6 +181,7 @@ class StandTrainingPushTests(unittest.TestCase):
         self.assertEqual(TrainConfig().stand_push_min_fraction, 0)
         self.assertEqual(TrainConfig().stand_push_max_fraction, 0)
         self.assertEqual(TrainConfig().stand_push_probability, 0.5)
+        self.assertEqual(TrainConfig().stand_push_direction, "negative")
 
     def test_invalid_fraction_and_non_stand_training_are_rejected(self) -> None:
         for value in (-0.01, 0.06, float("nan"), float("inf")):
@@ -176,9 +194,17 @@ class StandTrainingPushTests(unittest.TestCase):
                 StandTrainingPushWrapper(
                     self.base, 0.05, active_probability=probability
                 )
+        with self.assertRaisesRegex(ValueError, "direction"):
+            StandTrainingPushWrapper(self.base, 0.05, direction="sideways")
         with self.assertRaisesRegex(ValueError, "locomotion_skill=stand"):
             run_training(
                 EnvConfig(), TrainConfig(stand_push_max_fraction=0.05), Path("unused")
+            )
+        with self.assertRaisesRegex(ValueError, "direction"):
+            run_training(
+                EnvConfig(locomotion_skill="stand"),
+                TrainConfig(stand_push_direction="sideways"),
+                Path("unused"),
             )
 
 

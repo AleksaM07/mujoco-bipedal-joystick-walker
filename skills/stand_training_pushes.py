@@ -1,4 +1,4 @@
-"""Opt-in training perturbations for the remaining negative-X stand weakness."""
+"""Opt-in training perturbations for stand recovery."""
 
 import math
 
@@ -13,10 +13,10 @@ from skills.stand import StandEnv
 class StandTrainingPushWrapper(wrapper.Wrapper):
     """Mix nominal episodes with short thorax forces, without changing observations.
 
-    Active episodes sample a -world X force uniformly between ``min_fraction``
-    and ``max_fraction`` of body weight. One 0.2 s pulse repeats every 10 s, with
-    an episode-specific phase uniformly sampled from 2 to 8 s. Neither the pulse
-    phase nor force is added to the actor's observations.
+    Active episodes sample a world-X force uniformly between ``min_fraction``
+    and ``max_fraction`` of body weight. Direction can be fixed or sampled per
+    episode. One 0.2 s pulse repeats every 10 s, with an episode-specific phase
+    uniformly sampled from 2 to 8 s. Neither schedule nor force is observed.
     """
 
     def __init__(
@@ -26,6 +26,7 @@ class StandTrainingPushWrapper(wrapper.Wrapper):
         *,
         min_fraction: float = 0.0,
         active_probability: float = 0.5,
+        direction: str = "negative",
     ) -> None:
         if not all(
             math.isfinite(value)
@@ -38,6 +39,10 @@ class StandTrainingPushWrapper(wrapper.Wrapper):
             )
         if not 0 <= active_probability <= 1:
             raise ValueError("Stand push probability must be in [0, 1].")
+        if direction not in {"negative", "positive", "bidirectional"}:
+            raise ValueError(
+                "Stand push direction must be negative, positive or bidirectional."
+            )
         if not isinstance(env, StandEnv) or env._config.physics_backend != "mjx_jax":
             raise ValueError("Training pushes require StandEnv with mjx_jax physics.")
         super().__init__(env)
@@ -47,6 +52,7 @@ class StandTrainingPushWrapper(wrapper.Wrapper):
         self.min_force = min_fraction * model_weight
         self.max_force = max_fraction * model_weight
         self.active_probability = active_probability
+        self.direction = direction
         self.body_id = env.mj_model.body("thorax").id
         self.period_steps = round(10.0 / env.dt)
         self.duration_steps = round(0.2 / env.dt)
@@ -60,11 +66,20 @@ class StandTrainingPushWrapper(wrapper.Wrapper):
 
     def reset(self, rng: jax.Array) -> mjx_env.State:
         """Sample a nominal/pushed episode, magnitude and pulse phase on each reset."""
-        env_key, active_key, force_key, phase_key = jax.random.split(rng, 4)
+        env_key, active_key, force_key, phase_key, direction_key = jax.random.split(
+            rng, 5
+        )
         state = self.env.reset(env_key)
-        force = -jax.random.uniform(
+        magnitude = jax.random.uniform(
             force_key, minval=self.min_force, maxval=self.max_force
         )
+        if self.direction == "negative":
+            sign = jp.array(-1.0)
+        elif self.direction == "positive":
+            sign = jp.array(1.0)
+        else:
+            sign = jp.where(jax.random.bernoulli(direction_key), 1.0, -1.0)
+        force = sign * magnitude
         force = jp.where(
             jax.random.bernoulli(active_key, self.active_probability), force, 0.0
         )
