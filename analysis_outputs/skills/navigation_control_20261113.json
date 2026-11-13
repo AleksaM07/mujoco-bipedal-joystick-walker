@@ -1,0 +1,704 @@
+{
+  "scope": "native_mujoco_force_and_substep_parity_not_newton_or_policy_transfer",
+  "code_commit": "278f7dd824342f6c4e4e2efa4f5cb09610225aea",
+  "working_tree_dirty": true,
+  "source_sha256": {
+    "tools\\check_navigation_control.py": "7e649fc76edc40d8205f1f0df2eaff2ff87b1e5e21d1b584eab2ebbaf7ee68db",
+    "skills\\mujoco_control.py": "48fa8b0f3ee4f3683cd4ceccb62b20404b33b63a5a545646a02a9815c59efa99"
+  },
+  "mujoco_version": "3.10.0",
+  "xml_sha256": "494cb6707a59a957a27e248f07d7d7597227250588a9c6ca70b6314709895ef4",
+  "reference_sha256": "22e1510de92e2a3da04d73e8ad88c6a465c658e4b15a65b3c7d293c59d0cb9ec",
+  "seed": 13,
+  "timestep": 0.005,
+  "integrator": 3,
+  "actuators": [
+    {
+      "actuator": "abdomen_x_position",
+      "joint": "abdomen_x",
+      "qpos_index": 10,
+      "dof_index": 9,
+      "gear": 1.0,
+      "gain": 240.0,
+      "bias": [
+        0.0,
+        -240.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -0.18,
+        0.18
+      ],
+      "forcerange": [
+        -180.0,
+        180.0
+      ],
+      "passive_stiffness": 45.0,
+      "passive_damping": 8.0
+    },
+    {
+      "actuator": "abdomen_y_position",
+      "joint": "abdomen_y",
+      "qpos_index": 11,
+      "dof_index": 10,
+      "gear": 1.0,
+      "gain": 240.0,
+      "bias": [
+        0.0,
+        -240.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -0.14,
+        0.14
+      ],
+      "forcerange": [
+        -180.0,
+        180.0
+      ],
+      "passive_stiffness": 40.0,
+      "passive_damping": 8.0
+    },
+    {
+      "actuator": "abdomen_z_position",
+      "joint": "abdomen_z",
+      "qpos_index": 12,
+      "dof_index": 11,
+      "gear": 1.0,
+      "gain": 240.0,
+      "bias": [
+        0.0,
+        -240.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -0.18,
+        0.18
+      ],
+      "forcerange": [
+        -180.0,
+        180.0
+      ],
+      "passive_stiffness": 45.0,
+      "passive_damping": 8.0
+    },
+    {
+      "actuator": "pelvis_x_position",
+      "joint": "pelvis_x",
+      "qpos_index": 13,
+      "dof_index": 12,
+      "gear": 1.0,
+      "gain": 300.0,
+      "bias": [
+        0.0,
+        -300.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -0.12,
+        0.12
+      ],
+      "forcerange": [
+        -240.0,
+        240.0
+      ],
+      "passive_stiffness": 70.0,
+      "passive_damping": 12.0
+    },
+    {
+      "actuator": "pelvis_y_position",
+      "joint": "pelvis_y",
+      "qpos_index": 14,
+      "dof_index": 13,
+      "gear": 1.0,
+      "gain": 300.0,
+      "bias": [
+        0.0,
+        -300.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -0.1,
+        0.1
+      ],
+      "forcerange": [
+        -240.0,
+        240.0
+      ],
+      "passive_stiffness": 65.0,
+      "passive_damping": 12.0
+    },
+    {
+      "actuator": "pelvis_z_position",
+      "joint": "pelvis_z",
+      "qpos_index": 15,
+      "dof_index": 14,
+      "gear": 1.0,
+      "gain": 300.0,
+      "bias": [
+        0.0,
+        -300.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -0.12,
+        0.12
+      ],
+      "forcerange": [
+        -240.0,
+        240.0
+      ],
+      "passive_stiffness": 70.0,
+      "passive_damping": 12.0
+    },
+    {
+      "actuator": "left_hip_x_position",
+      "joint": "left_hip_x",
+      "qpos_index": 16,
+      "dof_index": 15,
+      "gear": 1.0,
+      "gain": 220.0,
+      "bias": [
+        0.0,
+        -220.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -0.349066,
+        0.698132
+      ],
+      "forcerange": [
+        -360.0,
+        360.0
+      ],
+      "passive_stiffness": 0.0,
+      "passive_damping": 2.0
+    },
+    {
+      "actuator": "left_hip_y_position",
+      "joint": "left_hip_y",
+      "qpos_index": 17,
+      "dof_index": 16,
+      "gear": 1.0,
+      "gain": 180.0,
+      "bias": [
+        0.0,
+        -180.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -0.383972,
+        0.383972
+      ],
+      "forcerange": [
+        -300.0,
+        300.0
+      ],
+      "passive_stiffness": 0.0,
+      "passive_damping": 2.0
+    },
+    {
+      "actuator": "left_hip_z_position",
+      "joint": "left_hip_z",
+      "qpos_index": 18,
+      "dof_index": 17,
+      "gear": 1.0,
+      "gain": 220.0,
+      "bias": [
+        0.0,
+        -220.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -0.523599,
+        1.047198
+      ],
+      "forcerange": [
+        -360.0,
+        360.0
+      ],
+      "passive_stiffness": 0.0,
+      "passive_damping": 2.0
+    },
+    {
+      "actuator": "left_knee_z_position",
+      "joint": "left_knee_z",
+      "qpos_index": 19,
+      "dof_index": 18,
+      "gear": 1.0,
+      "gain": 260.0,
+      "bias": [
+        0.0,
+        -260.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -2.356194,
+        0.0
+      ],
+      "forcerange": [
+        -420.0,
+        420.0
+      ],
+      "passive_stiffness": 0.0,
+      "passive_damping": 2.5
+    },
+    {
+      "actuator": "left_ankle_y_position",
+      "joint": "left_ankle_y",
+      "qpos_index": 20,
+      "dof_index": 19,
+      "gear": 1.0,
+      "gain": 180.0,
+      "bias": [
+        0.0,
+        -180.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -0.436332,
+        0.436332
+      ],
+      "forcerange": [
+        -300.0,
+        300.0
+      ],
+      "passive_stiffness": 0.0,
+      "passive_damping": 1.5
+    },
+    {
+      "actuator": "left_ankle_z_position",
+      "joint": "left_ankle_z",
+      "qpos_index": 21,
+      "dof_index": 20,
+      "gear": 1.0,
+      "gain": 160.0,
+      "bias": [
+        0.0,
+        -160.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -0.20944,
+        0.20944
+      ],
+      "forcerange": [
+        -260.0,
+        260.0
+      ],
+      "passive_stiffness": 0.0,
+      "passive_damping": 1.5
+    },
+    {
+      "actuator": "right_hip_x_position",
+      "joint": "right_hip_x",
+      "qpos_index": 22,
+      "dof_index": 21,
+      "gear": 1.0,
+      "gain": 220.0,
+      "bias": [
+        0.0,
+        -220.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -0.698132,
+        0.349066
+      ],
+      "forcerange": [
+        -360.0,
+        360.0
+      ],
+      "passive_stiffness": 0.0,
+      "passive_damping": 2.0
+    },
+    {
+      "actuator": "right_hip_y_position",
+      "joint": "right_hip_y",
+      "qpos_index": 23,
+      "dof_index": 22,
+      "gear": 1.0,
+      "gain": 180.0,
+      "bias": [
+        0.0,
+        -180.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -0.383972,
+        0.383972
+      ],
+      "forcerange": [
+        -300.0,
+        300.0
+      ],
+      "passive_stiffness": 0.0,
+      "passive_damping": 2.0
+    },
+    {
+      "actuator": "right_hip_z_position",
+      "joint": "right_hip_z",
+      "qpos_index": 24,
+      "dof_index": 23,
+      "gear": 1.0,
+      "gain": 220.0,
+      "bias": [
+        0.0,
+        -220.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -0.523599,
+        1.047198
+      ],
+      "forcerange": [
+        -360.0,
+        360.0
+      ],
+      "passive_stiffness": 0.0,
+      "passive_damping": 2.0
+    },
+    {
+      "actuator": "right_knee_z_position",
+      "joint": "right_knee_z",
+      "qpos_index": 25,
+      "dof_index": 24,
+      "gear": 1.0,
+      "gain": 260.0,
+      "bias": [
+        0.0,
+        -260.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -2.356194,
+        0.0
+      ],
+      "forcerange": [
+        -420.0,
+        420.0
+      ],
+      "passive_stiffness": 0.0,
+      "passive_damping": 2.5
+    },
+    {
+      "actuator": "right_ankle_y_position",
+      "joint": "right_ankle_y",
+      "qpos_index": 26,
+      "dof_index": 25,
+      "gear": 1.0,
+      "gain": 180.0,
+      "bias": [
+        0.0,
+        -180.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -0.436332,
+        0.436332
+      ],
+      "forcerange": [
+        -300.0,
+        300.0
+      ],
+      "passive_stiffness": 0.0,
+      "passive_damping": 1.5
+    },
+    {
+      "actuator": "right_ankle_z_position",
+      "joint": "right_ankle_z",
+      "qpos_index": 27,
+      "dof_index": 26,
+      "gear": 1.0,
+      "gain": 160.0,
+      "bias": [
+        0.0,
+        -160.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -0.20944,
+        0.20944
+      ],
+      "forcerange": [
+        -260.0,
+        260.0
+      ],
+      "passive_stiffness": 0.0,
+      "passive_damping": 1.5
+    },
+    {
+      "actuator": "left_shoulder_x_position",
+      "joint": "left_shoulder_x",
+      "qpos_index": 28,
+      "dof_index": 27,
+      "gear": 1.0,
+      "gain": 90.0,
+      "bias": [
+        0.0,
+        -90.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -0.872665,
+        3.141593
+      ],
+      "forcerange": [
+        -120.0,
+        120.0
+      ],
+      "passive_stiffness": 0.0,
+      "passive_damping": 1.0
+    },
+    {
+      "actuator": "left_shoulder_y_position",
+      "joint": "left_shoulder_y",
+      "qpos_index": 29,
+      "dof_index": 28,
+      "gear": 1.0,
+      "gain": 80.0,
+      "bias": [
+        0.0,
+        -80.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -1.570796,
+        1.570796
+      ],
+      "forcerange": [
+        -100.0,
+        100.0
+      ],
+      "passive_stiffness": 0.0,
+      "passive_damping": 1.0
+    },
+    {
+      "actuator": "left_shoulder_z_position",
+      "joint": "left_shoulder_z",
+      "qpos_index": 30,
+      "dof_index": 29,
+      "gear": 1.0,
+      "gain": 90.0,
+      "bias": [
+        0.0,
+        -90.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -0.872665,
+        3.141593
+      ],
+      "forcerange": [
+        -120.0,
+        120.0
+      ],
+      "passive_stiffness": 0.0,
+      "passive_damping": 1.0
+    },
+    {
+      "actuator": "left_elbow_z_position",
+      "joint": "left_elbow_z",
+      "qpos_index": 31,
+      "dof_index": 30,
+      "gear": 1.0,
+      "gain": 70.0,
+      "bias": [
+        0.0,
+        -70.0,
+        0.0
+      ],
+      "ctrlrange": [
+        0.0,
+        2.617994
+      ],
+      "forcerange": [
+        -90.0,
+        90.0
+      ],
+      "passive_stiffness": 0.0,
+      "passive_damping": 1.0
+    },
+    {
+      "actuator": "right_shoulder_x_position",
+      "joint": "right_shoulder_x",
+      "qpos_index": 34,
+      "dof_index": 33,
+      "gear": 1.0,
+      "gain": 90.0,
+      "bias": [
+        0.0,
+        -90.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -3.141593,
+        0.872665
+      ],
+      "forcerange": [
+        -120.0,
+        120.0
+      ],
+      "passive_stiffness": 0.0,
+      "passive_damping": 1.0
+    },
+    {
+      "actuator": "right_shoulder_y_position",
+      "joint": "right_shoulder_y",
+      "qpos_index": 35,
+      "dof_index": 34,
+      "gear": 1.0,
+      "gain": 80.0,
+      "bias": [
+        0.0,
+        -80.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -1.570796,
+        1.570796
+      ],
+      "forcerange": [
+        -100.0,
+        100.0
+      ],
+      "passive_stiffness": 0.0,
+      "passive_damping": 1.0
+    },
+    {
+      "actuator": "right_shoulder_z_position",
+      "joint": "right_shoulder_z",
+      "qpos_index": 36,
+      "dof_index": 35,
+      "gear": 1.0,
+      "gain": 90.0,
+      "bias": [
+        0.0,
+        -90.0,
+        0.0
+      ],
+      "ctrlrange": [
+        -0.872665,
+        3.141593
+      ],
+      "forcerange": [
+        -120.0,
+        120.0
+      ],
+      "passive_stiffness": 0.0,
+      "passive_damping": 1.0
+    },
+    {
+      "actuator": "right_elbow_z_position",
+      "joint": "right_elbow_z",
+      "qpos_index": 37,
+      "dof_index": 36,
+      "gear": 1.0,
+      "gain": 70.0,
+      "bias": [
+        0.0,
+        -70.0,
+        0.0
+      ],
+      "ctrlrange": [
+        0.0,
+        2.617994
+      ],
+      "forcerange": [
+        -90.0,
+        90.0
+      ],
+      "passive_stiffness": 0.0,
+      "passive_damping": 1.0
+    }
+  ],
+  "passive_joints": [
+    {
+      "joint": "head_x",
+      "stiffness": 35.0,
+      "spring_reference": 0.0,
+      "damping": 5.0
+    },
+    {
+      "joint": "head_y",
+      "stiffness": 35.0,
+      "spring_reference": 0.0,
+      "damping": 5.0
+    },
+    {
+      "joint": "head_z",
+      "stiffness": 30.0,
+      "spring_reference": 0.0,
+      "damping": 4.0
+    },
+    {
+      "joint": "left_wrist_y",
+      "stiffness": 0.0,
+      "spring_reference": 0.0,
+      "damping": 1.0
+    },
+    {
+      "joint": "left_wrist_z",
+      "stiffness": 0.0,
+      "spring_reference": 0.0,
+      "damping": 1.0
+    },
+    {
+      "joint": "right_wrist_y",
+      "stiffness": 0.0,
+      "spring_reference": 0.0,
+      "damping": 1.0
+    },
+    {
+      "joint": "right_wrist_z",
+      "stiffness": 0.0,
+      "spring_reference": 0.0,
+      "damping": 1.0
+    }
+  ],
+  "active_joints_with_zero_passive_stiffness": 20,
+  "force_probe": {
+    "states": 1025,
+    "max_force_or_torque_error": 0.0,
+    "passive_joint_force_peak_nm": 62.99179425894674,
+    "saturated_actuator_samples": 4412,
+    "passed": true
+  },
+  "rollout_probes": {
+    "neutral": {
+      "steps": 200,
+      "seconds": 1.0,
+      "steps_with_contacts": 200,
+      "max_qpos_component_error": 0.0,
+      "max_qvel_component_error": 0.0,
+      "held_torque_max_qpos_component_error": 0.025891354340953993,
+      "passed": true
+    },
+    "walk_start": {
+      "steps": 200,
+      "seconds": 1.0,
+      "steps_with_contacts": 200,
+      "max_qpos_component_error": 0.0,
+      "max_qvel_component_error": 0.0,
+      "held_torque_max_qpos_component_error": 0.04179890182045886,
+      "passed": true
+    },
+    "walk_middle": {
+      "steps": 200,
+      "seconds": 1.0,
+      "steps_with_contacts": 200,
+      "max_qpos_component_error": 0.0,
+      "max_qvel_component_error": 0.0,
+      "held_torque_max_qpos_component_error": 0.049741638464349536,
+      "passed": true
+    }
+  },
+  "passed": true,
+  "remaining": [
+    "engine import/body/hinge mapping",
+    "new engine force and integration parity",
+    "normalized policy action mapping",
+    "reference interpolation/seam/velocity validation",
+    "commanded training and independent task evaluation"
+  ]
+}

@@ -6,6 +6,10 @@ Ovo je prvi implementirani korak iz [poređenja pristupa](FRAMEWORK_COMPARISON_2
 za [fazu 2](PROJECT_GOALS.md). Kinematika i prenos reference prolaze;
 kompatibilnost simulatora, kontrole i politika još nije dokazana.
 
+Dopuna 2026-11-13: implementiran je i proveren prenos fizičkih control targets
+u momente u native MuJoCo-u. To daje numerički oracle za sledeći engine test;
+Newton/MimicKit simulator još nije prošao isti test.
+
 ## Implementacija
 
 - [mimickit_adapter.py](../skills/mimickit_adapter.py) gradi referentni skelet
@@ -132,3 +136,55 @@ Lokalno je potvrđen RTX 2060 sa 6.144 MiB kroz WSL. Korisnik je 2026-11-13
 potvrdio da server još nije povezan; lokalne provere se nastavljaju. Nema
 pokrenutog novog RL treninga niti server procesa. Stari recovery redovi su završeni i ne ponavljaju
 se. Natural-walk arhiva, njena grana i joystick grana ostaju nepromenjene.
+
+## Izvršena kontrolna provera — 2026-11-13
+
+[mujoco_control.py](../skills/mujoco_control.py) prevodi originalnih 26 fizičkih
+control targets u aktuatorske sile i generalizovane momente. Čuva gain/bias,
+gear, control clipping pre force clipping-a i sabiranje više aktuatora na
+istom zglobu. Formula prati
+[MuJoCo actuation model](https://mujoco.readthedocs.io/en/stable/computation/index.html#actuation-model).
+Pasivne sile ostaju u simulatoru; ne dodaju se drugi put i pasivni zglobovi ne
+dobijaju motor. Ovo još ne prevodi normalizovane akcije postojeće Brax politike.
+
+[check_navigation_control.py](../tools/check_navigation_control.py) izvršio je:
+
+| Test | Rezultat |
+| --- | --- |
+| 1.025 nasumičnih stanja, targets unutar i izvan control limita | Maksimalna razlika prema native `actuator_force`/`qfrc_actuator` je 0 u ovom izvršavanju. |
+| Saturacija sile | Obuhvaćeno 4.412 zasićenih aktuatorskih uzoraka. |
+| Pasivni zglobovi | Svih sedam ostaju bez aktuatorskog momenta; njihove native pasivne sile dostižu 62,99 Nm u ovoj širokoj nasumičnoj raspodeli. To nije izmereni nominalni walking moment. |
+| Tri početne poze, po 200 koraka / 1 s, kontakti prisutni u svih 600 koraka | Originalni position aktuatori i eksplicitni momenti ažurirani svakih 5 ms daju jednake `qpos` i `qvel` u ovom izvršavanju. |
+| Kontrolni primer: moment se osvežava tek svakih 20 ms | Razlika najveće komponente `qpos` je 0,0259–0,0497. `qpos` meša metre, quaternion komponente i radijane; ove brojeve ne tumačiti kao centimetre. |
+
+Trajni rezultat i kompletna gain/bias/passive mapa su u
+[navigation_control_20261113.json](../analysis_outputs/skills/navigation_control_20261113.json).
+Devet novih pytest slučajeva proverava non-unit i negativni gear, `ref`,
+velocity bias, oba clipping-a, više motora na istom zglobu, pasivni zglob,
+nevažeće targets i odbijanje nepodržane activation dinamike.
+
+Za native rollout kopira se model u memoriji, uklanja samo aktuatorska
+gain/bias sila i dodaje isti izračunati moment preko `qfrc_applied`. Originalni
+kontakti, mase, ograničenja i pasivne sile ostaju isti. Probe zahteva nulti
+aktuatorski velocity bias kao u našem XML-u: inače bi implicitna integracija
+njegovog izvoda tražila dodatnu proveru. Ovo su kratke open-loop putanje;
+nisu test stabilnog hoda, stajanja ili nove politike.
+
+Praktična posledica: svih 26 aktuatora ima nenulti gain, ali **20 njihovih
+zglobova ima nultu pasivnu stiffness**. Direktno korišćenje tih stiffness
+vrednosti za motorski Kp ne čuva našu kontrolu. Pored toga, pinovani Newton
+importer uključuje `convert_3d_hinge_to_ball_joints=True`. Pre sledećeg engine
+testa moraju se eksplicitno očuvati serijske hinge koordinate, aktivni i
+pasivni zglobovi, i ponoviti iste force/rollout provere. Potrebna je i provera
+mapiranja 34 referentna čvora na 16 fizičkih tela; virtuelni čvorovi nisu tela.
+
+Reprodukcija sa novim report nazivom:
+
+```powershell
+./.venv-mimickit-probe/Scripts/python.exe tools/check_navigation_control.py --reference runs/navigation_mimickit_preflight_20261112/reference_v2.npz --samples 1024 --steps 200 --output runs/navigation_control_repro/report.json
+./.venv-mimickit-probe/Scripts/python.exe -m pytest tests/mimickit/test_control_bridge.py -q
+```
+
+Ako reference paket nije prisutan, prvo ga napraviti exporterom iz prethodnog
+odeljka i proslediti novu putanju. Bez `--reference` izvršavaju se random force
+provera i neutralna putanja; dve walking početne poze tada nisu proverene.

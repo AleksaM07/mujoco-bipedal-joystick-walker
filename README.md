@@ -8,7 +8,8 @@ određuju naredni razvoj. Zamrznuti hod označen je tagom `natural-walk-v1.0`.
 
 Prvi [MimicKit test kompatibilnosti](docs/MIMICKIT_PREFLIGHT.md) je izvršen:
 adapter anatomije i prenos walking reference prolaze proveru kinematike.
-Slede provere fizičke kontrole i mali komandovani task pre većeg treninga.
+Native MuJoCo control-to-torque provera takođe prolazi. Slede iste provere
+u novom simulatoru i mali komandovani task pre većeg treninga.
 
 Treniramo humanoida u MuJoCo/MJX simulatoru pomoću PPO-a i BVH motion
 reference. Projekat ima dve zaštićene linije rada:

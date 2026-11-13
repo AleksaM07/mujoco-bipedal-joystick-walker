@@ -23,12 +23,28 @@ kao prethodni/arhivirani služe istoriji i ne nalažu ponavljanje završenog rad
 > Poslednji zahtev je preimenovanje u navigation i konkretna implementacija
 > sledećih koraka. Lokalna i remote grana su preimenovane uz očuvanje istorije.
 > MimicKit adapter i prenos walking reference su implementirani i provereni;
-> slede simulator/PD/action paritet, kontinuitet reference i mali fizički task.
+> native MuJoCo control-to-torque provera takođe prolazi. Slede isti test u
+> novom simulatoru, policy action mapa, kontinuitet reference i mali fizički task.
 > Ne ponavljati već završene probe bez nove izmene ili konkretne potrebe.
 > Framework još nije konačno izabran niti integrisan u RL trening. Ne menjaj
 > finalnu natural-walk arhivu niti joystick granu. Push razvojne grane je odobren.
 
 ## Najnovije — implementiran prvi MimicKit preflight
+
+Dopuna 2026-11-13: commit `278f7dd` sa prvim adapterom/referencom i rename-om
+je pushovan. Korisnik traži nastavak lokalno dok server ne bude povezan.
+Implementirani su `skills/mujoco_control.py` i
+`tools/check_navigation_control.py`; izveštaj je
+`analysis_outputs/skills/navigation_control_20261113.json`.
+Force oracle prolazi 1.025 stanja (uključujući control/force clipping), a tri
+native MuJoCo putanje od po 1 s / 200 podkoraka daju identične `qpos/qvel`
+sa originalnim aktuatorima i eksplicitnim momentima ažuriranim svakih 5 ms.
+Zadržavanje momenta preko četiri podkoraka menja putanju. Devet novih
+control testova prolazi; ukupno 22 optional pytest i 12 queue regresija.
+Ovo nije Newton niti uspešna locomotion politika. Dvadeset aktivnih zglobova
+ima nultu pasivnu stiffness, pa upstream PD izbor nije ekvivalentan motorskom
+gain-u. Newton importer takođe pretvara tri hinge zgloba u ball; taj izbor i
+mapiranje 34 referentna čvora na 16 fizičkih tela ostaju za prilagodbu/proveru.
 
 Grana je sada `navigation_walking_with_anatomical_human_robot` lokalno i na
 origin-u; stari skills naziv je uklonjen sa remote-a. Zaštićene natural-walk

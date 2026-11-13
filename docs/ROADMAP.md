@@ -6,7 +6,8 @@ Ažurirano 2026-11-12. Merljivi ciljevi i granice faza su u
 
 Aktivna grana je `navigation_walking_with_anatomical_human_robot`.
 [MimicKit preflight](MIMICKIT_PREFLIGHT.md) je implementiran i izvršen:
-kinematika i walking frejmovi prolaze; slede simulator/PD/action paritet,
+kinematika, walking frejmovi i native MuJoCo kontrolni oracle prolaze;
+slede paritet novog simulatora i policy action mapa,
 kontinuitet reference i mali fizički task pre većeg treninga.
 
 1. **Faza 1 — sačuvani rezultati.** Prirodan referentni hod je završen i
