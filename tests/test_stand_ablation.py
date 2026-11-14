@@ -138,6 +138,15 @@ class StandAblationTests(unittest.TestCase):
                 self.assertEqual(
                     recovery_training.resume_from, str(checkpoint.resolve())
                 )
+                recovery_v3_env, recovery_v3_training = build_configs(
+                    "resume",
+                    10_000_000,
+                    "recovery_v3",
+                    3e-4,
+                    checkpoint,
+                )
+                self.assertEqual(recovery_v3_env.stand_reward_mode, "recovery_v3")
+                self.assertEqual(recovery_v3_training.num_evals, 6)
                 longer_env, longer_training = build_configs(
                     "resume",
                     1_000_000,
@@ -238,7 +247,7 @@ class StandAblationTests(unittest.TestCase):
             )
             with (
                 patch("scripts.run_stand_ablation.RUNS_DIR", root),
-                self.assertRaisesRegex(ValueError, "balance_v1 to recovery_v2"),
+                self.assertRaisesRegex(ValueError, "supported recovery upgrade"),
             ):
                 build_configs(
                     "resume", 1_000_000, "recovery_v2", 3e-4, checkpoint

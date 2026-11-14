@@ -44,8 +44,15 @@ def build_configs(
         raise ValueError("Expected transfer/scratch/resume and positive timesteps.")
     if (variant == "resume") != (resume_from is not None):
         raise ValueError("Only the resume variant requires --resume-from.")
-    if reward_mode not in {"imitation", "balance_v1", "recovery_v2"}:
-        raise ValueError("Expected imitation, balance_v1 or recovery_v2 stand reward.")
+    if reward_mode not in {
+        "imitation",
+        "balance_v1",
+        "recovery_v2",
+        "recovery_v3",
+    }:
+        raise ValueError(
+            "Expected imitation, balance_v1, recovery_v2 or recovery_v3 stand reward."
+        )
     if not math.isfinite(learning_rate) or learning_rate <= 0:
         raise ValueError("learning_rate must be finite and positive.")
     if episode_length < 500:
@@ -89,7 +96,7 @@ def build_configs(
         seed=7,
         num_envs=64,
         num_eval_envs=4,
-        num_evals=6,
+        num_evals=max(6, math.ceil(timesteps / 2_000_000) + 1),
         episode_length=episode_length,
         batch_size=128,
         unroll_length=10,
@@ -142,12 +149,17 @@ def build_configs(
         if source_env_values != target_env_values:
             raise ValueError("Resume requires the same stand environment.")
         reward_migration = (source_reward, target_reward)
-        if source_reward != target_reward and reward_migration != (
-            "balance_v1",
-            "recovery_v2",
+        allowed_reward_migrations = {
+            ("balance_v1", "recovery_v2"),
+            ("balance_v1", "recovery_v3"),
+            ("recovery_v2", "recovery_v3"),
+        }
+        if (
+            source_reward != target_reward
+            and reward_migration not in allowed_reward_migrations
         ):
             raise ValueError(
-                "Resume requires the same reward or balance_v1 to recovery_v2."
+                "Resume requires the same reward or a supported recovery upgrade."
             )
         source_training, target_training = (
             asdict(TrainConfig(**source["train"])),
@@ -155,6 +167,7 @@ def build_configs(
         )
         for key in (
             "num_timesteps",
+            "num_evals",
             "learning_rate",
             "run_tag",
             "resume_from",
@@ -329,7 +342,7 @@ def main() -> int:
     parser.add_argument("--resume-from", type=Path)
     parser.add_argument(
         "--stand-reward-mode",
-        choices=("imitation", "balance_v1", "recovery_v2"),
+        choices=("imitation", "balance_v1", "recovery_v2", "recovery_v3"),
         default="imitation",
     )
     parser.add_argument("--output", type=Path)

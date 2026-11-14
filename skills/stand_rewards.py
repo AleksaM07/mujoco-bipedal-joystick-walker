@@ -57,3 +57,56 @@ def stand_recovery_score(
     that can suppress learning a recovery step after a backward impulse.
     """
     return _stand_state_score(speed, distance, torso_up, height_ratio, thresholds)
+
+
+def stand_recovery_v3_score(
+    speed: jax.Array,
+    distance: jax.Array,
+    angular_speed: jax.Array,
+    support_distance: jax.Array,
+    torso_up: jax.Array,
+    height_ratio: jax.Array,
+    recovery_active: jax.Array,
+) -> jax.Array:
+    """Dense physical recovery score with wider tolerances during a disturbance.
+
+    Each term contributes independently, so one initially bad quantity does not
+    erase the learning signal from improving another.  The anchor is deliberately
+    loose while recovery is active: a corrective step may move the root, but the
+    center of mass should still return over the feet and motion should settle.
+    """
+    recovery_active = recovery_active.astype(bool)
+    speed_scale = jp.where(recovery_active, 0.75, 0.20)
+    distance_scale = jp.where(recovery_active, 0.60, 0.25)
+    angular_scale = jp.where(recovery_active, 1.50, 0.50)
+    support_scale = jp.where(recovery_active, 0.20, 0.10)
+    torso_scale = jp.where(recovery_active, 0.25, 0.10)
+    height_scale = jp.where(recovery_active, 0.25, 0.15)
+
+    components = jp.stack(
+        [
+            jp.exp(-jp.square(speed / speed_scale)),
+            jp.exp(-jp.square(distance / distance_scale)),
+            jp.exp(-jp.square(angular_speed / angular_scale)),
+            jp.exp(-jp.square(support_distance / support_scale)),
+            jp.exp(-jp.square((1.0 - jp.clip(torso_up, -1.0, 1.0)) / torso_scale)),
+            jp.exp(-jp.square((height_ratio - 1.0) / height_scale)),
+        ]
+    )
+    weights = jp.array([0.22, 0.08, 0.18, 0.20, 0.18, 0.14])
+    score = jp.sum(weights * components)
+    finite = jp.all(
+        jp.isfinite(
+            jp.stack(
+                [
+                    speed,
+                    distance,
+                    angular_speed,
+                    support_distance,
+                    torso_up,
+                    height_ratio,
+                ]
+            )
+        )
+    )
+    return jp.where(finite, jp.nan_to_num(score, nan=0.0), 0.0)

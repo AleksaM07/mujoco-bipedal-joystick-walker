@@ -13,7 +13,11 @@ from mujoco_playground._src import mjx_env
 from biomechanics_env import BiomechanicsJoystickEnv
 from bvh_reference import LoopMode
 from skills.stand_metrics import StandThresholds, update_stand_metrics
-from skills.stand_rewards import stand_balance_score, stand_recovery_score
+from skills.stand_rewards import (
+    stand_balance_score,
+    stand_recovery_score,
+    stand_recovery_v3_score,
+)
 
 
 class StandEnv(BiomechanicsJoystickEnv):
@@ -29,9 +33,11 @@ class StandEnv(BiomechanicsJoystickEnv):
             "imitation",
             "balance_v1",
             "recovery_v2",
+            "recovery_v3",
         }:
             raise ValueError(
-                "stand_reward_mode must be imitation, balance_v1 or recovery_v2."
+                "stand_reward_mode must be imitation, balance_v1, recovery_v2 or "
+                "recovery_v3."
             )
         if (
             self._config.get("reference_gait") != "bvh"
@@ -84,7 +90,30 @@ class StandEnv(BiomechanicsJoystickEnv):
             self._torso_up(data),
             data.qpos[2] / self._init_q[2],
         )
-        if self._config.get("stand_reward_mode") == "recovery_v2":
+        reward_mode = self._config.get("stand_reward_mode")
+        if reward_mode == "recovery_v3":
+            feet = self._foot_xy(data)
+            foot_delta = feet[1] - feet[0]
+            segment_fraction = jp.clip(
+                jp.dot(self._center_of_mass(data)[:2] - feet[0], foot_delta)
+                / jp.maximum(jp.dot(foot_delta, foot_delta), 1e-8),
+                0.0,
+                1.0,
+            )
+            closest_support_point = feet[0] + segment_fraction * foot_delta
+            support_distance = jp.linalg.norm(
+                self._center_of_mass(data)[:2] - closest_support_point
+            )
+            local_angvel = self._local_root_angvel(data)
+            angular_speed = jp.linalg.norm(local_angvel[jp.array([0, 2])])
+            return stand_recovery_v3_score(
+                *common[:2],
+                angular_speed,
+                support_distance,
+                *common[2:],
+                info.get("stand_recovery_active", jp.array(False)),
+            )
+        if reward_mode == "recovery_v2":
             return stand_recovery_score(*common, self.thresholds)
         return stand_balance_score(
             *common,
@@ -101,8 +130,35 @@ class StandEnv(BiomechanicsJoystickEnv):
     ) -> jax.Array:
         """Optionally gate imitation quality with dense physical balance feedback."""
         imitation = super()._get_reward(data, action, previous_action, info)
-        if self._config.get("stand_reward_mode", "imitation") == "imitation":
+        reward_mode = self._config.get("stand_reward_mode", "imitation")
+        if reward_mode == "imitation":
             return imitation
+        if reward_mode == "recovery_v3":
+            physical_score = self._balance_score(data, info)
+            recovery_active = info.get("stand_recovery_active", jp.array(False))
+            imitation_quality = jp.clip(imitation / self.REWARD_MAX, 0.0, 1.0)
+            imitation_weight = jp.where(recovery_active, 0.10, 0.30)
+            stable = (
+                (jp.linalg.norm(data.qvel[:2]) < self.thresholds.max_speed)
+                & (
+                    jp.linalg.norm(data.qpos[:2] - info["stand_anchor_xy"])
+                    < self.thresholds.max_distance
+                )
+                & (self._torso_up(data) >= self.thresholds.min_torso_up)
+                & (data.qpos[2] / self._init_q[2] >= self.thresholds.min_height_ratio)
+                & jp.all(self._foot_contact(data, info) > 0)
+            )
+            reward = self.REWARD_MAX * (
+                (1.0 - imitation_weight) * physical_score
+                + imitation_weight * imitation_quality
+            )
+            reward += 0.15 * stable.astype(jp.float32)
+            reward -= self.ACTION_RATE_COST_SCALE * jp.sum(
+                jp.square(action - previous_action)
+            )
+            reward -= 0.10 * jp.clip(self._get_foot_slip_cost(data, info), 0.0, 3.0)
+            reward = jp.clip(jp.nan_to_num(reward, nan=0.0), 0.0, self.REWARD_MAX)
+            return jp.where(self._get_done(data, info), imitation, reward)
         # Keep a small pose signal outside the balance region. In particular,
         # a nearly perfect joint pose must not mask large root speed/drift.
         shaped = imitation * (0.2 + 0.8 * self._balance_score(data, info))

@@ -877,16 +877,28 @@ def run_training(
     if not enable_domain_randomization:
         logger.info("domain randomization disabled for this run")
     if train_config.stand_push_max_fraction:
-        logger.info(
-            "stand training pushes | direction={} world X | "
-            "body-weight fraction={}..{} | "
-            "active episode probability={} | pulse=0.2s every 10s | "
-            "random phase=2..8s | nominal evaluation unchanged",
-            train_config.stand_push_direction,
-            train_config.stand_push_min_fraction,
-            train_config.stand_push_max_fraction,
-            train_config.stand_push_probability,
-        )
+        if env_config.stand_reward_mode == "recovery_v3":
+            logger.info(
+                "stand recovery curriculum | direction={} world X | "
+                "body-weight levels={}..{} | active episode probability={} | "
+                "initial lean/velocity | advance after 1s stable | "
+                "nominal evaluation unchanged",
+                train_config.stand_push_direction,
+                train_config.stand_push_min_fraction,
+                train_config.stand_push_max_fraction,
+                train_config.stand_push_probability,
+            )
+        else:
+            logger.info(
+                "stand training pushes | direction={} world X | "
+                "body-weight fraction={}..{} | "
+                "active episode probability={} | pulse=0.2s every 10s | "
+                "random phase=2..8s | nominal evaluation unchanged",
+                train_config.stand_push_direction,
+                train_config.stand_push_min_fraction,
+                train_config.stand_push_max_fraction,
+                train_config.stand_push_probability,
+            )
 
     if train_config.debug_run:
         with logged_stage("debug_preflight"):
@@ -983,6 +995,10 @@ def make_wrap_env_fn(
                 min_fraction=stand_push_min_fraction,
                 active_probability=stand_push_probability,
                 direction=stand_push_direction,
+                success_curriculum=(
+                    getattr(wrapped_env._config, "stand_reward_mode", None)
+                    == "recovery_v3"
+                ),
             )
         return wrap_biomechanics_training(
             wrapped_env,
@@ -2650,11 +2666,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--stand-reward-mode",
-        choices=["imitation", "balance_v1", "recovery_v2"],
+        choices=["imitation", "balance_v1", "recovery_v2", "recovery_v3"],
         default=EnvConfig.stand_reward_mode,
         help=(
-            "Versioned stand reward; recovery_v2 keeps dense state feedback while "
-            "allowing temporary corrective foot lift."
+            "Versioned stand reward; recovery_v3 adds physical recovery shaping "
+            "and a success-gated perturbation curriculum."
         ),
     )
     parser.add_argument(

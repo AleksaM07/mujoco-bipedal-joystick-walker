@@ -83,6 +83,25 @@ class StandEnvironmentTests(unittest.TestCase):
         self.assertEqual(stepped.obs["privileged_state"].shape, (809,))
         self.assertEqual(stepped.info["stand_push_steps"].dtype, jp.int32)
 
+        recovery = make_environment(
+            replace(stand_config(), stand_reward_mode="recovery_v3")
+        )
+        curriculum = StandTrainingPushWrapper(
+            recovery,
+            0.05,
+            min_fraction=0.01,
+            active_probability=1.0,
+            success_curriculum=True,
+        )
+        recovery_state = jax.eval_shape(curriculum.reset, jax.random.PRNGKey(9))
+        recovery_step = jax.eval_shape(
+            curriculum.step, recovery_state, jp.zeros(26)
+        )
+        self.assertEqual(
+            jax.tree.structure(recovery_state), jax.tree.structure(recovery_step)
+        )
+        self.assertEqual(recovery_step.info["stand_curriculum_level"].dtype, jp.int32)
+
     def test_balance_reward_preserves_physics_layout_and_terminal_penalty(self):
         config = replace(stand_config(), stand_reward_mode="balance_v1")
         env = make_environment(config)
@@ -113,21 +132,30 @@ class StandEnvironmentTests(unittest.TestCase):
         self.assertEqual(recovery.observation_size, balance.observation_size)
         self.assertEqual(recovery._config["stand_reward_mode"], "recovery_v2")
         np.testing.assert_allclose(recovery._init_q, balance._init_q)
+        recovery_v3 = make_environment(
+            replace(stand_config(), stand_reward_mode="recovery_v3")
+        )
+        self.assertEqual(recovery_v3.action_size, balance.action_size)
+        state = jax.eval_shape(recovery_v3.reset, jax.random.PRNGKey(5))
+        stepped = jax.eval_shape(recovery_v3.step, state, jp.zeros(26))
+        self.assertEqual(jax.tree.structure(state), jax.tree.structure(stepped))
 
     def test_old_configs_keep_imitation_and_balance_mode_is_stand_only(self):
         restored = restore_saved_env_config({"env": {"locomotion_skill": "stand"}})
         self.assertEqual(restored.stand_reward_mode, "imitation")
-        for reward_mode in ("balance_v1", "recovery_v2"):
+        for reward_mode in ("balance_v1", "recovery_v2", "recovery_v3"):
             for factory in (make_environment, make_training_environment):
-                with self.subTest(reward_mode=reward_mode, factory=factory):
-                    with self.assertRaisesRegex(ValueError, "locomotion_skill=stand"):
-                        factory(
-                            replace(
-                                stand_config(),
-                                locomotion_skill="walk",
-                                stand_reward_mode=reward_mode,
-                            )
+                with (
+                    self.subTest(reward_mode=reward_mode, factory=factory),
+                    self.assertRaisesRegex(ValueError, "locomotion_skill=stand"),
+                ):
+                    factory(
+                        replace(
+                            stand_config(),
+                            locomotion_skill="walk",
+                            stand_reward_mode=reward_mode,
                         )
+                    )
 
 
 if __name__ == "__main__":

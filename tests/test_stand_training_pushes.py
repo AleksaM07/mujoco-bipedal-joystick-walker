@@ -29,19 +29,39 @@ class FreeBodyStandEnv(StandEnv):
             '<geom type="sphere" size="0.1" mass="75"/></body></worldbody></mujoco>'
         )
         self._mjx_model = mjx.put_model(self._mj_model)
+        self._init_q = jp.asarray(self._mj_model.qpos0).at[2].set(1.0)
 
     def reset(self, rng: jax.Array) -> mjx_env.State:
         del rng
         data = mjx.make_data(self.mj_model)
+        data = mjx.forward(
+            self.mjx_model, data.replace(qpos=data.qpos.at[2].set(1.0))
+        )
         zero = jp.array(0.0)
         return mjx_env.State(
             data=data,
             obs=jp.concatenate([data.qpos, data.qvel]),
             reward=zero,
             done=zero,
-            metrics={"terminated": zero, "truncated": zero},
-            info={},
+            metrics={"terminated": zero, "truncated": zero, "stand_speed": zero},
+            info={"stand_anchor_xy": data.qpos[:2]},
         )
+
+    def _get_obs(self, data: mjx.Data, info: dict) -> jax.Array:
+        del info
+        return jp.concatenate([data.qpos, data.qvel])
+
+    def _foot_xy(self, data: mjx.Data) -> jax.Array:
+        del data
+        return jp.zeros((2, 2))
+
+    def _torso_up(self, data: mjx.Data) -> jax.Array:
+        del data
+        return jp.array(1.0)
+
+    def _foot_contact(self, data: mjx.Data, info: dict) -> jax.Array:
+        del data, info
+        return jp.ones(2)
 
     def step(self, state: mjx_env.State, action: jax.Array) -> mjx_env.State:
         data = jax.lax.fori_loop(
@@ -52,6 +72,10 @@ class FreeBodyStandEnv(StandEnv):
             obs=jp.concatenate([data.qpos, data.qvel]),
             done=(action[0] < 0).astype(jp.float32),
             reward=jp.array(1.0),
+            metrics={
+                **state.metrics,
+                "stand_speed": jp.linalg.norm(data.qvel[:2]),
+            },
         )
 
 
@@ -142,6 +166,56 @@ class StandTrainingPushTests(unittest.TestCase):
         self.assertLess(np.mean(force > 0), 0.55)
         self.assertTrue(np.all(np.abs(force) >= 0.04 * 75 * 9.81))
         self.assertTrue(np.all(np.abs(force) <= 0.05 * 75 * 9.81))
+
+    def test_success_curriculum_starts_with_recoverable_state_and_advances(self) -> None:
+        env = StandTrainingPushWrapper(
+            self.base,
+            0.05,
+            min_fraction=0.01,
+            active_probability=1.0,
+            direction="negative",
+            success_curriculum=True,
+        )
+        state = jax.jit(env.reset)(jax.random.PRNGKey(31))
+        self.assertEqual(int(state.info["stand_curriculum_phase"]), env.RECOVERY)
+        self.assertTrue(bool(state.info["stand_recovery_active"]))
+        self.assertGreaterEqual(float(state.data.qvel[0]), -0.20)
+        self.assertLessEqual(float(state.data.qvel[0]), -0.05)
+        self.assertGreaterEqual(float(state.data.qvel[4]), -0.20)
+        self.assertLessEqual(float(state.data.qvel[4]), -0.05)
+        self.assertLess(float(state.info["stand_initial_tilt_radians"]), 0.0)
+
+        state = state.replace(
+            data=state.data.replace(qvel=jp.zeros_like(state.data.qvel)),
+            info={
+                **state.info,
+                "stand_curriculum_stable_steps": jp.array(
+                    env.curriculum_dwell_steps - 1, dtype=jp.int32
+                ),
+            },
+        )
+        state = jax.jit(env.step)(state, jp.zeros(1))
+        self.assertEqual(int(state.info["stand_curriculum_level"]), 1)
+        self.assertEqual(int(state.info["stand_curriculum_phase"]), env.WAITING)
+        self.assertFalse(bool(state.info["stand_recovery_active"]))
+        np.testing.assert_allclose(
+            state.info["stand_anchor_xy"], state.data.qpos[:2], atol=1e-7
+        )
+
+        state = state.replace(
+            info={
+                **state.info,
+                "stand_curriculum_next_start": state.info["stand_push_steps"],
+            }
+        )
+        state = jax.jit(env.step)(state, jp.zeros(1))
+        expected_force = -(0.02 * 75 * 9.81)
+        self.assertAlmostEqual(
+            float(state.metrics["stand_training_push_x_newtons"]),
+            expected_force,
+            places=4,
+        )
+        self.assertEqual(int(state.info["stand_curriculum_phase"]), env.PULSE)
 
     def test_auto_reset_clears_counter_and_force_and_resamples_schedule(self) -> None:
         env = wrap_biomechanics_training(self.env, episode_length=2)
