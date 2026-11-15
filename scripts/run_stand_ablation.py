@@ -49,9 +49,11 @@ def build_configs(
         "balance_v1",
         "recovery_v2",
         "recovery_v3",
+        "recovery_v4",
     }:
         raise ValueError(
-            "Expected imitation, balance_v1, recovery_v2 or recovery_v3 stand reward."
+            "Expected imitation, balance_v1, recovery_v2, recovery_v3 or "
+            "recovery_v4 stand reward."
         )
     if not math.isfinite(learning_rate) or learning_rate <= 0:
         raise ValueError("learning_rate must be finite and positive.")
@@ -70,9 +72,15 @@ def build_configs(
         raise ValueError("Stand push fractions must satisfy 0 <= min <= max <= 0.05.")
     if not 0 <= stand_push_probability <= 1:
         raise ValueError("Stand push probability must be in [0, 1].")
-    if stand_push_direction not in {"negative", "positive", "bidirectional"}:
+    if stand_push_direction not in {
+        "negative",
+        "positive",
+        "bidirectional",
+        "omnidirectional",
+    }:
         raise ValueError(
-            "Stand push direction must be negative, positive or bidirectional."
+            "Stand push direction must be negative, positive, bidirectional or "
+            "omnidirectional."
         )
     saved = json.loads((ARCHIVE / "config.json").read_text(encoding="utf-8"))
     environment = replace(
@@ -153,6 +161,9 @@ def build_configs(
             ("balance_v1", "recovery_v2"),
             ("balance_v1", "recovery_v3"),
             ("recovery_v2", "recovery_v3"),
+            ("balance_v1", "recovery_v4"),
+            ("recovery_v2", "recovery_v4"),
+            ("recovery_v3", "recovery_v4"),
         }
         if (
             source_reward != target_reward
@@ -182,7 +193,14 @@ def build_configs(
             target_training.pop(key)
         if source_training != target_training:
             raise ValueError("Resume requires matching controlled PPO settings.")
-        training = replace(training, resume_from=str(checkpoint), restore_value_fn=True)
+        restore_value_fn = not (
+            target_reward == "recovery_v4" and source_reward != target_reward
+        )
+        training = replace(
+            training,
+            resume_from=str(checkpoint),
+            restore_value_fn=restore_value_fn,
+        )
     return environment, training
 
 
@@ -334,7 +352,7 @@ def main() -> int:
     parser.add_argument("--stand-push-probability", type=float, default=0.5)
     parser.add_argument(
         "--stand-push-direction",
-        choices=("negative", "positive", "bidirectional"),
+        choices=("negative", "positive", "bidirectional", "omnidirectional"),
         default="negative",
     )
     parser.add_argument("--robustness-check", action="store_true")
@@ -342,7 +360,13 @@ def main() -> int:
     parser.add_argument("--resume-from", type=Path)
     parser.add_argument(
         "--stand-reward-mode",
-        choices=("imitation", "balance_v1", "recovery_v2", "recovery_v3"),
+        choices=(
+            "imitation",
+            "balance_v1",
+            "recovery_v2",
+            "recovery_v3",
+            "recovery_v4",
+        ),
         default="imitation",
     )
     parser.add_argument("--output", type=Path)

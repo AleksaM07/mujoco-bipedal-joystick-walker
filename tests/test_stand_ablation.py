@@ -147,6 +147,21 @@ class StandAblationTests(unittest.TestCase):
                 )
                 self.assertEqual(recovery_v3_env.stand_reward_mode, "recovery_v3")
                 self.assertEqual(recovery_v3_training.num_evals, 6)
+                recovery_v4_env, recovery_v4_training = build_configs(
+                    "resume",
+                    20_000_000,
+                    "recovery_v4",
+                    5e-5,
+                    checkpoint,
+                    episode_length=3000,
+                    stand_push_min_fraction=0.01,
+                    stand_push_max_fraction=0.05,
+                    stand_push_probability=0.75,
+                    stand_push_direction="omnidirectional",
+                )
+                self.assertEqual(recovery_v4_env.stand_reward_mode, "recovery_v4")
+                self.assertEqual(recovery_v4_training.num_evals, 11)
+                self.assertFalse(recovery_v4_training.restore_value_fn)
                 longer_env, longer_training = build_configs(
                     "resume",
                     1_000_000,
@@ -249,9 +264,7 @@ class StandAblationTests(unittest.TestCase):
                 patch("scripts.run_stand_ablation.RUNS_DIR", root),
                 self.assertRaisesRegex(ValueError, "supported recovery upgrade"),
             ):
-                build_configs(
-                    "resume", 1_000_000, "recovery_v2", 3e-4, checkpoint
-                )
+                build_configs("resume", 1_000_000, "recovery_v2", 3e-4, checkpoint)
 
     def test_resume_is_explicit_and_forwarded_to_worker(self) -> None:
         with self.assertRaisesRegex(ValueError, "requires --resume-from"):
@@ -285,9 +298,7 @@ class StandAblationTests(unittest.TestCase):
         self.assertEqual(
             command[command.index("--stand-push-max-fraction") + 1], "0.05"
         )
-        self.assertEqual(
-            command[command.index("--stand-push-probability") + 1], "0.75"
-        )
+        self.assertEqual(command[command.index("--stand-push-probability") + 1], "0.75")
 
     def test_push_fraction_is_explicit_and_bounded(self) -> None:
         for fraction in (-0.01, 0.06, float("nan"), float("inf")):

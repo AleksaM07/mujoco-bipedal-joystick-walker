@@ -94,13 +94,29 @@ class StandEnvironmentTests(unittest.TestCase):
             success_curriculum=True,
         )
         recovery_state = jax.eval_shape(curriculum.reset, jax.random.PRNGKey(9))
-        recovery_step = jax.eval_shape(
-            curriculum.step, recovery_state, jp.zeros(26)
-        )
+        recovery_step = jax.eval_shape(curriculum.step, recovery_state, jp.zeros(26))
         self.assertEqual(
             jax.tree.structure(recovery_state), jax.tree.structure(recovery_step)
         )
         self.assertEqual(recovery_step.info["stand_curriculum_level"].dtype, jp.int32)
+
+        recovery_v4 = make_environment(
+            replace(stand_config(), stand_reward_mode="recovery_v4")
+        )
+        random_pushes = StandTrainingPushWrapper(
+            recovery_v4,
+            0.05,
+            min_fraction=0.01,
+            active_probability=1.0,
+            direction="omnidirectional",
+            random_pushes=True,
+        )
+        random_state = jax.eval_shape(random_pushes.reset, jax.random.PRNGKey(10))
+        random_step = jax.eval_shape(random_pushes.step, random_state, jp.zeros(26))
+        self.assertEqual(
+            jax.tree.structure(random_state), jax.tree.structure(random_step)
+        )
+        self.assertEqual(random_step.info["stand_push_force_xy"].shape, (2,))
 
     def test_balance_reward_preserves_physics_layout_and_terminal_penalty(self):
         config = replace(stand_config(), stand_reward_mode="balance_v1")
@@ -139,11 +155,23 @@ class StandEnvironmentTests(unittest.TestCase):
         state = jax.eval_shape(recovery_v3.reset, jax.random.PRNGKey(5))
         stepped = jax.eval_shape(recovery_v3.step, state, jp.zeros(26))
         self.assertEqual(jax.tree.structure(state), jax.tree.structure(stepped))
+        recovery_v4 = make_environment(
+            replace(stand_config(), stand_reward_mode="recovery_v4")
+        )
+        v4_state = jax.eval_shape(recovery_v4.reset, jax.random.PRNGKey(6))
+        v4_step = jax.eval_shape(recovery_v4.step, v4_state, jp.zeros(26))
+        self.assertEqual(jax.tree.structure(v4_state), jax.tree.structure(v4_step))
+        self.assertIn("stand_capture_distance", v4_step.metrics)
 
     def test_old_configs_keep_imitation_and_balance_mode_is_stand_only(self):
         restored = restore_saved_env_config({"env": {"locomotion_skill": "stand"}})
         self.assertEqual(restored.stand_reward_mode, "imitation")
-        for reward_mode in ("balance_v1", "recovery_v2", "recovery_v3"):
+        for reward_mode in (
+            "balance_v1",
+            "recovery_v2",
+            "recovery_v3",
+            "recovery_v4",
+        ):
             for factory in (make_environment, make_training_environment):
                 with (
                     self.subTest(reward_mode=reward_mode, factory=factory),

@@ -17,6 +17,7 @@ from skills.stand_rewards import (
     stand_balance_score,
     stand_recovery_score,
     stand_recovery_v3_score,
+    stand_recovery_v4_score,
 )
 
 
@@ -34,10 +35,11 @@ class StandEnv(BiomechanicsJoystickEnv):
             "balance_v1",
             "recovery_v2",
             "recovery_v3",
+            "recovery_v4",
         }:
             raise ValueError(
                 "stand_reward_mode must be imitation, balance_v1, recovery_v2 or "
-                "recovery_v3."
+                "recovery_v3/recovery_v4."
             )
         if (
             self._config.get("reference_gait") != "bvh"
@@ -91,6 +93,19 @@ class StandEnv(BiomechanicsJoystickEnv):
             data.qpos[2] / self._init_q[2],
         )
         reward_mode = self._config.get("stand_reward_mode")
+        if reward_mode == "recovery_v4":
+            terms = self._recovery_v4_terms(data, info)
+            return stand_recovery_v4_score(
+                terms["capture_distance"],
+                terms["support_distance"],
+                terms["velocity_target_error"],
+                terms["angular_speed"],
+                common[2],
+                common[3],
+                terms["any_foot_contact"],
+                common[1],
+                info.get("stand_recovery_active", jp.array(False)),
+            )
         if reward_mode == "recovery_v3":
             feet = self._foot_xy(data)
             foot_delta = feet[1] - feet[0]
@@ -120,6 +135,47 @@ class StandEnv(BiomechanicsJoystickEnv):
             jp.all(self._foot_contact(data, info) > 0),
             self.thresholds,
         )
+
+    def _recovery_v4_terms(
+        self, data: mjx.Data, info: dict[str, jax.Array]
+    ) -> dict[str, jax.Array]:
+        """Return support and capture-point quantities used by recovery v4."""
+        feet = self._foot_xy(data)
+        foot_delta = feet[1] - feet[0]
+        denominator = jp.maximum(jp.dot(foot_delta, foot_delta), 1e-8)
+        center_of_mass = self._center_of_mass(data)
+        com_xy = center_of_mass[:2]
+        com_velocity = self._center_of_mass_velocity(data)[:2]
+
+        def closest_support_point(point: jax.Array) -> jax.Array:
+            fraction = jp.clip(
+                jp.dot(point - feet[0], foot_delta) / denominator, 0.0, 1.0
+            )
+            return feet[0] + fraction * foot_delta
+
+        gravity = float(np.linalg.norm(self.mj_model.opt.gravity))
+        omega = jp.sqrt(gravity / jp.maximum(center_of_mass[2], 0.25))
+        capture_point = com_xy + com_velocity / jp.maximum(omega, 1e-6)
+        closest_com = closest_support_point(com_xy)
+        closest_capture = closest_support_point(capture_point)
+        # Approximate the two sole rectangles by their centre segment expanded
+        # with a conservative isotropic footprint radius.
+        support_radius = jp.array(0.06, dtype=jp.float32)
+        support_distance = jp.maximum(
+            jp.linalg.norm(com_xy - closest_com) - support_radius, 0.0
+        )
+        capture_distance = jp.maximum(
+            jp.linalg.norm(capture_point - closest_capture) - support_radius, 0.0
+        )
+        target_velocity = omega * (closest_com - com_xy)
+        local_angvel = self._local_root_angvel(data)
+        return {
+            "capture_distance": capture_distance,
+            "support_distance": support_distance,
+            "velocity_target_error": jp.linalg.norm(com_velocity - target_velocity),
+            "angular_speed": jp.linalg.norm(local_angvel[jp.array([0, 2])]),
+            "any_foot_contact": jp.any(self._foot_contact(data, info) > 0),
+        }
 
     def _get_reward(
         self,
@@ -159,6 +215,21 @@ class StandEnv(BiomechanicsJoystickEnv):
             reward -= 0.10 * jp.clip(self._get_foot_slip_cost(data, info), 0.0, 3.0)
             reward = jp.clip(jp.nan_to_num(reward, nan=0.0), 0.0, self.REWARD_MAX)
             return jp.where(self._get_done(data, info), imitation, reward)
+        if reward_mode == "recovery_v4":
+            physical_score = self._balance_score(data, info)
+            recovery_active = info.get("stand_recovery_active", jp.array(False))
+            imitation_quality = jp.clip(imitation / self.REWARD_MAX, 0.0, 1.0)
+            imitation_weight = jp.where(recovery_active, 0.05, 0.20)
+            reward = self.REWARD_MAX * (
+                (1.0 - imitation_weight) * physical_score
+                + imitation_weight * imitation_quality
+            )
+            reward -= self.ACTION_RATE_COST_SCALE * jp.sum(
+                jp.square(action - previous_action)
+            )
+            reward -= 0.05 * jp.clip(self._get_foot_slip_cost(data, info), 0.0, 3.0)
+            reward = jp.clip(jp.nan_to_num(reward, nan=0.0), 0.0, self.REWARD_MAX)
+            return jp.where(self._get_done(data, info), imitation, reward)
         # Keep a small pose signal outside the balance region. In particular,
         # a nearly perfect joint pose must not mask large root speed/drift.
         shaped = imitation * (0.2 + 0.8 * self._balance_score(data, info))
@@ -178,6 +249,13 @@ class StandEnv(BiomechanicsJoystickEnv):
             stand_success=jp.array(0.0),
             stand_balance_score=self._balance_score(state.data, state.info),
         )
+        if self._config.get("stand_reward_mode") == "recovery_v4":
+            terms = self._recovery_v4_terms(state.data, state.info)
+            metrics.update(
+                stand_capture_distance=terms["capture_distance"],
+                stand_support_distance=terms["support_distance"],
+                stand_velocity_target_error=terms["velocity_target_error"],
+            )
         return state.replace(
             metrics={
                 **state.metrics,
@@ -190,6 +268,13 @@ class StandEnv(BiomechanicsJoystickEnv):
         state = super().step(state, action)
         metrics = self._stand_metrics(state)
         metrics["stand_balance_score"] = self._balance_score(state.data, state.info)
+        if self._config.get("stand_reward_mode") == "recovery_v4":
+            terms = self._recovery_v4_terms(state.data, state.info)
+            metrics.update(
+                stand_capture_distance=terms["capture_distance"],
+                stand_support_distance=terms["support_distance"],
+                stand_velocity_target_error=terms["velocity_target_error"],
+            )
         info = {**state.info, "stand_dwell_steps": metrics["stand_dwell_steps"]}
         return state.replace(
             info=info,

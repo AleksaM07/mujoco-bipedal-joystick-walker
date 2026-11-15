@@ -686,9 +686,11 @@ def run_training(
         "negative",
         "positive",
         "bidirectional",
+        "omnidirectional",
     }:
         raise ValueError(
-            "Stand push direction must be negative, positive or bidirectional."
+            "Stand push direction must be negative, positive, bidirectional or "
+            "omnidirectional."
         )
     if train_config.stand_push_max_fraction and (
         env_config.locomotion_skill != "stand"
@@ -877,7 +879,17 @@ def run_training(
     if not enable_domain_randomization:
         logger.info("domain randomization disabled for this run")
     if train_config.stand_push_max_fraction:
-        if env_config.stand_reward_mode == "recovery_v3":
+        if env_config.stand_reward_mode == "recovery_v4":
+            logger.info(
+                "stand recovery v4 | direction={} | independently sampled "
+                "body-weight fraction={}..{} every 4..6s | active episode "
+                "probability={} | capture-point reward | nominal eval unchanged",
+                train_config.stand_push_direction,
+                train_config.stand_push_min_fraction,
+                train_config.stand_push_max_fraction,
+                train_config.stand_push_probability,
+            )
+        elif env_config.stand_reward_mode == "recovery_v3":
             logger.info(
                 "stand recovery curriculum | direction={} world X | "
                 "body-weight levels={}..{} | active episode probability={} | "
@@ -998,6 +1010,10 @@ def make_wrap_env_fn(
                 success_curriculum=(
                     getattr(wrapped_env._config, "stand_reward_mode", None)
                     == "recovery_v3"
+                ),
+                random_pushes=(
+                    getattr(wrapped_env._config, "stand_reward_mode", None)
+                    == "recovery_v4"
                 ),
             )
         return wrap_biomechanics_training(
@@ -2666,11 +2682,17 @@ def main() -> None:
     )
     parser.add_argument(
         "--stand-reward-mode",
-        choices=["imitation", "balance_v1", "recovery_v2", "recovery_v3"],
+        choices=[
+            "imitation",
+            "balance_v1",
+            "recovery_v2",
+            "recovery_v3",
+            "recovery_v4",
+        ],
         default=EnvConfig.stand_reward_mode,
         help=(
-            "Versioned stand reward; recovery_v3 adds physical recovery shaping "
-            "and a success-gated perturbation curriculum."
+            "Versioned stand reward; recovery_v4 adds capture-point shaping and "
+            "direct randomized perturbations."
         ),
     )
     parser.add_argument(
@@ -3051,9 +3073,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--stand-push-direction",
-        choices=("negative", "positive", "bidirectional"),
+        choices=("negative", "positive", "bidirectional", "omnidirectional"),
         default="negative",
-        help="Training-only world-X thorax push direction.",
+        help="Training-only horizontal thorax push direction distribution.",
     )
     parser.add_argument(
         "--restore-value-fn",

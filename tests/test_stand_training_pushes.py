@@ -34,9 +34,7 @@ class FreeBodyStandEnv(StandEnv):
     def reset(self, rng: jax.Array) -> mjx_env.State:
         del rng
         data = mjx.make_data(self.mj_model)
-        data = mjx.forward(
-            self.mjx_model, data.replace(qpos=data.qpos.at[2].set(1.0))
-        )
+        data = mjx.forward(self.mjx_model, data.replace(qpos=data.qpos.at[2].set(1.0)))
         zero = jp.array(0.0)
         return mjx_env.State(
             data=data,
@@ -167,7 +165,9 @@ class StandTrainingPushTests(unittest.TestCase):
         self.assertTrue(np.all(np.abs(force) >= 0.04 * 75 * 9.81))
         self.assertTrue(np.all(np.abs(force) <= 0.05 * 75 * 9.81))
 
-    def test_success_curriculum_starts_with_recoverable_state_and_advances(self) -> None:
+    def test_success_curriculum_starts_with_recoverable_state_and_advances(
+        self,
+    ) -> None:
         env = StandTrainingPushWrapper(
             self.base,
             0.05,
@@ -216,6 +216,41 @@ class StandTrainingPushTests(unittest.TestCase):
             places=4,
         )
         self.assertEqual(int(state.info["stand_curriculum_phase"]), env.PULSE)
+
+    def test_random_pushes_resample_full_horizontal_force_without_unlock(self) -> None:
+        env = StandTrainingPushWrapper(
+            self.base,
+            0.05,
+            min_fraction=0.05,
+            active_probability=1.0,
+            direction="omnidirectional",
+            random_pushes=True,
+        )
+        state = jax.jit(env.reset)(jax.random.PRNGKey(41))
+        state = state.replace(
+            info={**state.info, "stand_push_start": jp.array(0, dtype=jp.int32)}
+        )
+        step = jax.jit(env.step)
+        first = step(state, jp.zeros(1))
+        force = np.asarray(first.info["stand_push_force_xy"])
+        self.assertAlmostEqual(float(np.linalg.norm(force)), 0.05 * 75 * 9.81, places=4)
+        self.assertEqual(int(first.info["stand_random_push_count"]), 1)
+        self.assertEqual(int(first.info["stand_curriculum_phase"]), env.PULSE)
+        self.assertTrue(bool(first.info["stand_recovery_active"]))
+        self.assertEqual(jax.tree.structure(state), jax.tree.structure(first))
+
+        waiting = first.replace(
+            info={
+                **first.info,
+                "stand_curriculum_phase": jp.array(env.WAITING, dtype=jp.int32),
+                "stand_push_start": first.info["stand_push_steps"],
+            }
+        )
+        second = step(waiting, jp.zeros(1))
+        self.assertEqual(int(second.info["stand_random_push_count"]), 2)
+        self.assertFalse(
+            np.allclose(force, np.asarray(second.info["stand_push_force_xy"]))
+        )
 
     def test_auto_reset_clears_counter_and_force_and_resamples_schedule(self) -> None:
         env = wrap_biomechanics_training(self.env, episode_length=2)
@@ -270,6 +305,13 @@ class StandTrainingPushTests(unittest.TestCase):
                 )
         with self.assertRaisesRegex(ValueError, "direction"):
             StandTrainingPushWrapper(self.base, 0.05, direction="sideways")
+        with self.assertRaisesRegex(ValueError, "either"):
+            StandTrainingPushWrapper(
+                self.base,
+                0.05,
+                success_curriculum=True,
+                random_pushes=True,
+            )
         with self.assertRaisesRegex(ValueError, "locomotion_skill=stand"):
             run_training(
                 EnvConfig(), TrainConfig(stand_push_max_fraction=0.05), Path("unused")

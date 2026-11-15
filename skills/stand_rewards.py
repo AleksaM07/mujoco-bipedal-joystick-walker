@@ -110,3 +110,51 @@ def stand_recovery_v3_score(
         )
     )
     return jp.where(finite, jp.nan_to_num(score, nan=0.0), 0.0)
+
+
+def stand_recovery_v4_score(
+    capture_distance: jax.Array,
+    support_distance: jax.Array,
+    velocity_target_error: jax.Array,
+    angular_speed: jax.Array,
+    torso_up: jax.Array,
+    height_ratio: jax.Array,
+    any_foot_contact: jax.Array,
+    anchor_distance: jax.Array,
+    recovery_active: jax.Array,
+) -> jax.Array:
+    """Physics-guided capturability score for reactive stepping recovery.
+
+    Capture-point distance supplies the missing dynamic signal from v3: a state
+    can have its CoM over the feet and still be unrecoverable because momentum
+    carries it outside the support region.  Independent terms preserve useful
+    gradients when another component is already poor.
+    """
+    recovery_active = recovery_active.astype(bool)
+    anchor_scale = jp.where(recovery_active, 0.75, 0.25)
+    components = jp.stack(
+        [
+            jp.exp(-jp.square(capture_distance / 0.04)),
+            jp.exp(-jp.square(support_distance / 0.08)),
+            jp.exp(-jp.square(velocity_target_error / 0.15)),
+            jp.exp(-jp.square(angular_speed / 0.80)),
+            jp.exp(-jp.square((1.0 - jp.clip(torso_up, -1.0, 1.0)) / 0.15)),
+            jp.exp(-jp.square((height_ratio - 1.0) / 0.20)),
+            any_foot_contact.astype(jp.float32),
+            jp.exp(-jp.square(anchor_distance / anchor_scale)),
+        ]
+    )
+    weights = jp.array([0.32, 0.08, 0.22, 0.08, 0.10, 0.08, 0.07, 0.05])
+    values = jp.stack(
+        [
+            capture_distance,
+            support_distance,
+            velocity_target_error,
+            angular_speed,
+            torso_up,
+            height_ratio,
+            anchor_distance,
+        ]
+    )
+    score = jp.sum(weights * components)
+    return jp.where(jp.all(jp.isfinite(values)), jp.nan_to_num(score, nan=0.0), 0.0)
