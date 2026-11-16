@@ -1,6 +1,7 @@
 """Verify stand CLI isolation and selective actor/critic checkpoint transfer."""
 
 import functools
+import hashlib
 import json
 import unittest
 from dataclasses import asdict
@@ -223,6 +224,29 @@ class CheckpointTransferTests(unittest.TestCase):
             resolved = train.infer_xml_path_from_resume(checkpoint)
 
         self.assertEqual(resolved, "generated_models/robot.xml")
+
+    def test_resume_xml_guard_accepts_only_newline_portable_hash_change(self) -> None:
+        with TemporaryDirectory() as directory:
+            run_dir = Path(directory)
+            checkpoint = run_dir / "checkpoints" / "000001"
+            checkpoint.mkdir(parents=True)
+            (run_dir / "config.json").write_text(
+                json.dumps({"env": {}}), encoding="utf-8"
+            )
+            xml_path = run_dir / "robot.xml"
+            lf_xml = b"<mujoco>\n  <worldbody/>\n</mujoco>\n"
+            xml_path.write_bytes(lf_xml)
+            crlf_hash = hashlib.sha256(lf_xml.replace(b"\n", b"\r\n")).hexdigest()
+            (run_dir / "xml_manifest.json").write_text(
+                json.dumps({"xml_sha256": crlf_hash}), encoding="utf-8"
+            )
+            environment = SimpleNamespace(xml_path=xml_path)
+
+            train.validate_resume_xml_guard(checkpoint, environment)
+
+            xml_path.write_bytes(lf_xml.replace(b"worldbody", b"asset"))
+            with self.assertRaisesRegex(ValueError, "Checkpoint/XML mismatch"):
+                train.validate_resume_xml_guard(checkpoint, environment)
 
 
 if __name__ == "__main__":

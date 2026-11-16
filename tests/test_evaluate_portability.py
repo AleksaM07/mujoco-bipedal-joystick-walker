@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import unittest
 from pathlib import Path
@@ -15,6 +16,28 @@ import evaluate
 
 
 class EvaluatePortabilityTests(unittest.TestCase):
+    def test_xml_guard_accepts_crlf_manifest_for_lf_checkout(self) -> None:
+        with TemporaryDirectory() as directory:
+            run_dir = Path(directory)
+            checkpoint = run_dir / "checkpoints" / "000000000160"
+            checkpoint.mkdir(parents=True)
+            (run_dir / "config.json").write_text(
+                json.dumps({"env": {}}), encoding="utf-8"
+            )
+            xml_path = run_dir / "robot.xml"
+            lf_xml = b"<mujoco>\n  <worldbody/>\n</mujoco>\n"
+            xml_path.write_bytes(lf_xml)
+            saved_hash = hashlib.sha256(
+                lf_xml.replace(b"\n", b"\r\n")
+            ).hexdigest()
+            (run_dir / "xml_manifest.json").write_text(
+                json.dumps({"xml_sha256": saved_hash}), encoding="utf-8"
+            )
+
+            evaluate.validate_xml_manifest(
+                checkpoint, SimpleNamespace(xml_path=xml_path)
+            )
+
     def test_checkpoint_network_config_does_not_hide_run_manifest(self) -> None:
         with TemporaryDirectory() as directory:
             run_dir = Path(directory)

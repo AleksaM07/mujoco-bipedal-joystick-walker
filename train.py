@@ -578,6 +578,24 @@ def file_sha256(path: str | Path | None) -> str | None:
     return digest.hexdigest()
 
 
+def file_sha256_newline_variants(path: str | Path | None) -> set[str]:
+    """Return hashes equivalent under XML-irrelevant newline conversion."""
+    if path is None:
+        return set()
+    file_path = Path(path)
+    if not file_path.is_absolute():
+        file_path = PROJECT_ROOT / file_path
+    if not file_path.is_file():
+        return set()
+    raw_bytes = file_path.read_bytes()
+    lf_bytes = raw_bytes.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    crlf_bytes = lf_bytes.replace(b"\n", b"\r\n")
+    return {
+        hashlib.sha256(contents).hexdigest()
+        for contents in (raw_bytes, lf_bytes, crlf_bytes)
+    }
+
+
 def write_xml_manifest(run_dir: Path, env: BiomechanicsJoystickEnv) -> None:
     """Persist the exact XML identity used by a run."""
     # REF: PROJECT-XML-HASH-GUARD
@@ -614,11 +632,19 @@ def validate_resume_xml_guard(
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     saved_hash = manifest.get("xml_sha256")
     current_hash = file_sha256(env.xml_path)
-    if saved_hash and current_hash and saved_hash != current_hash:
+    compatible_hashes = file_sha256_newline_variants(env.xml_path)
+    if saved_hash and current_hash and saved_hash not in compatible_hashes:
         raise ValueError(
             "Checkpoint/XML mismatch: saved checkpoint XML hash "
             f"{saved_hash[:12]} != runtime XML hash {current_hash[:12]}. "
             "Pass the original --xml-path or retrain for this XML."
+        )
+    if saved_hash and current_hash and saved_hash != current_hash:
+        logger.info(
+            "resume XML guard matched after LF/CRLF normalization | "
+            "saved={} | runtime={}",
+            saved_hash[:12],
+            current_hash[:12],
         )
 
 
