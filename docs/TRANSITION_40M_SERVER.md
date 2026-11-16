@@ -1,0 +1,33 @@
+# Start/walk/stop server curriculum (40M)
+
+The server job is intentionally staged instead of repeating the failed direct
+full-clip fine-tune:
+
+1. 5M steps on a finite middle stride from `133_21`;
+2. 15M steps on overlapping stand-to-walk and walk-to-stand clips;
+3. 20M steps on the complete 6.54 s start/walk/stop take.
+
+Each phase starts a fresh critic while restoring the actor and observation
+normalizer. The next phase starts only if at least 75% of evaluation episodes
+reach `done_motion` and no more than 25% end through low/tipped/invalid states.
+The natural-walk archive is read-only.
+
+From an updated checkout of
+`navigation_walking_with_anatomical_human_robot`, run:
+
+```bash
+NUM_ENVS=256 NUM_EVAL_ENVS=16 \
+  bash scripts/run_transition_curriculum_40m.sh
+```
+
+For a larger GPU, increase `NUM_ENVS` only after checking memory, for example:
+
+```bash
+NUM_ENVS=1024 NUM_EVAL_ENVS=32 \
+  bash scripts/run_transition_curriculum_40m.sh
+```
+
+The script refuses to start if another `train.py` is active or if any phase
+would reuse an existing run tag. Override `PYTHON_BIN`, `NATURAL_CHECKPOINT`,
+or `TRANSITION_BVH` through environment variables when the server layout is
+different.
