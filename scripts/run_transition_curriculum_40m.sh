@@ -12,6 +12,7 @@ NUM_ENVS="${NUM_ENVS:-256}"
 NUM_EVAL_ENVS="${NUM_EVAL_ENVS:-16}"
 RUN_SUFFIX="${RUN_SUFFIX:-$(date +%Y%m%d_%H%M%S)}"
 NATURAL_CHECKPOINT="${NATURAL_CHECKPOINT:-prezentacija/5th_success_final_natural_walk/model_000001024000}"
+NATURAL_XML="${NATURAL_XML:-prezentacija/5th_success_final_natural_walk/generated_models/human_male_180cm_75kg_standard_trainfast_v21_arms.xml}"
 TRANSITION_BVH="${TRANSITION_BVH:-BVH_walking_animation/cmuconvert-max-131-135/133/133_21.bvh}"
 
 if [[ ! -x "$PYTHON_BIN" ]]; then
@@ -20,6 +21,10 @@ if [[ ! -x "$PYTHON_BIN" ]]; then
 fi
 if [[ ! -d "$NATURAL_CHECKPOINT" ]]; then
     echo "Natural-walk checkpoint not found: $NATURAL_CHECKPOINT" >&2
+    exit 2
+fi
+if [[ ! -f "$NATURAL_XML" ]]; then
+    echo "Archived natural-walk XML not found: $NATURAL_XML" >&2
     exit 2
 fi
 if [[ ! -f "$TRANSITION_BVH" ]]; then
@@ -40,6 +45,7 @@ COMMON_ARGS=(
     --env-version standard
     --playground-impl jax
     --physics-backend mjx_jax
+    --xml-path "$NATURAL_XML"
     --command-profile walk
     --action-smoothing 0.2
     --reference-gait bvh

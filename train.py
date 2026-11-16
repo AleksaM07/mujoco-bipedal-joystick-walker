@@ -447,12 +447,22 @@ def infer_xml_path_from_resume(checkpoint_path: Path | None) -> str | None:
         run_config = json.loads(config_path.read_text(encoding="utf-8"))
         xml_path = run_config.get("env", {}).get("xml_path")
         if xml_path:
+            archived_xml = Path(xml_path)
+            if not archived_xml.is_absolute():
+                archived_xml = run_dir / archived_xml
+                if archived_xml.is_file():
+                    return str(archived_xml)
             return str(xml_path)
     manifest_path = run_dir / "xml_manifest.json"
     if manifest_path.exists():
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         xml_path = manifest.get("xml_path")
         if xml_path:
+            archived_xml = Path(xml_path)
+            if not archived_xml.is_absolute():
+                archived_xml = run_dir / archived_xml
+                if archived_xml.is_file():
+                    return str(archived_xml)
             return str(xml_path)
 
     log_path = run_dir / "train.log"

@@ -10,7 +10,9 @@ full-clip fine-tune:
 Each phase starts a fresh critic while restoring the actor and observation
 normalizer. The next phase starts only if at least 75% of evaluation episodes
 reach `done_motion` and no more than 25% end through low/tipped/invalid states.
-The natural-walk archive is read-only.
+The natural-walk archive is read-only. Its archived XML is passed explicitly,
+so a server's current `generated_models/` copy cannot silently replace the
+checkpoint-compatible model.
 
 From an updated checkout of
 `navigation_walking_with_anatomical_human_robot`, run:
@@ -29,5 +31,5 @@ NUM_ENVS=1024 NUM_EVAL_ENVS=32 \
 
 The script refuses to start if another `train.py` is active or if any phase
 would reuse an existing run tag. Override `PYTHON_BIN`, `NATURAL_CHECKPOINT`,
-or `TRANSITION_BVH` through environment variables when the server layout is
-different.
+`NATURAL_XML`, or `TRANSITION_BVH` through environment variables when the
+server layout is different.

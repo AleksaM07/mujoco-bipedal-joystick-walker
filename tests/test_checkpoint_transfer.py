@@ -193,6 +193,37 @@ class CheckpointTransferTests(unittest.TestCase):
             self.assertEqual(make.call_args_list[0].args[0].xml_path, "archived.xml")
             self.assertEqual(make.call_args_list[1].args[0].xml_path, "archived.xml")
 
+    def test_resume_prefers_xml_copied_inside_portable_archive(self) -> None:
+        with TemporaryDirectory() as directory:
+            run_dir = Path(directory) / "archive"
+            checkpoint = run_dir / "model_000001"
+            archived_xml = run_dir / "generated_models" / "robot.xml"
+            checkpoint.mkdir(parents=True)
+            archived_xml.parent.mkdir()
+            archived_xml.write_text("<mujoco/>", encoding="utf-8")
+            (run_dir / "config.json").write_text(
+                json.dumps({"env": {"xml_path": "generated_models/robot.xml"}}),
+                encoding="utf-8",
+            )
+
+            resolved = train.infer_xml_path_from_resume(checkpoint)
+
+        self.assertEqual(Path(resolved), archived_xml)
+
+    def test_resume_keeps_repo_relative_xml_when_archive_has_no_copy(self) -> None:
+        with TemporaryDirectory() as directory:
+            run_dir = Path(directory) / "run"
+            checkpoint = run_dir / "checkpoints" / "000001"
+            checkpoint.mkdir(parents=True)
+            (run_dir / "config.json").write_text(
+                json.dumps({"env": {"xml_path": "generated_models/robot.xml"}}),
+                encoding="utf-8",
+            )
+
+            resolved = train.infer_xml_path_from_resume(checkpoint)
+
+        self.assertEqual(resolved, "generated_models/robot.xml")
+
 
 if __name__ == "__main__":
     unittest.main()
