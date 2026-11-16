@@ -728,9 +728,8 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # Drop very short extracted snippets from the default training task.
         # They are useful for loader debugging, but not for walking imitation.
         reference_min_motion_length=0.8,
-        # Locomotion extracts loopable gait cycles. Full preserves one finite
-        # start/walk/stop take for transition imitation and never changes old
-        # configs unless explicitly requested.
+        # Locomotion extracts loopable cycles; transition_endpoints exposes
+        # overlapping start and stop clips; full preserves one finite take.
         reference_segment_mode="locomotion",
         # auto keeps only seam-continuous clips looped. wrap is useful after a
         # visual BVH check confirms manually segmented stride cycles are clean.
@@ -946,8 +945,9 @@ class EnvConfig:
     deepmimic_arm_reward_weight: float = 0.0
     reference_reset_min_steps_remaining: int = 25
     reference_min_motion_length: float = 0.8
-    # "full" preserves a finite start/walk/stop take instead of extracting
-    # short locomotion cycles. Existing gait training keeps "locomotion".
+    # "full" preserves a finite start/walk/stop take; "transition_endpoints"
+    # yields overlapping start and stop clips. Existing gait training keeps
+    # "locomotion".
     reference_segment_mode: str = "locomotion"
     reference_loop_mode: str = "auto"
     reference_root_xy_scale: float = 0.35

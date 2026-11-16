@@ -2828,11 +2828,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--reference-segment-mode",
-        choices=["locomotion", "full"],
+        choices=["locomotion", "transition_endpoints", "full"],
         default=EnvConfig.reference_segment_mode,
         help=(
-            "locomotion extracts gait cycles; full preserves each finite BVH "
-            "take for start/walk/stop transition imitation."
+            "locomotion extracts gait cycles; transition_endpoints creates "
+            "overlapping start/stop curriculum clips; full preserves each "
+            "finite BVH take."
         ),
     )
     parser.add_argument(

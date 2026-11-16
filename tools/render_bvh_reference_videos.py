@@ -66,9 +66,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--reference-segment-mode",
-        choices=("locomotion", "full"),
+        choices=("locomotion", "transition_endpoints", "full"),
         default="locomotion",
-        help="Preserve full finite transition takes instead of gait-cycle cuts.",
+        help="Select gait cycles, endpoint curriculum clips, or the full take.",
     )
     parser.add_argument(
         "--reference-loop-mode",

@@ -229,9 +229,9 @@ class BvhMotionLibrary:
                 for segment in segments
             ]
             clips.extend(
-                candidate_clips
-                if reference_segment_mode == "full"
-                else _select_motion_clips_for_bvh(candidate_clips)
+                _select_motion_clips_for_bvh(candidate_clips)
+                if reference_segment_mode == "locomotion"
+                else candidate_clips
             )
         ik_target_names = tuple(name for name, _ in BVH_IK_TARGET_MAP)
         if arm_reference_mode == "cmu_wrist_ik":
@@ -1138,13 +1138,44 @@ def _motion_segments_for_mode(
     bvh: ParsedBvh,
     mode: str,
 ) -> tuple[MotionSegment, ...]:
-    """Choose periodic locomotion cuts or preserve one finite full motion."""
+    """Choose periodic cycles, endpoint transitions, or one finite motion."""
     if mode == "locomotion":
         return _motion_segments_for_bvh(path, bvh)
     if mode == "full":
         return (MotionSegment(0, bvh.frames, ""),)
+    if mode == "transition_endpoints":
+        return _transition_endpoint_segments(_detect_step_segments(bvh), bvh.frames)
     raise ValueError(
-        f"reference_segment_mode must be 'locomotion' or 'full', got {mode!r}"
+        "reference_segment_mode must be 'locomotion', 'transition_endpoints' "
+        f"or 'full', got {mode!r}"
+    )
+
+
+def _transition_endpoint_segments(
+    detected_steps: tuple[MotionSegment, ...],
+    frame_count: int,
+) -> tuple[MotionSegment, MotionSegment]:
+    """Build overlapping stand-to-walk and walk-to-stand curriculum clips.
+
+    The overlap contains established alternating steps, so each finite clip
+    connects its endpoint transition to locomotion instead of teaching an
+    isolated pose change. Four detected half-steps are the minimum evidence
+    needed to identify a real walking middle.
+    """
+    if len(detected_steps) < 4:
+        raise ValueError(
+            "transition_endpoints requires at least four detected walking steps"
+        )
+
+    start_end = detected_steps[min(2, len(detected_steps) - 1)].end_frame
+    stop_start = detected_steps[max(0, len(detected_steps) - 4)].start_frame
+    if not 0 < stop_start < start_end < frame_count:
+        raise ValueError(
+            "Could not construct overlapping transition endpoints from detected steps"
+        )
+    return (
+        MotionSegment(0, start_end, ""),
+        MotionSegment(stop_start, frame_count, ""),
     )
 
 

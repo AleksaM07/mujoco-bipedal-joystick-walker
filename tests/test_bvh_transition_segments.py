@@ -5,7 +5,13 @@ from pathlib import Path
 
 import numpy as np
 
-from bvh_reference import ParsedBvh, ParsedJoint, _motion_segments_for_mode
+from bvh_reference import (
+    MotionSegment,
+    ParsedBvh,
+    ParsedJoint,
+    _motion_segments_for_mode,
+    _transition_endpoint_segments,
+)
 from config import EnvConfig, default_biomechanics_env_config
 
 
@@ -42,6 +48,28 @@ class BvhTransitionSegmentTests(unittest.TestCase):
 
         self.assertEqual(len(segments), 1)
         self.assertEqual((segments[0].start_frame, segments[0].end_frame), (0, 480))
+
+    def test_endpoint_mode_overlaps_start_and_stop_with_walking_middle(self) -> None:
+        detected = (
+            MotionSegment(100, 140, "right_foot"),
+            MotionSegment(140, 180, "left_foot"),
+            MotionSegment(180, 220, "right_foot"),
+            MotionSegment(220, 260, "left_foot"),
+            MotionSegment(260, 300, "right_foot"),
+            MotionSegment(300, 340, "left_foot"),
+        )
+
+        start, stop = _transition_endpoint_segments(detected, frame_count=480)
+
+        self.assertEqual((start.start_frame, start.end_frame), (0, 220))
+        self.assertEqual((stop.start_frame, stop.end_frame), (180, 480))
+
+    def test_endpoint_mode_needs_a_walking_middle(self) -> None:
+        with self.assertRaisesRegex(ValueError, "at least four"):
+            _transition_endpoint_segments(
+                (MotionSegment(100, 140, "right_foot"),),
+                frame_count=480,
+            )
 
     def test_unknown_mode_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "reference_segment_mode"):

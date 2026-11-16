@@ -1019,6 +1019,16 @@ def main():
         action="append",
         default=None,
     )
+    parser.add_argument(
+        "--reference-segment-mode",
+        choices=["locomotion", "transition_endpoints", "full"],
+        default=None,
+    )
+    parser.add_argument(
+        "--reference-loop-mode",
+        choices=["auto", "wrap", "clamp"],
+        default=None,
+    )
     parser.add_argument("--reference-root-xy-scale", type=float, default=None)
     parser.add_argument("--action-smoothing", type=float, default=None)
     parser.add_argument("--init-qpos-file", type=Path, default=None)
@@ -1135,7 +1145,16 @@ def main():
         reference_target_observation = bool(
             run_env_value(run_config, "reference_target_observation", False)
         )
-    reference_loop_mode = str(run_env_value(run_config, "reference_loop_mode", "auto"))
+    reference_segment_mode = (
+        args.reference_segment_mode
+        if args.reference_segment_mode is not None
+        else str(run_env_value(run_config, "reference_segment_mode", "locomotion"))
+    )
+    reference_loop_mode = (
+        args.reference_loop_mode
+        if args.reference_loop_mode is not None
+        else str(run_env_value(run_config, "reference_loop_mode", "auto"))
+    )
     reference_root_xy_scale = (
         args.reference_root_xy_scale
         if args.reference_root_xy_scale is not None
@@ -1203,6 +1222,7 @@ def main():
         f"reference_gait={reference_gait} | "
         f"arm_actuators={arm_actuators} | "
         f"reference_gait_file={reference_gait_file} | "
+        f"reference_segment_mode={reference_segment_mode} | "
         f"reference_loop_mode={reference_loop_mode} | "
         f"reference_root_xy_scale={reference_root_xy_scale} | "
         f"reference_lock_stance_feet={reference_lock_stance_feet} | "
@@ -1231,6 +1251,7 @@ def main():
         reference_gait=reference_gait,
         arm_actuators=arm_actuators,
         reference_gait_file=reference_gait_file,
+        reference_segment_mode=reference_segment_mode,
         reference_loop_mode=reference_loop_mode,
         reference_root_xy_scale=reference_root_xy_scale,
         reference_lock_stance_feet=reference_lock_stance_feet,
