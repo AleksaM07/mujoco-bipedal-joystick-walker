@@ -201,11 +201,16 @@ class BvhMotionLibrary:
         strict_ik_targets: bool = False,
         arm_reference_mode: str = "legacy",
         reference_elbow_flexion_alpha: float = 0.0,
+        reference_segment_mode: str = "locomotion",
     ) -> "BvhMotionLibrary":
         clips: list[MotionClip] = []
         for source_path in expand_motion_paths(paths):
             bvh = _parse_bvh(source_path)
-            segments = _motion_segments_for_bvh(source_path, bvh)
+            segments = _motion_segments_for_mode(
+                source_path,
+                bvh,
+                reference_segment_mode,
+            )
             candidate_clips = [
                 _retarget_segment(
                     source_path=source_path,
@@ -223,7 +228,11 @@ class BvhMotionLibrary:
                 )
                 for segment in segments
             ]
-            clips.extend(_select_motion_clips_for_bvh(candidate_clips))
+            clips.extend(
+                candidate_clips
+                if reference_segment_mode == "full"
+                else _select_motion_clips_for_bvh(candidate_clips)
+            )
         ik_target_names = tuple(name for name, _ in BVH_IK_TARGET_MAP)
         if arm_reference_mode == "cmu_wrist_ik":
             ik_target_names += tuple(name for name, _ in BVH_ARM_IK_TARGET_MAP)
@@ -320,6 +329,7 @@ def load_bvh_references(
     strict_ik_targets: bool = False,
     arm_reference_mode: str = "legacy",
     reference_elbow_flexion_alpha: float = 0.0,
+    reference_segment_mode: str = "locomotion",
 ) -> BvhReferenceBatch:
     """Load BVH/list paths into a padded reference batch.
 
@@ -352,6 +362,7 @@ def load_bvh_references(
         strict_ik_targets=strict_ik_targets,
         arm_reference_mode=arm_reference_mode,
         reference_elbow_flexion_alpha=reference_elbow_flexion_alpha,
+        reference_segment_mode=reference_segment_mode,
     )
     return library.to_reference_batch()
 
@@ -362,7 +373,9 @@ def expand_motion_paths(paths: tuple[str | Path, ...]) -> tuple[Path, ...]:
     for raw_path in paths:
         path = resolve_project_path(raw_path)
         if path.suffix.lower() == ".txt":
-            expanded.extend(resolve_project_path(item) for item in read_reference_gait_list(path))
+            expanded.extend(
+                resolve_project_path(item) for item in read_reference_gait_list(path)
+            )
         elif path.is_dir():
             expanded.extend(sorted(path.rglob("*.bvh")))
         else:
@@ -589,7 +602,11 @@ def _bvh_arm_swing_targets(
             None,
         )
         right_name = next(
-            (name for name in ("RightHand", "RightWrist", "rhand") if name in bvh.joints),
+            (
+                name
+                for name in ("RightHand", "RightWrist", "rhand")
+                if name in bvh.joints
+            ),
             None,
         )
         if left_name is None or right_name is None or bvh.root_name not in bvh.joints:
@@ -643,8 +660,7 @@ def _bvh_arm_swing_targets(
             )
             geometric = _bvh_elbow_flexion_target(bvh, side)
             targets[joint_name] = (
-                constant
-                + reference_elbow_flexion_alpha * (geometric - constant)
+                constant + reference_elbow_flexion_alpha * (geometric - constant)
             ).astype(np.float32)
         else:
             targets[joint_name] = np.full(
@@ -827,13 +843,21 @@ def _motion_clip_rank_key(clip: MotionClip) -> tuple[float, float, float, float]
 
 def _loop_seam_error(clip: MotionClip) -> float:
     """Aggregate seam mismatch into one score for ranking candidates."""
-    pose_err = float(np.sqrt(np.mean(np.square(clip.qpos_targets[-1] - clip.qpos_targets[0]))))
-    vel_err = float(np.sqrt(np.mean(np.square(clip.qvel_targets[-1] - clip.qvel_targets[0]))))
-    root_vel_err = float(np.linalg.norm(clip.root_vel_targets[-1] - clip.root_vel_targets[0]))
+    pose_err = float(
+        np.sqrt(np.mean(np.square(clip.qpos_targets[-1] - clip.qpos_targets[0])))
+    )
+    vel_err = float(
+        np.sqrt(np.mean(np.square(clip.qvel_targets[-1] - clip.qvel_targets[0])))
+    )
+    root_vel_err = float(
+        np.linalg.norm(clip.root_vel_targets[-1] - clip.root_vel_targets[0])
+    )
     root_angvel_err = float(
         np.linalg.norm(clip.root_angvel_targets[-1] - clip.root_angvel_targets[0])
     )
-    root_height_err = float(abs(clip.root_pos_targets[-1, 2] - clip.root_pos_targets[0, 2]))
+    root_height_err = float(
+        abs(clip.root_pos_targets[-1, 2] - clip.root_pos_targets[0, 2])
+    )
     root_rot_err = float(
         np.linalg.norm(
             _quat_to_expmap(
@@ -883,7 +907,9 @@ def _joint_mujoco_rotations(
     joint_name = _first_existing_joint(bvh, joint_names)
     if joint_name is None:
         if allow_missing:
-            return np.repeat(np.eye(3, dtype=np.float32)[None, :, :], bvh.frames, axis=0)
+            return np.repeat(
+                np.eye(3, dtype=np.float32)[None, :, :], bvh.frames, axis=0
+            )
         joined = ", ".join(joint_names)
         raise ValueError(f"BVH nema nijedan trazeni joint: {joined}.")
 
@@ -1003,7 +1029,9 @@ def _parse_bvh(path: Path) -> ParsedBvh:
                 name=joint.name,
                 parent=joint.parent,
                 children=joint.children,
-                offset=np.asarray([float(value) for value in parts[1:4]], dtype=np.float32),
+                offset=np.asarray(
+                    [float(value) for value in parts[1:4]], dtype=np.float32
+                ),
                 channels=joint.channels,
                 channel_indices=joint.channel_indices,
             )
@@ -1026,7 +1054,9 @@ def _parse_bvh(path: Path) -> ParsedBvh:
         elif stripped == "}":
             if stack:
                 stack.pop()
-            current_joint = next((item for item in reversed(stack) if item is not None), None)
+            current_joint = next(
+                (item for item in reversed(stack) if item is not None), None
+            )
 
     if motion_index is None:
         raise ValueError(f"{path} nema MOTION sekciju.")
@@ -1101,6 +1131,21 @@ def _motion_segments_for_bvh(path: Path, bvh: ParsedBvh) -> tuple[MotionSegment,
     if deduped:
         return deduped
     return (MotionSegment(0, bvh.frames, ""),)
+
+
+def _motion_segments_for_mode(
+    path: Path,
+    bvh: ParsedBvh,
+    mode: str,
+) -> tuple[MotionSegment, ...]:
+    """Choose periodic locomotion cuts or preserve one finite full motion."""
+    if mode == "locomotion":
+        return _motion_segments_for_bvh(path, bvh)
+    if mode == "full":
+        return (MotionSegment(0, bvh.frames, ""),)
+    raise ValueError(
+        f"reference_segment_mode must be 'locomotion' or 'full', got {mode!r}"
+    )
 
 
 def _promote_stride_cycles(
@@ -1179,7 +1224,11 @@ def _dedupe_segments(segments: list[MotionSegment]) -> tuple[MotionSegment, ...]
     return tuple(
         sorted(
             unique.values(),
-            key=lambda segment: (segment.start_frame, segment.end_frame, segment.support_foot),
+            key=lambda segment: (
+                segment.start_frame,
+                segment.end_frame,
+                segment.support_foot,
+            ),
         )
     )
 
@@ -1284,8 +1333,7 @@ def _canonical_support_foot(support_foot: str) -> str:
 
 def _global_joint_positions(bvh: ParsedBvh) -> dict[str, np.ndarray]:
     positions = {
-        name: np.zeros((bvh.frames, 3), dtype=np.float32)
-        for name in bvh.joints
+        name: np.zeros((bvh.frames, 3), dtype=np.float32) for name in bvh.joints
     }
 
     def traverse(
@@ -1333,7 +1381,9 @@ def _root_motion_targets(
     root = bvh.joints[bvh.root_name]
     root_values = bvh.motion[:, list(root.channel_indices)]
     root_translation = np.zeros((bvh.frames, 3), dtype=np.float32)
-    root_rotation = np.repeat(np.eye(3, dtype=np.float32)[None, :, :], bvh.frames, axis=0)
+    root_rotation = np.repeat(
+        np.eye(3, dtype=np.float32)[None, :, :], bvh.frames, axis=0
+    )
 
     for frame_index in range(bvh.frames):
         rotation = np.eye(3, dtype=np.float32)
@@ -1457,17 +1507,14 @@ def _bvh_ik_target_positions(
                     f"{aliases}. Available joints: {tuple(bvh.joints)}"
                 )
             arm_names.append(source_name)
-        arm_positions = np.stack(
-            [global_positions[name] for name in arm_names], axis=1
-        )
+        arm_positions = np.stack([global_positions[name] for name in arm_names], axis=1)
         selected = np.concatenate([selected, arm_positions], axis=1)
     elif arm_reference_mode not in {"legacy", "cmu_wrist"}:
         raise ValueError(f"Unsupported arm_reference_mode: {arm_reference_mode!r}")
     mujoco_positions = _bvh_positions_to_mujoco(selected)
     mujoco_positions -= raw_root_origin[None, None, :]
     mujoco_positions = (
-        mujoco_positions @ alignment_rot.T[None, :, :]
-        + initial_root_pos[None, None, :]
+        mujoco_positions @ alignment_rot.T[None, :, :] + initial_root_pos[None, None, :]
     )
     return mujoco_positions.astype(np.float32)
 
@@ -1532,7 +1579,10 @@ def _median_filter_1d(values: np.ndarray, kernel_size: int) -> np.ndarray:
     radius = kernel_size // 2
     padded = np.pad(values, (radius, radius), mode="edge")
     return np.asarray(
-        [np.median(padded[index : index + kernel_size]) for index in range(values.shape[0])],
+        [
+            np.median(padded[index : index + kernel_size])
+            for index in range(values.shape[0])
+        ],
         dtype=values.dtype,
     )
 

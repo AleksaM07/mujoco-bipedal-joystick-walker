@@ -652,7 +652,10 @@ def normalize_reference_path(raw_path: str, list_path: Path | None = None) -> st
         # Manifest reports often live in `<dataset>/_walking_filter_report/`
         # while storing media paths relative to `<dataset>/`.
         dataset_relative = list_path.parent.parent / candidate
-        if list_path.parent.name == "_walking_filter_report" and dataset_relative.exists():
+        if (
+            list_path.parent.name == "_walking_filter_report"
+            and dataset_relative.exists()
+        ):
             return relative_to_project_or_absolute(dataset_relative)
     return candidate.as_posix()
 
@@ -725,6 +728,10 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         # Drop very short extracted snippets from the default training task.
         # They are useful for loader debugging, but not for walking imitation.
         reference_min_motion_length=0.8,
+        # Locomotion extracts loopable gait cycles. Full preserves one finite
+        # start/walk/stop take for transition imitation and never changes old
+        # configs unless explicitly requested.
+        reference_segment_mode="locomotion",
         # auto keeps only seam-continuous clips looped. wrap is useful after a
         # visual BVH check confirms manually segmented stride cycles are clean.
         reference_loop_mode="auto",
@@ -939,6 +946,9 @@ class EnvConfig:
     deepmimic_arm_reward_weight: float = 0.0
     reference_reset_min_steps_remaining: int = 25
     reference_min_motion_length: float = 0.8
+    # "full" preserves a finite start/walk/stop take instead of extracting
+    # short locomotion cycles. Existing gait training keeps "locomotion".
+    reference_segment_mode: str = "locomotion"
     reference_loop_mode: str = "auto"
     reference_root_xy_scale: float = 0.35
     reference_lock_stance_feet: bool = True

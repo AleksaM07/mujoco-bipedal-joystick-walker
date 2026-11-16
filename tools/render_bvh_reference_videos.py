@@ -65,6 +65,12 @@ def parse_args() -> argparse.Namespace:
         help="Arm-reference blend used by the environment (1.0 keeps full motion).",
     )
     parser.add_argument(
+        "--reference-segment-mode",
+        choices=("locomotion", "full"),
+        default="locomotion",
+        help="Preserve full finite transition takes instead of gait-cycle cuts.",
+    )
+    parser.add_argument(
         "--reference-loop-mode",
         choices=["auto", "wrap", "clamp"],
         default="auto",
@@ -109,8 +115,7 @@ def parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=False,
         help=(
-            "Force only root XYZ position/velocity to the reference during PD "
-            "playback."
+            "Force only root XYZ position/velocity to the reference during PD playback."
         ),
     )
     parser.add_argument(
@@ -413,9 +418,7 @@ def apply_actuator_scales(
     if kp_scale <= 0.0:
         raise ValueError(f"--actuator-kp-scale must be positive, got {kp_scale}.")
     if force_scale <= 0.0:
-        raise ValueError(
-            f"--actuator-force-scale must be positive, got {force_scale}."
-        )
+        raise ValueError(f"--actuator-force-scale must be positive, got {force_scale}.")
     for extra_scale, name in (
         (trunk_kp_scale, "--trunk-kp-scale"),
         (pelvis_kp_scale, "--pelvis-kp-scale"),
@@ -466,8 +469,7 @@ def apply_contact_friction_scale(
     """Scale floor/foot friction terms in-place for contact diagnostics."""
     if friction_scale <= 0.0:
         raise ValueError(
-            "--contact-friction-scale must be positive, got "
-            f"{friction_scale}."
+            f"--contact-friction-scale must be positive, got {friction_scale}."
         )
     geom_ids = [
         env._floor_geom_id,
@@ -604,7 +606,9 @@ def overlay_frame_title(
     if mode == "compare":
         midpoint = canvas.width // 2
         draw.line((midpoint, 0, midpoint, banner_height), fill=(80, 80, 80), width=1)
-        draw.text((12, 28), "LEFT: KINEMATIC REFERENCE", fill=(180, 180, 180), font=font)
+        draw.text(
+            (12, 28), "LEFT: KINEMATIC REFERENCE", fill=(180, 180, 180), font=font
+        )
         draw.text(
             (midpoint + 12, 28),
             "RIGHT: PD TRACKING",
@@ -620,7 +624,9 @@ def default_reference_files(args: argparse.Namespace) -> list[str]:
         args.reference_gait_list,
     )
     if files is None:
-        files = expand_reference_gait_files(reference_gait_lists=[DEFAULT_BVH_REFERENCE_LIST])
+        files = expand_reference_gait_files(
+            reference_gait_lists=[DEFAULT_BVH_REFERENCE_LIST]
+        )
     if args.source_limit is not None:
         files = [
             path.as_posix()
@@ -638,6 +644,7 @@ def make_env(args: argparse.Namespace) -> BiomechanicsJoystickEnv:
         "arm_reference_mode": args.arm_reference_mode,
         "reference_stability_arm_alpha": args.reference_stability_arm_alpha,
         "reference_gait_file": default_reference_files(args),
+        "reference_segment_mode": args.reference_segment_mode,
         "reference_loop_mode": args.reference_loop_mode,
         "reference_target_observation": False,
         "reference_action_mode": args.reference_action_mode,
@@ -750,7 +757,9 @@ def actuator_state_trace(
         )
         row[f"pd_act_target_{joint_name}"] = float(target_qpos[index])
         row[f"pd_act_actual_{joint_name}"] = float(actual_qpos[index])
-        row[f"pd_act_error_{joint_name}"] = float(target_qpos[index] - actual_qpos[index])
+        row[f"pd_act_error_{joint_name}"] = float(
+            target_qpos[index] - actual_qpos[index]
+        )
     return row
 
 
@@ -812,9 +821,21 @@ def quat_to_rotmat(quat_wxyz: np.ndarray) -> np.ndarray:
     w, x, y, z = quat / norm
     return np.array(
         [
-            [1.0 - (2.0 * (y * y + z * z)), 2.0 * (x * y - z * w), 2.0 * (x * z + y * w)],
-            [2.0 * (x * y + z * w), 1.0 - (2.0 * (x * x + z * z)), 2.0 * (y * z - x * w)],
-            [2.0 * (x * z - y * w), 2.0 * (y * z + x * w), 1.0 - (2.0 * (x * x + y * y))],
+            [
+                1.0 - (2.0 * (y * y + z * z)),
+                2.0 * (x * y - z * w),
+                2.0 * (x * z + y * w),
+            ],
+            [
+                2.0 * (x * y + z * w),
+                1.0 - (2.0 * (x * x + z * z)),
+                2.0 * (y * z - x * w),
+            ],
+            [
+                2.0 * (x * z - y * w),
+                2.0 * (y * z + x * w),
+                1.0 - (2.0 * (x * x + y * y)),
+            ],
         ],
         dtype=np.float64,
     )
@@ -833,7 +854,9 @@ def center_of_mass(env: BiomechanicsJoystickEnv, data: mujoco.MjData) -> np.ndar
     )
 
 
-def heading_frame_axes_from_rotation(rotation: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def heading_frame_axes_from_rotation(
+    rotation: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
     """Return horizontal heading-forward and heading-left axes from one rotation matrix."""
     heading_forward = rotation[:, 0].copy()
     heading_forward[2] = 0.0
@@ -842,7 +865,9 @@ def heading_frame_axes_from_rotation(rotation: np.ndarray) -> tuple[np.ndarray, 
         heading_forward = np.array([1.0, 0.0, 0.0], dtype=np.float64)
     else:
         heading_forward /= heading_norm
-    heading_left = np.cross(np.array([0.0, 0.0, 1.0], dtype=np.float64), heading_forward)
+    heading_left = np.cross(
+        np.array([0.0, 0.0, 1.0], dtype=np.float64), heading_forward
+    )
     return heading_forward, heading_left
 
 
@@ -924,12 +949,17 @@ def emulate_policy_motor_targets(
     reference_action_mode = str(env._config.get("reference_action_mode", "residual"))
 
     if control_source == "direct_reference":
-        return desired_ctrl, zero_action, zero_action, {
-            "pd_policy_action_l2": 0.0,
-            "pd_smoothed_action_l2": 0.0,
-            "pd_policy_action_clip_fraction": 0.0,
-            "pd_ctrl_target_rmse": 0.0,
-        }
+        return (
+            desired_ctrl,
+            zero_action,
+            zero_action,
+            {
+                "pd_policy_action_l2": 0.0,
+                "pd_smoothed_action_l2": 0.0,
+                "pd_policy_action_clip_fraction": 0.0,
+                "pd_ctrl_target_rmse": 0.0,
+            },
+        )
 
     if control_source == "zero_policy":
         policy_action = zero_action
@@ -987,16 +1017,21 @@ def emulate_policy_motor_targets(
         motor_targets = reference_ctrl + smoothed_action * action_scale * residual_scale
         motor_targets = np.clip(motor_targets, lower_limits, upper_limits)
 
-    return motor_targets, clipped_policy_action, smoothed_action, {
-        "pd_policy_action_l2": float(np.linalg.norm(clipped_policy_action)),
-        "pd_smoothed_action_l2": float(np.linalg.norm(smoothed_action)),
-        "pd_policy_action_clip_fraction": float(
-            np.mean(np.abs(policy_action) > 1.0)
-        ),
-        "pd_ctrl_target_rmse": float(
-            np.sqrt(np.mean(np.square(motor_targets - desired_ctrl)))
-        ),
-    }
+    return (
+        motor_targets,
+        clipped_policy_action,
+        smoothed_action,
+        {
+            "pd_policy_action_l2": float(np.linalg.norm(clipped_policy_action)),
+            "pd_smoothed_action_l2": float(np.linalg.norm(smoothed_action)),
+            "pd_policy_action_clip_fraction": float(
+                np.mean(np.abs(policy_action) > 1.0)
+            ),
+            "pd_ctrl_target_rmse": float(
+                np.sqrt(np.mean(np.square(motor_targets - desired_ctrl)))
+            ),
+        },
+    )
 
 
 def render_clip(
@@ -1101,7 +1136,9 @@ def render_clip(
     substep_dt = float(env.dt) / float(env.n_substeps)
     trace_kinematic_data = mujoco.MjData(model)
 
-    def query_reference_at(query_clip_id: int, query_motion_time: float) -> dict[str, np.ndarray]:
+    def query_reference_at(
+        query_clip_id: int, query_motion_time: float
+    ) -> dict[str, np.ndarray]:
         bounded_motion_time = query_motion_time
         if args.segment_seconds is not None or loop_mode == int(LoopMode.CLAMP):
             bounded_motion_time = min(bounded_motion_time, segment_end_time)
@@ -1163,8 +1200,12 @@ def render_clip(
             "reference_action_range_scale": float(args.reference_action_range_scale),
             "reference_residual_scale": float(args.reference_residual_scale),
             "reference_replay_target_step": int(args.reference_replay_target_step),
-            "pd_state_time_s": pd_elapsed_time if args.mode in ("pd", "compare") else None,
-            "pd_motion_time_s": pd_motion_time if args.mode in ("pd", "compare") else None,
+            "pd_state_time_s": pd_elapsed_time
+            if args.mode in ("pd", "compare")
+            else None,
+            "pd_motion_time_s": pd_motion_time
+            if args.mode in ("pd", "compare")
+            else None,
         }
         if args.mode in ("kinematic", "compare"):
             ref = query_reference_at(clip_id, sample_motion_time)
@@ -1210,14 +1251,16 @@ def render_clip(
             target_qpos = np.asarray(target_ref["qpos"], dtype=np.float64)
             actual_qpos = data.qpos[env._actuator_qpos_indices_np]
             force_ratio, saturated_fraction = actuator_force_stats(model, data)
-            _, clipped_policy_action, smoothed_action, control_diag = emulate_policy_motor_targets(
-                env,
-                clip_id,
-                sample_motion_time,
-                target_qpos,
-                previous_policy_action,
-                query_reference_at,
-                control_source=args.control_source,
+            _, clipped_policy_action, smoothed_action, control_diag = (
+                emulate_policy_motor_targets(
+                    env,
+                    clip_id,
+                    sample_motion_time,
+                    target_qpos,
+                    previous_policy_action,
+                    query_reference_at,
+                    control_source=args.control_source,
+                )
             )
             actuator_trace = (
                 actuator_state_trace(env, model, data, target_qpos)
@@ -1338,13 +1381,22 @@ def render_clip(
                     target_time = pd_motion_time + (
                         float(env.dt) * float(args.reference_speed_scale)
                     )
-                    if args.segment_seconds is not None or loop_mode == int(LoopMode.CLAMP):
+                    if args.segment_seconds is not None or loop_mode == int(
+                        LoopMode.CLAMP
+                    ):
                         target_time = min(target_time, segment_end_time)
                     target_ref = query_reference_at(clip_id, target_time)
                     data.xfrc_applied[:, :] = 0.0
-                    if args.pin_root_to_reference or args.pin_root_position_to_reference:
-                        data.qpos[:3] = np.asarray(target_ref["root_pos"], dtype=np.float64)
-                        data.qvel[:3] = np.asarray(target_ref["root_vel"], dtype=np.float64)
+                    if (
+                        args.pin_root_to_reference
+                        or args.pin_root_position_to_reference
+                    ):
+                        data.qpos[:3] = np.asarray(
+                            target_ref["root_pos"], dtype=np.float64
+                        )
+                        data.qvel[:3] = np.asarray(
+                            target_ref["root_vel"], dtype=np.float64
+                        )
                     elif args.pin_root_xy_to_reference:
                         root_pos = np.asarray(target_ref["root_pos"], dtype=np.float64)
                         root_vel = np.asarray(target_ref["root_vel"], dtype=np.float64)
@@ -1355,8 +1407,13 @@ def render_clip(
                         root_vel = np.asarray(target_ref["root_vel"], dtype=np.float64)
                         data.qpos[2] = root_pos[2]
                         data.qvel[2] = root_vel[2]
-                    if args.pin_root_to_reference or args.pin_root_rotation_to_reference:
-                        data.qpos[3:7] = np.asarray(target_ref["root_quat"], dtype=np.float64)
+                    if (
+                        args.pin_root_to_reference
+                        or args.pin_root_rotation_to_reference
+                    ):
+                        data.qpos[3:7] = np.asarray(
+                            target_ref["root_quat"], dtype=np.float64
+                        )
                         data.qvel[3:6] = np.asarray(
                             target_ref["root_angvel"],
                             dtype=np.float64,
@@ -1378,19 +1435,26 @@ def render_clip(
                         max_torque=float(args.root_pitch_assist_max_torque),
                     )
                     if assist_force != 0.0:
-                        data.xfrc_applied[env._reference_anchor_body_id, 2] = assist_force
-                    if np.any(np.abs(assist_torque) > 0.0):
-                        data.xfrc_applied[env._reference_anchor_body_id, 3:6] = assist_torque
-                    data.ctrl[:], previous_policy_action, _smoothed_action, _control_diag = (
-                        emulate_policy_motor_targets(
-                            env,
-                            clip_id,
-                            target_time,
-                            np.asarray(target_ref["qpos"], dtype=np.float64),
-                            previous_policy_action,
-                            query_reference_at,
-                            control_source=args.control_source,
+                        data.xfrc_applied[env._reference_anchor_body_id, 2] = (
+                            assist_force
                         )
+                    if np.any(np.abs(assist_torque) > 0.0):
+                        data.xfrc_applied[env._reference_anchor_body_id, 3:6] = (
+                            assist_torque
+                        )
+                    (
+                        data.ctrl[:],
+                        previous_policy_action,
+                        _smoothed_action,
+                        _control_diag,
+                    ) = emulate_policy_motor_targets(
+                        env,
+                        clip_id,
+                        target_time,
+                        np.asarray(target_ref["qpos"], dtype=np.float64),
+                        previous_policy_action,
+                        query_reference_at,
+                        control_source=args.control_source,
                     )
                     for _ in range(env.n_substeps):
                         mujoco.mj_step(model, data)
@@ -1430,10 +1494,14 @@ def render_clip(
                 "render_motion_time_s": render_motion_time,
                 "gravity_scale": float(args.gravity_scale),
                 "pin_root_to_reference": bool(args.pin_root_to_reference),
-                "pin_root_position_to_reference": bool(args.pin_root_position_to_reference),
+                "pin_root_position_to_reference": bool(
+                    args.pin_root_position_to_reference
+                ),
                 "pin_root_xy_to_reference": bool(args.pin_root_xy_to_reference),
                 "pin_root_z_to_reference": bool(args.pin_root_z_to_reference),
-                "pin_root_rotation_to_reference": bool(args.pin_root_rotation_to_reference),
+                "pin_root_rotation_to_reference": bool(
+                    args.pin_root_rotation_to_reference
+                ),
                 "actuator_force_scale": float(args.actuator_force_scale),
                 "actuator_kp_scale": float(args.actuator_kp_scale),
                 "trunk_kp_scale": float(args.trunk_kp_scale),
@@ -1450,17 +1518,25 @@ def render_clip(
                 "root_z_assist_max_force": float(args.root_z_assist_max_force),
                 "root_pitch_assist_kp": float(args.root_pitch_assist_kp),
                 "root_pitch_assist_kd": float(args.root_pitch_assist_kd),
-                "root_pitch_assist_max_torque": float(args.root_pitch_assist_max_torque),
+                "root_pitch_assist_max_torque": float(
+                    args.root_pitch_assist_max_torque
+                ),
                 "trace_actuator_state": bool(args.trace_actuator_state),
                 "control_source": args.control_source,
                 "reference_action_mode": args.reference_action_mode,
                 "reference_action_center": args.reference_action_center,
                 "reference_action_range": args.reference_action_range,
-                "reference_action_range_scale": float(args.reference_action_range_scale),
+                "reference_action_range_scale": float(
+                    args.reference_action_range_scale
+                ),
                 "reference_residual_scale": float(args.reference_residual_scale),
                 "reference_replay_target_step": int(args.reference_replay_target_step),
-                "pd_sim_time_s": pd_elapsed_time if args.mode in ("pd", "compare") else None,
-                "pd_motion_time_s": pd_motion_time if args.mode in ("pd", "compare") else None,
+                "pd_sim_time_s": pd_elapsed_time
+                if args.mode in ("pd", "compare")
+                else None,
+                "pd_motion_time_s": pd_motion_time
+                if args.mode in ("pd", "compare")
+                else None,
             }
             if args.mode in ("kinematic", "compare"):
                 kin_feet = foot_snapshot(env, kinematic_data)
@@ -1499,14 +1575,16 @@ def render_clip(
                 target_qpos = np.asarray(target_ref["qpos"], dtype=np.float64)
                 actual_qpos = data.qpos[env._actuator_qpos_indices_np]
                 force_ratio, saturated_fraction = actuator_force_stats(model, data)
-                _, clipped_policy_action, smoothed_action, control_diag = emulate_policy_motor_targets(
-                    env,
-                    clip_id,
-                    pd_motion_time,
-                    target_qpos,
-                    previous_policy_action,
-                    query_reference_at,
-                    control_source=args.control_source,
+                _, clipped_policy_action, smoothed_action, control_diag = (
+                    emulate_policy_motor_targets(
+                        env,
+                        clip_id,
+                        pd_motion_time,
+                        target_qpos,
+                        previous_policy_action,
+                        query_reference_at,
+                        control_source=args.control_source,
+                    )
                 )
                 actuator_trace = (
                     actuator_state_trace(env, model, data, target_qpos)
@@ -1622,60 +1700,65 @@ def render_clip(
     output_path = args.out_dir / file_name
     write_video(output_path, rendered, args.fps)
 
-    return output_path, {
-        "clip_id": clip_id,
-        "file": output_path.name,
-        "mode": args.mode,
-        "label": label,
-        "loop_mode": LoopMode(loop_mode).name,
-        "source_path": env._bvh_reference_source_paths[clip_id],
-        "source_start_frame": int(env._bvh_reference_source_start_frames[clip_id]),
-        "source_end_frame": int(env._bvh_reference_source_end_frames[clip_id]),
-        "frame_count": frame_count,
-        "frame_time": frame_time,
-        "motion_length_s": motion_length,
-        "motion_start_time_s": motion_start_time,
-        "motion_window_s": motion_window_seconds,
-        "reference_speed_scale": float(args.reference_speed_scale),
-        "gravity_scale": float(args.gravity_scale),
-        "pin_root_to_reference": bool(args.pin_root_to_reference),
-        "pin_root_position_to_reference": bool(args.pin_root_position_to_reference),
-        "pin_root_xy_to_reference": bool(args.pin_root_xy_to_reference),
-        "pin_root_z_to_reference": bool(args.pin_root_z_to_reference),
-        "pin_root_rotation_to_reference": bool(args.pin_root_rotation_to_reference),
-        "actuator_force_scale": float(args.actuator_force_scale),
-        "actuator_kp_scale": float(args.actuator_kp_scale),
-        "trunk_kp_scale": float(args.trunk_kp_scale),
-        "pelvis_kp_scale": float(args.pelvis_kp_scale),
-        "ankle_kp_scale": float(args.ankle_kp_scale),
-        "hip_kp_scale": float(args.hip_kp_scale),
-        "trunk_passive_scale": float(args.trunk_passive_scale),
-        "pelvis_passive_scale": float(args.pelvis_passive_scale),
-        "head_passive_scale": float(args.head_passive_scale),
-        "hip_passive_scale": float(args.hip_passive_scale),
-        "contact_friction_scale": float(args.contact_friction_scale),
-        "root_z_assist_kp": float(args.root_z_assist_kp),
-        "root_z_assist_kd": float(args.root_z_assist_kd),
-        "root_z_assist_max_force": float(args.root_z_assist_max_force),
-        "root_pitch_assist_kp": float(args.root_pitch_assist_kp),
-        "root_pitch_assist_kd": float(args.root_pitch_assist_kd),
-        "root_pitch_assist_max_torque": float(args.root_pitch_assist_max_torque),
-        "trace_actuator_state": bool(args.trace_actuator_state),
-        "control_source": args.control_source,
-        "reference_action_mode": args.reference_action_mode,
-        "reference_action_center": args.reference_action_center,
-        "reference_action_range": args.reference_action_range,
-        "reference_action_range_scale": float(args.reference_action_range_scale),
-        "reference_residual_scale": float(args.reference_residual_scale),
-        "reference_replay_target_step": int(args.reference_replay_target_step),
-        "trace_dt_s": float(args.trace_dt),
-        "rendered_seconds": video_seconds,
-        "pd_fail_step": pd_fail_step,
-        "pd_fail_time_s": pd_fail_time,
-        "pd_fail_reason": pd_fail_reason,
-        "debug_body_floor_collision": bool(args.debug_body_floor_collision),
-        "overlay_title": args.overlay_title or "",
-    }, trace_rows, detail_trace_rows
+    return (
+        output_path,
+        {
+            "clip_id": clip_id,
+            "file": output_path.name,
+            "mode": args.mode,
+            "label": label,
+            "loop_mode": LoopMode(loop_mode).name,
+            "source_path": env._bvh_reference_source_paths[clip_id],
+            "source_start_frame": int(env._bvh_reference_source_start_frames[clip_id]),
+            "source_end_frame": int(env._bvh_reference_source_end_frames[clip_id]),
+            "frame_count": frame_count,
+            "frame_time": frame_time,
+            "motion_length_s": motion_length,
+            "motion_start_time_s": motion_start_time,
+            "motion_window_s": motion_window_seconds,
+            "reference_speed_scale": float(args.reference_speed_scale),
+            "gravity_scale": float(args.gravity_scale),
+            "pin_root_to_reference": bool(args.pin_root_to_reference),
+            "pin_root_position_to_reference": bool(args.pin_root_position_to_reference),
+            "pin_root_xy_to_reference": bool(args.pin_root_xy_to_reference),
+            "pin_root_z_to_reference": bool(args.pin_root_z_to_reference),
+            "pin_root_rotation_to_reference": bool(args.pin_root_rotation_to_reference),
+            "actuator_force_scale": float(args.actuator_force_scale),
+            "actuator_kp_scale": float(args.actuator_kp_scale),
+            "trunk_kp_scale": float(args.trunk_kp_scale),
+            "pelvis_kp_scale": float(args.pelvis_kp_scale),
+            "ankle_kp_scale": float(args.ankle_kp_scale),
+            "hip_kp_scale": float(args.hip_kp_scale),
+            "trunk_passive_scale": float(args.trunk_passive_scale),
+            "pelvis_passive_scale": float(args.pelvis_passive_scale),
+            "head_passive_scale": float(args.head_passive_scale),
+            "hip_passive_scale": float(args.hip_passive_scale),
+            "contact_friction_scale": float(args.contact_friction_scale),
+            "root_z_assist_kp": float(args.root_z_assist_kp),
+            "root_z_assist_kd": float(args.root_z_assist_kd),
+            "root_z_assist_max_force": float(args.root_z_assist_max_force),
+            "root_pitch_assist_kp": float(args.root_pitch_assist_kp),
+            "root_pitch_assist_kd": float(args.root_pitch_assist_kd),
+            "root_pitch_assist_max_torque": float(args.root_pitch_assist_max_torque),
+            "trace_actuator_state": bool(args.trace_actuator_state),
+            "control_source": args.control_source,
+            "reference_action_mode": args.reference_action_mode,
+            "reference_action_center": args.reference_action_center,
+            "reference_action_range": args.reference_action_range,
+            "reference_action_range_scale": float(args.reference_action_range_scale),
+            "reference_residual_scale": float(args.reference_residual_scale),
+            "reference_replay_target_step": int(args.reference_replay_target_step),
+            "trace_dt_s": float(args.trace_dt),
+            "rendered_seconds": video_seconds,
+            "pd_fail_step": pd_fail_step,
+            "pd_fail_time_s": pd_fail_time,
+            "pd_fail_reason": pd_fail_reason,
+            "debug_body_floor_collision": bool(args.debug_body_floor_collision),
+            "overlay_title": args.overlay_title or "",
+        },
+        trace_rows,
+        detail_trace_rows,
+    )
 
 
 def main() -> None:

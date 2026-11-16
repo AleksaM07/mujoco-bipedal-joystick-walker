@@ -212,8 +212,7 @@ class PpoPercentLogger:
         since_last = now - self.last_log_time
         eta = estimate_eta(elapsed, percent)
         logger.info(
-            "ppo progress | step={} / {} | {}% | elapsed={} | "
-            "last={} | eta={}",
+            "ppo progress | step={} / {} | {}% | elapsed={} | last={} | eta={}",
             step,
             self.total_timesteps,
             percent,
@@ -288,9 +287,7 @@ def choose_device(name: str, allow_cpu: bool):
         return gpus[0]
     if allow_cpu:
         return jax.devices("cpu")[0]
-    raise RuntimeError(
-        "JAX ne vidi GPU. Dodaj --allow-cpu samo za mali CPU run."
-    )
+    raise RuntimeError("JAX ne vidi GPU. Dodaj --allow-cpu samo za mali CPU run.")
 
 
 def format_steps(steps: int) -> str:
@@ -313,12 +310,8 @@ def make_run_dir(
     stamp = datetime.now().strftime("%Y%m%d_%H%M")
     # REF: PROJECT-RUN-NAMING-V1
     # TYPE: ENGINEERING_DEFAULT
-    return (
-        base_dir
-        / (
-            f"{stamp}_{run_label}_steps-{format_steps(timesteps)}"
-            "_reward-pending_running"
-        )
+    return base_dir / (
+        f"{stamp}_{run_label}_steps-{format_steps(timesteps)}_reward-pending_running"
     )
 
 
@@ -336,7 +329,9 @@ def reserve_training_directories(
         checkpoint_dir.expanduser().resolve() if checkpoint_dir is not None else None
     )
     if checkpoint_dir is not None and run_dir.is_relative_to(checkpoint_dir):
-        raise ValueError("Checkpoint output must not be the run directory or its parent.")
+        raise ValueError(
+            "Checkpoint output must not be the run directory or its parent."
+        )
     if run_dir.exists():
         raise FileExistsError(
             f"Refusing to reuse run directory: {run_dir}. "
@@ -366,9 +361,7 @@ def mark_run_status(
     name = run_dir.name
     reward_value = best_reward if best_reward is not None else final_reward
     reward_label = (
-        format_reward_for_path(reward_value)
-        if reward_value is not None
-        else "unknown"
+        format_reward_for_path(reward_value) if reward_value is not None else "unknown"
     )
 
     if name.endswith("_running"):
@@ -553,11 +546,7 @@ def save_run_config(
 
 def parse_int_tuple(raw_value: str) -> tuple[int, ...]:
     """Parse a comma-separated integer list for CLI tuple fields."""
-    values = tuple(
-        int(part.strip())
-        for part in raw_value.split(",")
-        if part.strip()
-    )
+    values = tuple(int(part.strip()) for part in raw_value.split(",") if part.strip())
     if not values:
         raise ValueError("Expected at least one integer value.")
     return values
@@ -762,9 +751,7 @@ def run_training(
     )
 
     enable_erfi = (
-        train_config.enable_erfi
-        and not train_config.bare
-        and not train_config.no_erfi
+        train_config.enable_erfi and not train_config.bare and not train_config.no_erfi
     )
     with logged_stage("make_environment"):
         env = make_environment(env_config, enable_erfi=enable_erfi)
@@ -777,9 +764,7 @@ def run_training(
         with logged_stage("reference reset diagnostics"):
             # Compile the diagnostic as one program instead of dispatching and
             # compiling hundreds of small GPU operations in an eager reset.
-            diagnostic_state = jax.jit(env.reset)(
-                jax.random.PRNGKey(train_config.seed)
-            )
+            diagnostic_state = jax.jit(env.reset)(jax.random.PRNGKey(train_config.seed))
             log_reference_reset_diagnostics(jax.block_until_ready(diagnostic_state))
     logger.info(
         "trening start | env={} | impl={} | run_dir={}",
@@ -990,9 +975,11 @@ def make_wrap_env_fn(
         del full_reset
         if wrapped_env is eval_env:
             randomization_fn = None
-        if wrapped_env is eval_env and getattr(
-            getattr(wrapped_env, "_config", None), "physics_backend", None
-        ) == "mjx_jax":
+        if (
+            wrapped_env is eval_env
+            and getattr(getattr(wrapped_env, "_config", None), "physics_backend", None)
+            == "mjx_jax"
+        ):
             return wrap_biomechanics_evaluation(
                 wrapped_env, episode_length, action_repeat
             )
@@ -1000,7 +987,9 @@ def make_wrap_env_fn(
             from skills.stand_training_pushes import StandTrainingPushWrapper
 
             if randomization_fn is not None:
-                raise ValueError("Stand push experiment requires nominal model physics.")
+                raise ValueError(
+                    "Stand push experiment requires nominal model physics."
+                )
             wrapped_env = StandTrainingPushWrapper(
                 wrapped_env,
                 stand_push_max_fraction,
@@ -1315,9 +1304,7 @@ class CompletedEvaluationWrapper(playground_wrapper.Wrapper):
             def where_active(next_value, previous_value):
                 if next_value.ndim == 0 or next_value.shape[0] != active.shape[0]:
                     return next_value
-                mask = active.reshape(
-                    (active.shape[0],) + (1,) * (next_value.ndim - 1)
-                )
+                mask = active.reshape((active.shape[0],) + (1,) * (next_value.ndim - 1))
                 return jnp.where(mask, next_value, previous_value)
 
             # Keep inactive worlds at their first terminal state. Letting them
@@ -1350,8 +1337,7 @@ def wrap_biomechanics_training(
     env: mjx_env.MjxEnv,
     episode_length: int = 1000,
     action_repeat: int = 1,
-    randomization_fn: Callable[[mjx.Model], tuple[mjx.Model, mjx.Model]]
-    | None = None,
+    randomization_fn: Callable[[mjx.Model], tuple[mjx.Model, mjx.Model]] | None = None,
 ) -> playground_wrapper.Wrapper:
     """Wrap biomechanics envs for PPO with true reset-time randomization."""
     if randomization_fn is None:
@@ -1585,9 +1571,7 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         "tracking_sigma": env_config.tracking_sigma,
         "tracking_yaw_sigma": env_config.tracking_yaw_sigma,
         "arm_reference_mode": env_config.arm_reference_mode,
-        "reference_elbow_flexion_alpha": (
-            env_config.reference_elbow_flexion_alpha
-        ),
+        "reference_elbow_flexion_alpha": (env_config.reference_elbow_flexion_alpha),
         "recovery_physics_version": env_config.recovery_physics_version,
         "reference_motion_speed_scale": env_config.reference_motion_speed_scale,
         "reference_loop_closure": env_config.reference_loop_closure,
@@ -1612,6 +1596,7 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
             env_config.reference_reset_min_steps_remaining
         ),
         "reference_min_motion_length": env_config.reference_min_motion_length,
+        "reference_segment_mode": env_config.reference_segment_mode,
         "reference_loop_mode": env_config.reference_loop_mode,
         "reference_root_xy_scale": env_config.reference_root_xy_scale,
         "reference_lock_stance_feet": env_config.reference_lock_stance_feet,
@@ -1966,7 +1951,9 @@ def run_reference_playback_audit(
             }
             write_sample = (int(step_index) % trace_stride) == 0
             write_sample = write_sample or bool(metrics.get("done", 0.0) > 0.5)
-            write_sample = write_sample or int(step_index) == int(np.max(np.where(valid_mask)[0]))
+            write_sample = write_sample or int(step_index) == int(
+                np.max(np.where(valid_mask)[0])
+            )
             if not write_sample:
                 continue
             clip_id = int(clip_ids[step_index])
@@ -2057,9 +2044,9 @@ def run_reference_playback_audit(
             body,
             (state, jnp.asarray(0, dtype=jnp.int32), metric_sum, state.done),
         )
-        done_flags = jnp.stack(
-            [state.metrics[key] for key in done_keys]
-        ).astype(jnp.float32)
+        done_flags = jnp.stack([state.metrics[key] for key in done_keys]).astype(
+            jnp.float32
+        )
         return {
             "steps_taken": steps_taken,
             "done": state.done.astype(jnp.float32),
@@ -2073,18 +2060,18 @@ def run_reference_playback_audit(
             "deepmimic_total_no_root_velocity": state.metrics[
                 "deepmimic_total_no_root_velocity"
             ].astype(jnp.float32),
-            "deepmimic_key_position": state.metrics[
-                "deepmimic_key_position"
-            ].astype(jnp.float32),
-            "deepmimic_pose_error": state.metrics[
-                "deepmimic_pose_error"
-            ].astype(jnp.float32),
+            "deepmimic_key_position": state.metrics["deepmimic_key_position"].astype(
+                jnp.float32
+            ),
+            "deepmimic_pose_error": state.metrics["deepmimic_pose_error"].astype(
+                jnp.float32
+            ),
             "deepmimic_velocity_error": state.metrics[
                 "deepmimic_velocity_error"
             ].astype(jnp.float32),
-            "deepmimic_root_xy_error": state.metrics[
-                "deepmimic_root_xy_error"
-            ].astype(jnp.float32),
+            "deepmimic_root_xy_error": state.metrics["deepmimic_root_xy_error"].astype(
+                jnp.float32
+            ),
             "deepmimic_root_height_error": state.metrics[
                 "deepmimic_root_height_error"
             ].astype(jnp.float32),
@@ -2094,12 +2081,12 @@ def run_reference_playback_audit(
             "deepmimic_root_angvel_error": state.metrics[
                 "deepmimic_root_angvel_error"
             ].astype(jnp.float32),
-            "deepmimic_key_pos_error": state.metrics[
-                "deepmimic_key_pos_error"
-            ].astype(jnp.float32),
-            "deepmimic_max_key_dist": state.metrics[
-                "deepmimic_max_key_dist"
-            ].astype(jnp.float32),
+            "deepmimic_key_pos_error": state.metrics["deepmimic_key_pos_error"].astype(
+                jnp.float32
+            ),
+            "deepmimic_max_key_dist": state.metrics["deepmimic_max_key_dist"].astype(
+                jnp.float32
+            ),
         }
 
     with logged_stage("reference_playback/jit_compile"):
@@ -2449,7 +2436,9 @@ def run_reference_playback_audit(
 def _apply_reference_playback_clip_mode(env, clip_mode: str) -> str:
     """Restrict reset sampling to all clips, wrap-only clips, or clamp-only clips."""
     weights = np.asarray(getattr(env, "_bvh_reference_weights", np.array([1.0])))
-    loop_modes = np.asarray(getattr(env, "_bvh_reference_loop_modes", np.zeros_like(weights)))
+    loop_modes = np.asarray(
+        getattr(env, "_bvh_reference_loop_modes", np.zeros_like(weights))
+    )
     if clip_mode == "all":
         return "all"
     if clip_mode == "wrap":
@@ -2483,7 +2472,9 @@ def _apply_reference_playback_clip_mode(env, clip_mode: str) -> str:
 
 def _force_reference_playback_clip_id(env, clip_id: int) -> None:
     """Restrict playback sampling to one concrete reference clip."""
-    weights = np.asarray(getattr(env, "_bvh_reference_weights", np.array([], dtype=np.float32)))
+    weights = np.asarray(
+        getattr(env, "_bvh_reference_weights", np.array([], dtype=np.float32))
+    )
     if weights.size == 0:
         raise ValueError("No reference clips available for playback forcing.")
     if clip_id < 0 or clip_id >= weights.shape[0]:
@@ -2519,7 +2510,9 @@ def _clip_source_path(env, clip_id: int) -> str | None:
 
 
 def _clip_source_start_frame(env, clip_id: int) -> int | None:
-    starts = np.asarray(getattr(env, "_bvh_reference_source_start_frames", np.array([])))
+    starts = np.asarray(
+        getattr(env, "_bvh_reference_source_start_frames", np.array([]))
+    )
     return int(starts[clip_id]) if clip_id < starts.shape[0] else None
 
 
@@ -2605,14 +2598,20 @@ def _log_reference_library_summary(env) -> None:
 
 def main() -> None:
     configure_stdout_encoding()
-    parser = argparse.ArgumentParser(
-        description="MuJoCo Playground/Brax PPO trening."
-    )
+    parser = argparse.ArgumentParser(description="MuJoCo Playground/Brax PPO trening.")
     parser.add_argument("--seed", type=int, default=7)
-    parser.add_argument("--joystick-speed-center", type=float, default=EnvConfig.joystick_speed_center)
-    parser.add_argument("--joystick-speed-radius", type=float, default=EnvConfig.joystick_speed_radius)
-    parser.add_argument("--joystick-yaw-limit", type=float, default=EnvConfig.joystick_yaw_limit)
-    parser.add_argument("--joystick-reward-weight", type=float, default=EnvConfig.joystick_reward_weight)
+    parser.add_argument(
+        "--joystick-speed-center", type=float, default=EnvConfig.joystick_speed_center
+    )
+    parser.add_argument(
+        "--joystick-speed-radius", type=float, default=EnvConfig.joystick_speed_radius
+    )
+    parser.add_argument(
+        "--joystick-yaw-limit", type=float, default=EnvConfig.joystick_yaw_limit
+    )
+    parser.add_argument(
+        "--joystick-reward-weight", type=float, default=EnvConfig.joystick_reward_weight
+    )
     parser.add_argument(
         "--arm-reference-mode",
         choices=[
@@ -2804,8 +2803,13 @@ def main() -> None:
     parser.add_argument(
         "--recovery-physics-version",
         choices=[
-            "legacy", "consistent_v1", "consistent_v2", "consistent_v3",
-            "consistent_v4", "consistent_v5", "consistent_v6",
+            "legacy",
+            "consistent_v1",
+            "consistent_v2",
+            "consistent_v3",
+            "consistent_v4",
+            "consistent_v5",
+            "consistent_v6",
         ],
         default=EnvConfig.recovery_physics_version,
         help="Opt into recovery fixes; v6 also preserves support-handoff anchors.",
@@ -2821,6 +2825,15 @@ def main() -> None:
         choices=["strict", "bounded"],
         default=EnvConfig.reference_loop_closure,
         help="v2+: reject mismatched loop endpoints, or explicitly repair small gaps.",
+    )
+    parser.add_argument(
+        "--reference-segment-mode",
+        choices=["locomotion", "full"],
+        default=EnvConfig.reference_segment_mode,
+        help=(
+            "locomotion extracts gait cycles; full preserves each finite BVH "
+            "take for start/walk/stop transition imitation."
+        ),
     )
     parser.add_argument(
         "--reference-loop-mode",
@@ -2852,6 +2865,15 @@ def main() -> None:
         type=float,
         default=EnvConfig.reference_foot_lock_height,
         help="Foot min-Z threshold used by stance foot locking.",
+    )
+    parser.add_argument(
+        "--reference-stability-arm-alpha",
+        type=float,
+        default=EnvConfig.reference_stability_arm_alpha,
+        help=(
+            "Arm-reference blend after stability retargeting. Use 1.0 when "
+            "continuing the archived full-arm natural-walk checkpoint."
+        ),
     )
     parser.add_argument(
         "--reference-replay-target-step",
@@ -3240,13 +3262,13 @@ def main() -> None:
         reference_action_range=args.reference_action_range,
         reference_action_range_scale=args.reference_action_range_scale,
         reference_residual_scale=args.reference_residual_scale,
+        reference_segment_mode=args.reference_segment_mode,
         reference_loop_mode=args.reference_loop_mode,
         reference_root_xy_scale=args.reference_root_xy_scale,
         reference_lock_stance_feet=args.reference_lock_stance_feet,
         reference_foot_lock_height=args.reference_foot_lock_height,
-        bvh_target_observation_steps=parse_int_tuple(
-            args.bvh_target_observation_steps
-        ),
+        reference_stability_arm_alpha=args.reference_stability_arm_alpha,
+        bvh_target_observation_steps=parse_int_tuple(args.bvh_target_observation_steps),
         reference_replay_target_step=args.reference_replay_target_step,
         deepmimic_root_velocity_weight_scale=(
             args.deepmimic_root_velocity_weight_scale
