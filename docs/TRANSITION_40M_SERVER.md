@@ -1,11 +1,15 @@
-# Start/walk/stop server curriculum (40M)
+# Start/walk/stop server curriculum (40M minimum, 75M total)
 
 The server job is intentionally staged instead of repeating the failed direct
 full-clip fine-tune:
 
-1. 5M steps on a finite middle stride from `133_21`;
+1. 40M steps on a finite middle stride from `133_21`;
 2. 15M steps on overlapping stand-to-walk and walk-to-stand clips;
 3. 20M steps on the complete 6.54 s start/walk/stop take.
+
+The stride phase uses the mixed task/DeepMimic reward. The earlier 5M pure
+imitation probe preserved a near-perfect pose score while physical completion
+declined, so simply extending that objective would train the wrong behavior.
 
 Each phase starts a fresh critic while restoring the actor and observation
 normalizer. The next phase starts only if at least 75% of evaluation episodes

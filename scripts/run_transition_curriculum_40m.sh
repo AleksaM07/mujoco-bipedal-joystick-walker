@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Three gated phases, 5M + 15M + 20M = 40M environment steps.
+# Three gated phases, 40M + 15M + 20M = 75M environment steps.
+# The first gate therefore always receives the requested minimum 40M budget.
 # Run from any directory with: bash scripts/run_transition_curriculum_40m.sh
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -84,7 +85,7 @@ COMMON_ARGS=(
     --arms-on
     --deepmimic-root-velocity-weight-scale 1.0
     --deepmimic-arm-reward-weight 1.0
-    --deepmimic-reward-mode pure
+    --deepmimic-reward-mode mixed
     --bare
     --num-envs "$NUM_ENVS"
     --num-eval-envs "$NUM_EVAL_ENVS"
@@ -148,10 +149,10 @@ PHASE_A_TAG="transition40m_a_stride_${RUN_SUFFIX}"
 PHASE_B_TAG="transition40m_b_endpoints_${RUN_SUFFIX}"
 PHASE_C_TAG="transition40m_c_full_${RUN_SUFFIX}"
 
-echo "Phase A/3: 5M finite middle-stride adaptation"
+echo "Phase A/3: 40M finite middle-stride balance adaptation"
 echo "PPO geometry: envs=$NUM_ENVS eval_envs=$NUM_EVAL_ENVS batch=$BATCH_SIZE minibatches=$NUM_MINIBATCHES"
 run_phase \
-    "$PHASE_A_TAG" 5000000 11 0.0001 "$NATURAL_CHECKPOINT" \
+    "$PHASE_A_TAG" 40000000 21 0.00005 "$NATURAL_CHECKPOINT" \
     --reference-segment-mode locomotion \
     --reference-force-clip-id 0
 PHASE_A_RUN="$(find_completed_run "$PHASE_A_TAG")"
@@ -159,19 +160,19 @@ PHASE_A_CHECKPOINT="$(gate_checkpoint "$PHASE_A_RUN" | tail -n 1)"
 
 echo "Phase B/3: 15M start/stop endpoint curriculum"
 run_phase \
-    "$PHASE_B_TAG" 15000000 16 0.0001 "$PHASE_A_CHECKPOINT" \
+    "$PHASE_B_TAG" 15000000 16 0.00005 "$PHASE_A_CHECKPOINT" \
     --reference-segment-mode transition_endpoints
 PHASE_B_RUN="$(find_completed_run "$PHASE_B_TAG")"
 PHASE_B_CHECKPOINT="$(gate_checkpoint "$PHASE_B_RUN" | tail -n 1)"
 
 echo "Phase C/3: 20M complete start/walk/stop take"
 run_phase \
-    "$PHASE_C_TAG" 20000000 21 0.00005 "$PHASE_B_CHECKPOINT" \
+    "$PHASE_C_TAG" 20000000 21 0.00002 "$PHASE_B_CHECKPOINT" \
     --reference-segment-mode full \
     --reference-force-clip-id 0
 PHASE_C_RUN="$(find_completed_run "$PHASE_C_TAG")"
 PHASE_C_CHECKPOINT="$(gate_checkpoint "$PHASE_C_RUN" | tail -n 1)"
 
-echo "40M transition curriculum passed all gates."
+echo "75M transition curriculum passed all gates."
 echo "Final run: $PHASE_C_RUN"
 echo "Selected checkpoint: $PHASE_C_CHECKPOINT"
