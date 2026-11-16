@@ -29,6 +29,11 @@ NUM_ENVS=1024 NUM_EVAL_ENVS=32 \
   bash scripts/run_transition_curriculum_40m.sh
 ```
 
+The script automatically uses `BATCH_SIZE=256` with `NUM_ENVS=1024` and four
+minibatches. `BATCH_SIZE` and `NUM_MINIBATCHES` can be overridden, but the
+script rejects combinations that violate Brax's divisibility requirement
+before creating a training run.
+
 The script refuses to start if another `train.py` is active or if any phase
 would reuse an existing run tag. Override `PYTHON_BIN`, `NATURAL_CHECKPOINT`,
 `NATURAL_XML`, or `TRANSITION_BVH` through environment variables when the

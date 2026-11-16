@@ -10,6 +10,14 @@ cd "$REPO_ROOT"
 PYTHON_BIN="${PYTHON_BIN:-.venv/bin/python}"
 NUM_ENVS="${NUM_ENVS:-256}"
 NUM_EVAL_ENVS="${NUM_EVAL_ENVS:-16}"
+NUM_MINIBATCHES="${NUM_MINIBATCHES:-4}"
+if [[ -z "${BATCH_SIZE:-}" ]]; then
+    if (( NUM_ENVS >= 512 && NUM_ENVS % NUM_MINIBATCHES == 0 )); then
+        BATCH_SIZE=$((NUM_ENVS / NUM_MINIBATCHES))
+    else
+        BATCH_SIZE=128
+    fi
+fi
 RUN_SUFFIX="${RUN_SUFFIX:-$(date +%Y%m%d_%H%M%S)}"
 NATURAL_CHECKPOINT="${NATURAL_CHECKPOINT:-prezentacija/5th_success_final_natural_walk/model_000001024000}"
 NATURAL_XML="${NATURAL_XML:-prezentacija/5th_success_final_natural_walk/generated_models/human_male_180cm_75kg_standard_trainfast_v21_arms.xml}"
@@ -35,6 +43,12 @@ if pgrep -af '[p]ython.*train.py' >/dev/null; then
     echo "Another train.py process is already active; refusing a duplicate." >&2
     pgrep -af '[p]ython.*train.py' >&2
     exit 3
+fi
+if (( BATCH_SIZE * NUM_MINIBATCHES % NUM_ENVS != 0 )); then
+    echo "Invalid PPO geometry: BATCH_SIZE=$BATCH_SIZE, " \
+         "NUM_MINIBATCHES=$NUM_MINIBATCHES, NUM_ENVS=$NUM_ENVS." >&2
+    echo "BATCH_SIZE * NUM_MINIBATCHES must be divisible by NUM_ENVS." >&2
+    exit 2
 fi
 
 export XLA_PYTHON_CLIENT_PREALLOCATE="${XLA_PYTHON_CLIENT_PREALLOCATE:-false}"
@@ -77,8 +91,8 @@ COMMON_ARGS=(
     --training-metrics-steps 250000
     --episode-length 500
     --unroll-length 10
-    --batch-size 128
-    --num-minibatches 4
+    --batch-size "$BATCH_SIZE"
+    --num-minibatches "$NUM_MINIBATCHES"
     --updates-per-batch 2
 )
 
@@ -135,6 +149,7 @@ PHASE_B_TAG="transition40m_b_endpoints_${RUN_SUFFIX}"
 PHASE_C_TAG="transition40m_c_full_${RUN_SUFFIX}"
 
 echo "Phase A/3: 5M finite middle-stride adaptation"
+echo "PPO geometry: envs=$NUM_ENVS eval_envs=$NUM_EVAL_ENVS batch=$BATCH_SIZE minibatches=$NUM_MINIBATCHES"
 run_phase \
     "$PHASE_A_TAG" 5000000 11 0.0001 "$NATURAL_CHECKPOINT" \
     --reference-segment-mode locomotion \
