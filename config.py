@@ -724,6 +724,8 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         transition_blend_seconds=0.8,
         transition_min_walk_seconds=2.0,
         transition_stop_phase=70.0 / 133.0,
+        brake_lead_seconds_min=0.2,
+        brake_lead_seconds_max=0.8,
         # Keep finite clips away from the terminal edge during random reset.
         # This prevents short clamp snippets from ending a few control steps
         # after reset before the controller can learn a gait segment.
@@ -892,6 +894,10 @@ class EnvConfig:
     transition_blend_seconds: float = 0.8
     transition_min_walk_seconds: float = 2.0
     transition_stop_phase: float = 70.0 / 133.0
+    # The bridge skill starts shortly before its stop blend. Ordinary walking
+    # remains owned by the frozen FINAL_WALKING actor.
+    brake_lead_seconds_min: float = 0.2
+    brake_lead_seconds_max: float = 0.8
 
     # MJX-Warp je primarni backend. MJX-JAX ostaje samo za stare checkpoint-e
     # i male CPU dijagnostike.

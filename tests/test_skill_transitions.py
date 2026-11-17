@@ -4,7 +4,9 @@ from itertools import pairwise
 import numpy as np
 
 from skills.transitions import (
+    BRAKE_HANDOFF_PHASES,
     DEFAULT_TRANSITION_PHASES,
+    WALK_STOP_PROBE_PHASES,
     TransitionPhase,
     build_transition_directives,
     transition_boundaries,
@@ -86,6 +88,23 @@ class SkillTransitionScheduleTests(unittest.TestCase):
             self.assertGreater(blend[0], 0.0)
             self.assertEqual(blend[-1], 1.0)
             self.assertTrue(all(left < right for left, right in pairwise(blend)))
+
+    def test_walk_stop_probe_does_not_depend_on_untrained_reverse_transition(self) -> None:
+        directives = build_transition_directives(0.02, WALK_STOP_PROBE_PHASES)
+
+        self.assertEqual(len(directives), 725)
+        self.assertEqual(
+            transition_boundaries(directives), [(0, "walk"), (200, "stand")]
+        )
+
+    def test_bridge_schedule_connects_all_three_policies(self) -> None:
+        directives = build_transition_directives(0.02, BRAKE_HANDOFF_PHASES)
+
+        self.assertEqual(len(directives), 820)
+        self.assertEqual(
+            transition_boundaries(directives),
+            [(0, "walk"), (200, "brake_transition"), (310, "stand")],
+        )
 
     def test_invalid_or_disconnected_schedules_are_rejected(self) -> None:
         for dt in (0.0, -0.02, float("nan"), float("inf")):

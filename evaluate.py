@@ -1402,8 +1402,10 @@ def make_environment(env_config: EnvConfig):
     for name in ("xml_path", "reference_gait_file", "init_qpos_file"):
         if config_overrides[name] is None:
             config_overrides.pop(name)
-    if skill not in {"walk", "stand", "walk_stop"}:
-        raise ValueError("locomotion_skill must be walk, stand or walk_stop.")
+    if skill not in {"walk", "stand", "walk_stop", "brake_transition"}:
+        raise ValueError(
+            "locomotion_skill must be walk, stand, walk_stop or brake_transition."
+        )
     if skill != "stand" and env_config.stand_reward_mode != "imitation":
         raise ValueError("stand_reward_mode requires locomotion_skill=stand.")
     environment_class = BiomechanicsJoystickEnv
@@ -1415,6 +1417,10 @@ def make_environment(env_config: EnvConfig):
         from skills.walk_stop import WalkStopEnv
 
         environment_class = WalkStopEnv
+    elif skill == "brake_transition":
+        from skills.brake_transition import BrakeTransitionEnv
+
+        environment_class = BrakeTransitionEnv
     return environment_class(
         env_version=env_config.env_version,
         config_overrides=config_overrides,

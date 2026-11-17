@@ -148,6 +148,17 @@ class TrainingProgressLogger:
                 ("eval/episode_command_lin_error", "cmd_lin_mae"),
                 ("eval/episode_command_yaw_error", "cmd_yaw_mae"),
                 ("eval/episode_transition_alpha", "stop_alpha_step"),
+                ("eval/episode_brake_speed", "brake_speed_mps"),
+                (
+                    "eval/episode_brake_capture_distance",
+                    "brake_capture_distance_m",
+                ),
+                (
+                    "eval/episode_brake_support_distance",
+                    "brake_support_distance_m",
+                ),
+                ("eval/episode_brake_capture_ready", "brake_capture_ready"),
+                ("eval/episode_brake_handoff_ready", "brake_handoff_ready"),
             )
             for key, label in per_step_metrics:
                 value = metrics.get(key)
@@ -1632,6 +1643,8 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         "transition_blend_seconds": env_config.transition_blend_seconds,
         "transition_min_walk_seconds": env_config.transition_min_walk_seconds,
         "transition_stop_phase": env_config.transition_stop_phase,
+        "brake_lead_seconds_min": env_config.brake_lead_seconds_min,
+        "brake_lead_seconds_max": env_config.brake_lead_seconds_max,
         "reference_reset_min_steps_remaining": (
             env_config.reference_reset_min_steps_remaining
         ),
@@ -1663,8 +1676,15 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         config_overrides["init_qpos_file"] = env_config.init_qpos_file
     if env_config.accurate_physics:
         config_overrides["sim_dt"] = 0.005
-    if env_config.locomotion_skill not in {"walk", "stand", "walk_stop"}:
-        raise ValueError("locomotion_skill must be walk, stand or walk_stop.")
+    if env_config.locomotion_skill not in {
+        "walk",
+        "stand",
+        "walk_stop",
+        "brake_transition",
+    }:
+        raise ValueError(
+            "locomotion_skill must be walk, stand, walk_stop or brake_transition."
+        )
     if (
         env_config.locomotion_skill != "stand"
         and env_config.stand_reward_mode != "imitation"
@@ -1679,6 +1699,10 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         from skills.walk_stop import WalkStopEnv
 
         environment_class = WalkStopEnv
+    elif env_config.locomotion_skill == "brake_transition":
+        from skills.brake_transition import BrakeTransitionEnv
+
+        environment_class = BrakeTransitionEnv
     return environment_class(
         env_version=env_config.env_version,
         config_overrides=config_overrides,
@@ -2719,7 +2743,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--locomotion-skill",
-        choices=["walk", "stand", "walk_stop"],
+        choices=["walk", "stand", "walk_stop", "brake_transition"],
         default="walk",
         help="Select walk, stand, or the walk-to-stop transition curriculum.",
     )
@@ -2737,6 +2761,18 @@ def main() -> None:
         "--transition-stop-phase",
         type=float,
         default=EnvConfig.transition_stop_phase,
+    )
+    parser.add_argument(
+        "--brake-lead-seconds-min",
+        type=float,
+        default=EnvConfig.brake_lead_seconds_min,
+        help="Shortest walking lead-in before BRAKE_TRANSITION starts blending.",
+    )
+    parser.add_argument(
+        "--brake-lead-seconds-max",
+        type=float,
+        default=EnvConfig.brake_lead_seconds_max,
+        help="Longest walking lead-in before BRAKE_TRANSITION starts blending.",
     )
     parser.add_argument(
         "--stand-reward-mode",
@@ -3314,6 +3350,8 @@ def main() -> None:
         transition_blend_seconds=args.transition_blend_seconds,
         transition_min_walk_seconds=args.transition_min_walk_seconds,
         transition_stop_phase=args.transition_stop_phase,
+        brake_lead_seconds_min=args.brake_lead_seconds_min,
+        brake_lead_seconds_max=args.brake_lead_seconds_max,
         reference_loop_closure=args.reference_loop_closure,
         reference_gait=args.reference_gait,
         arm_actuators=args.arm_actuators,

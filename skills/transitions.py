@@ -4,7 +4,7 @@ import math
 from dataclasses import dataclass
 from typing import Literal
 
-SkillName = Literal["stand", "walk"]
+SkillName = Literal["stand", "walk", "brake_transition"]
 
 
 @dataclass(frozen=True)
@@ -41,6 +41,22 @@ DEFAULT_TRANSITION_PHASES = (
     TransitionPhase("start_2", 0.5, "stand", "walk"),
     TransitionPhase("walk_2", 4.0, "walk"),
     TransitionPhase("stop_2", 0.5, "walk", "stand"),
+    TransitionPhase("stand_final", 10.0, "stand"),
+)
+
+# Isolate braking from the still-untrained reverse transition. Starting from
+# FINAL_WALKING also preserves its exact reference-reset distribution.
+WALK_STOP_PROBE_PHASES = (
+    TransitionPhase("walk_initial", 4.0, "walk"),
+    TransitionPhase("stop", 0.5, "walk", "stand"),
+    TransitionPhase("stand_final", 10.0, "stand"),
+)
+
+BRAKE_HANDOFF_PHASES = (
+    TransitionPhase("walk_initial", 4.0, "walk"),
+    TransitionPhase("brake_blend", 0.2, "walk", "brake_transition"),
+    TransitionPhase("brake_control", 2.0, "brake_transition"),
+    TransitionPhase("stand_blend", 0.2, "brake_transition", "stand"),
     TransitionPhase("stand_final", 10.0, "stand"),
 )
 

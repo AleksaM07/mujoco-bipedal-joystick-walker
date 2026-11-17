@@ -37,22 +37,19 @@ from evaluate import (
     validate_xml_manifest,
     write_video,
 )
+from skills.policy_registry import FINAL_STANDING, FINAL_WALKING
 from skills.transitions import (
+    BRAKE_HANDOFF_PHASES,
     DEFAULT_TRANSITION_PHASES,
+    WALK_STOP_PROBE_PHASES,
     SkillName,
     build_transition_directives,
     transition_boundaries,
 )
 from tools.evaluate_stand import load_stand_config
 
-DEFAULT_WALK_CHECKPOINT = (
-    PROJECT_ROOT / "prezentacija/5th_success_final_natural_walk/model_000001024000"
-)
-DEFAULT_STAND_CHECKPOINT = (
-    PROJECT_ROOT / "runs/stand_pushx_20261106_1m_lr3e-4/resume/"
-    "20261106_1811_stand_balance_v1_resume_1000000_lr0_0003_"
-    "V1_steps-1m_reward-8683p0273_s/checkpoints/000000409600"
-)
+DEFAULT_WALK_CHECKPOINT = FINAL_WALKING.checkpoint
+DEFAULT_STAND_CHECKPOINT = FINAL_STANDING.checkpoint
 STAND_SPEED_LIMIT = 0.15
 STAND_DISTANCE_LIMIT = 0.25
 STAND_TORSO_UP_LIMIT = 0.90
@@ -145,6 +142,25 @@ def load_walk_config(checkpoint: Path):
     )
 
 
+def load_brake_config(checkpoint: Path):
+    """Restore one trained BRAKE_TRANSITION actor without changing semantics."""
+    saved = find_run_config(checkpoint)
+    if saved is None or saved["env"].get("locomotion_skill") != "brake_transition":
+        raise ValueError("Bridge checkpoint needs locomotion_skill=brake_transition")
+    if saved["env"].get("physics_backend", "mjx_jax") != "mjx_jax":
+        raise ValueError("Transition probe requires a saved mjx_jax checkpoint")
+    xml_path = infer_xml_path(checkpoint, saved)
+    if xml_path is None:
+        raise ValueError("Cannot resolve the bridge checkpoint XML")
+    return restore_saved_env_config(
+        saved,
+        playground_impl="jax",
+        physics_backend="mjx_jax",
+        warp_num_worlds=1,
+        xml_path=xml_path,
+    )
+
+
 class FrozenSkillController:
     """Evaluate one frozen actor against an externally advanced physical state."""
 
@@ -160,11 +176,12 @@ class FrozenSkillController:
         self.skill = skill
         self.seed = seed
         self.device = choose_device(device)
-        config = (
-            load_stand_config(self.checkpoint)
-            if skill == "stand"
-            else load_walk_config(self.checkpoint)
-        )
+        if skill == "stand":
+            config = load_stand_config(self.checkpoint)
+        elif skill == "walk":
+            config = load_walk_config(self.checkpoint)
+        else:
+            config = load_brake_config(self.checkpoint)
         with jax.default_device(self.device):
             self.env = make_environment(config)
             validate_xml_manifest(self.checkpoint, self.env)
@@ -382,6 +399,9 @@ def run_probe(
     seed: int,
     device: str,
     walk_phase_candidates: int,
+    brake_checkpoint: Path | None = None,
+    brake_phase_candidates: int = 64,
+    protocol: str = "walk_stop",
 ) -> tuple[
     dict[str, Any],
     list[dict[str, Any]],
@@ -392,6 +412,17 @@ def run_probe(
     stand = FrozenSkillController(stand_checkpoint, "stand", seed=seed, device=device)
     print("[transition] loading walk actor", flush=True)
     walk = FrozenSkillController(walk_checkpoint, "walk", seed=seed + 37, device=device)
+    brake = None
+    if protocol == "brake_handoff":
+        if brake_checkpoint is None:
+            raise ValueError("brake_handoff requires --brake-checkpoint")
+        print("[transition] loading brake actor", flush=True)
+        brake = FrozenSkillController(
+            brake_checkpoint,
+            "brake_transition",
+            seed=seed + 73,
+            device=device,
+        )
     if file_sha256(stand.env.xml_path) != file_sha256(walk.env.xml_path):
         raise ValueError("Stand and walk checkpoints use different XML models")
     if stand.env.action_size != walk.env.action_size or stand.env.dt != walk.env.dt:
@@ -399,19 +430,33 @@ def run_probe(
 
     model = mujoco.MjModel.from_xml_path(str(Path(stand.env.xml_path).resolve()))
     data = mujoco.MjData(model)
-    initial_state = stand.activate(np.zeros(2, dtype=np.float32))
+    if protocol == "walk_stop":
+        phases = WALK_STOP_PROBE_PHASES
+    elif protocol == "brake_handoff":
+        phases = BRAKE_HANDOFF_PHASES
+    else:
+        phases = DEFAULT_TRANSITION_PHASES
+    directives = build_transition_directives(dt=float(stand.env.dt), phases=phases)
+    initial_skill = directives[0].source
+    controllers = {"stand": stand, "walk": walk}
+    if brake is not None:
+        if file_sha256(brake.env.xml_path) != file_sha256(walk.env.xml_path):
+            raise ValueError("Brake and final policies use different XML models")
+        if brake.env.action_size != walk.env.action_size or brake.env.dt != walk.env.dt:
+            raise ValueError("Brake and final policy control interfaces differ")
+        controllers["brake_transition"] = brake
+    initial_controller = controllers[initial_skill]
+    initial_state = initial_controller.activate(np.zeros(2, dtype=np.float32))
     data.qpos[:] = np.asarray(initial_state.data.qpos)
     data.qvel[:] = np.asarray(initial_state.data.qvel)
     mujoco.mj_forward(model, data)
-    stand.origin_xy = data.qpos[:2].astype(np.float32).copy()
+    initial_controller.origin_xy = data.qpos[:2].astype(np.float32).copy()
 
     dt = float(stand.env.dt)
     substeps = round(dt / model.opt.timestep)
     if substeps < 1 or not np.isclose(substeps * model.opt.timestep, dt):
         raise ValueError("Control dt must be an integer multiple of simulation dt")
-    directives = build_transition_directives(dt)
     boundaries = dict(transition_boundaries(directives))
-    controllers = {"stand": stand, "walk": walk}
     torso_id = model.body("thorax").id
     floor_id = model.geom("floor").id
     foot_ids = (
@@ -434,11 +479,17 @@ def run_probe(
                 f"activate={incoming}",
                 flush=True,
             )
+            match_physical_state = incoming != "stand"
+            candidate_count = 1
+            if incoming == "walk":
+                candidate_count = walk_phase_candidates
+            elif incoming == "brake_transition":
+                candidate_count = brake_phase_candidates
             controllers[incoming].activate(
                 data.qpos[:2],
-                physical_qpos=(data.qpos.copy() if incoming == "walk" else None),
-                physical_qvel=(data.qvel.copy() if incoming == "walk" else None),
-                candidate_count=(walk_phase_candidates if incoming == "walk" else 1),
+                physical_qpos=(data.qpos.copy() if match_physical_state else None),
+                physical_qvel=(data.qvel.copy() if match_physical_state else None),
+                candidate_count=candidate_count,
             )
             if incoming == "stand":
                 stand_anchor = data.qpos[:2].copy()
@@ -527,13 +578,19 @@ def run_probe(
 
     phase_names = list(dict.fromkeys(row["phase"] for row in rows))
     summaries = [phase_summary(rows, name, dt) for name in phase_names]
-    required_names = {phase.name for phase in DEFAULT_TRANSITION_PHASES}
+    required_names = {phase.name for phase in phases}
     completed = required_names == set(phase_names) and len(rows) == len(directives)
     report = {
         "protocol": "frozen_skill_transition_probe_v1",
-        "scope": "straight_line_two_start_two_stop_no_reset_diagnostic",
+        "scope": protocol,
+        "walk_policy": FINAL_WALKING.label,
         "walk_checkpoint": str(walk_checkpoint.resolve()),
+        "stand_policy": FINAL_STANDING.label,
         "stand_checkpoint": str(stand_checkpoint.resolve()),
+        "brake_policy": "BRAKE_TRANSITION" if brake is not None else None,
+        "brake_checkpoint": (
+            str(brake_checkpoint.resolve()) if brake_checkpoint is not None else None
+        ),
         "xml_sha256": file_sha256(stand.env.xml_path),
         "seed": seed,
         "device": device,
@@ -545,8 +602,10 @@ def run_probe(
         "completed_seconds": len(rows) * dt,
         "physics_resets": 0,
         "walk_phase_candidates": walk_phase_candidates,
+        "brake_phase_candidates": brake_phase_candidates,
         "stand_activations": stand.activation_records,
         "walk_activations": walk.activation_records,
+        "brake_activations": [] if brake is None else brake.activation_records,
         "terminated": terminated,
         "phases": summaries,
         "max_motor_target_jump": max(row["target_jump"] for row in rows),
@@ -571,12 +630,29 @@ def main() -> None:
         "--stand-checkpoint", type=Path, default=DEFAULT_STAND_CHECKPOINT
     )
     parser.add_argument("--seed", type=int, default=11)
+    parser.add_argument(
+        "--protocol",
+        choices=("walk_stop", "brake_handoff", "two_cycle"),
+        default="walk_stop",
+        help="Isolate walking-to-standing, or run the full two-cycle diagnostic.",
+    )
     parser.add_argument("--device", choices=("cpu", "gpu"), default="gpu")
     parser.add_argument(
         "--walk-phase-candidates",
         type=int,
         default=64,
         help="Reference reset phases sampled at each stand-to-walk activation.",
+    )
+    parser.add_argument(
+        "--brake-checkpoint",
+        type=Path,
+        help="Trained BRAKE_TRANSITION checkpoint for the three-policy gate.",
+    )
+    parser.add_argument(
+        "--brake-phase-candidates",
+        type=int,
+        default=64,
+        help="Bridge reference phases matched to the incoming walking state.",
     )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--video", action="store_true")
@@ -594,6 +670,9 @@ def main() -> None:
         seed=args.seed,
         device=args.device,
         walk_phase_candidates=args.walk_phase_candidates,
+        brake_checkpoint=args.brake_checkpoint,
+        brake_phase_candidates=args.brake_phase_candidates,
+        protocol=args.protocol,
     )
     trace_path = output / "trace.csv"
     with trace_path.open("w", newline="", encoding="utf-8") as stream:
@@ -621,7 +700,12 @@ def main() -> None:
             720,
             layout="quad",
         )
-        video_path = output / "videos" / "transition_quad.mp4"
+        video_path = (
+            PROJECT_ROOT
+            / "videos"
+            / "final_skill_transitions"
+            / f"{output.name}_quad.mp4"
+        )
         video_path.parent.mkdir(parents=True, exist_ok=True)
         write_video(video_path, frames, fps=10)
         report["video"] = str(video_path)
