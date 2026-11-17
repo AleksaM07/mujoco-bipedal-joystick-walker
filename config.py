@@ -726,6 +726,7 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         transition_stop_phase=70.0 / 133.0,
         brake_lead_seconds_min=0.2,
         brake_lead_seconds_max=0.8,
+        brake_state_bank_file=None,
         # Keep finite clips away from the terminal edge during random reset.
         # This prevents short clamp snippets from ending a few control steps
         # after reset before the controller can learn a gait segment.
@@ -898,6 +899,9 @@ class EnvConfig:
     # remains owned by the frozen FINAL_WALKING actor.
     brake_lead_seconds_min: float = 0.2
     brake_lead_seconds_max: float = 0.8
+    # Optional offline rollout states from FINAL_WALKING. This closes the
+    # reset-distribution gap between ideal BVH states and supervisor handoff.
+    brake_state_bank_file: str | None = None
 
     # MJX-Warp je primarni backend. MJX-JAX ostaje samo za stare checkpoint-e
     # i male CPU dijagnostike.

@@ -28,23 +28,35 @@ def select_brake_checkpoint(
         raise ValueError(f"No evaluated checkpoints found under {run_dir}")
 
     def fractions(row: dict[str, float]) -> tuple[float, float, float]:
-        length = max(row.get("episode_length", 0.0), 1.0)
         handoff = row.get("brake_handoff_ready", 0.0)
         capture = row.get("brake_capture_ready", 0.0)
-        fall = sum(
-            row.get(key, 0.0) for key in ("done_low", "done_tip", "done_nan")
+        # Brax reports terminal flags as a fraction of evaluated episodes,
+        # unlike dense episode metrics which are sums over time. Dividing this
+        # value by episode_length would make a 100% fall rate look like 0.5%.
+        physical_termination = row.get(
+            "terminated",
+            sum(
+                row.get(key, 0.0)
+                for key in ("done_low", "done_tip", "done_nan")
+            ),
         )
-        return handoff, capture, fall / length
+        return handoff, capture, physical_termination
 
-    row, checkpoint = max(
-        candidates,
-        key=lambda candidate: (
-            fractions(candidate[0])[0],
-            fractions(candidate[0])[1],
-            -fractions(candidate[0])[2],
+    def rank(candidate: tuple[dict[str, float], Path]) -> tuple[float, ...]:
+        handoff, capture, termination = fractions(candidate[0])
+        eligible = (
+            handoff >= min_handoff_fraction
+            and termination <= max_fall_fraction
+        )
+        return (
+            float(eligible),
+            handoff,
+            capture,
+            -termination,
             candidate[0].get("episode_length", 0.0),
-        ),
-    )
+        )
+
+    row, checkpoint = max(candidates, key=rank)
     handoff_fraction, capture_fraction, fall_fraction = fractions(row)
     passed = (
         handoff_fraction >= min_handoff_fraction
@@ -59,6 +71,7 @@ def select_brake_checkpoint(
         "brake_handoff_fraction": handoff_fraction,
         "brake_capture_fraction": capture_fraction,
         "fall_fraction": fall_fraction,
+        "physical_termination_fraction": fall_fraction,
         "min_handoff_fraction": min_handoff_fraction,
         "max_fall_fraction": max_fall_fraction,
     }

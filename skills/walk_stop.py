@@ -213,8 +213,8 @@ class WalkStopEnv(BiomechanicsJoystickEnv):
             "stand_balance_score": self._balance_score(state.data, state.info),
         }
 
-    def reset(self, rng: jax.Array) -> mjx_env.State:
-        state = super().reset(rng)
+    def _initialize_transition(self, state: mjx_env.State) -> mjx_env.State:
+        """Attach a stop clock and anchor to any compatible physical reset."""
         info = dict(state.info)
         clip_id = info["bvh_reference_clip_id"].astype(jp.int32)
         duration = self._bvh_reference_motion_lengths[clip_id]
@@ -255,6 +255,10 @@ class WalkStopEnv(BiomechanicsJoystickEnv):
                 **{name: value.astype(jp.float32) for name, value in metrics.items()},
             }
         )
+
+    def reset(self, rng: jax.Array) -> mjx_env.State:
+        state = super().reset(rng)
+        return self._initialize_transition(state)
 
     def step(self, state: mjx_env.State, action: jax.Array) -> mjx_env.State:
         previous_alpha = self._transition_alpha(state.info)

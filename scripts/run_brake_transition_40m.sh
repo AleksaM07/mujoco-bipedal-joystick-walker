@@ -14,14 +14,19 @@ NUM_EVAL_ENVS="${NUM_EVAL_ENVS:-32}"
 NUM_MINIBATCHES="${NUM_MINIBATCHES:-4}"
 BATCH_SIZE="${BATCH_SIZE:-$((NUM_ENVS / NUM_MINIBATCHES))}"
 RUN_SUFFIX="${RUN_SUFFIX:-$(date +%Y%m%d_%H%M%S)}"
-RUN_TAG="brake_transition_40m_${RUN_SUFFIX}"
+RUN_TAG="brake_transition_v2_40m_${RUN_SUFFIX}"
 
 FINAL_WALKING="prezentacija/5th_success_final_natural_walk/model_000001024000"
 FINAL_STANDING="runs/stand_horizon60_20261106_1m_lr3e-4/resume/20261106_1414_stand_balance_v1_resume_1000000_lr0_0003_V1_steps-1m_reward-8554p6201_s/checkpoints/000001024000"
 FINAL_XML="prezentacija/5th_success_final_natural_walk/generated_models/human_male_180cm_75kg_standard_trainfast_v21_arms.xml"
 FINAL_WALK_BVH="BVH_walking_animation/cmuconvert-max-01-09/02/02_01.bvh"
+FINAL_WALK_STATE_BANK="skills/assets/final_walking_state_bank.npz"
 
-for required in "$PYTHON_BIN" "$FINAL_XML" "$FINAL_WALK_BVH"; do
+for required in \
+    "$PYTHON_BIN" \
+    "$FINAL_XML" \
+    "$FINAL_WALK_BVH" \
+    "$FINAL_WALK_STATE_BANK"; do
     if [[ ! -e "$required" ]]; then
         echo "Required path is missing: $required" >&2
         exit 2
@@ -58,7 +63,7 @@ fi
 export XLA_PYTHON_CLIENT_PREALLOCATE="${XLA_PYTHON_CLIENT_PREALLOCATE:-false}"
 export MUJOCO_GL="${MUJOCO_GL:-egl}"
 
-echo "Training BRAKE_TRANSITION for 40M steps"
+echo "Training BRAKE_TRANSITION v2 for 40M steps from FINAL_WALKING states"
 echo "PPO geometry: envs=$NUM_ENVS eval_envs=$NUM_EVAL_ENVS batch=$BATCH_SIZE minibatches=$NUM_MINIBATCHES"
 "$PYTHON_BIN" -u train.py \
     --device gpu \
@@ -72,6 +77,7 @@ echo "PPO geometry: envs=$NUM_ENVS eval_envs=$NUM_EVAL_ENVS batch=$BATCH_SIZE mi
     --transition-stop-phase 0.5263157894736842 \
     --brake-lead-seconds-min 0.2 \
     --brake-lead-seconds-max 0.8 \
+    --brake-state-bank-file "$FINAL_WALK_STATE_BANK" \
     --command-profile walk \
     --action-smoothing 0.2 \
     --reference-gait bvh \

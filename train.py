@@ -159,6 +159,7 @@ class TrainingProgressLogger:
                 ),
                 ("eval/episode_brake_capture_ready", "brake_capture_ready"),
                 ("eval/episode_brake_handoff_ready", "brake_handoff_ready"),
+                ("eval/episode_brake_state_bank_active", "brake_state_bank_active"),
             )
             for key, label in per_step_metrics:
                 value = metrics.get(key)
@@ -1645,6 +1646,7 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         "transition_stop_phase": env_config.transition_stop_phase,
         "brake_lead_seconds_min": env_config.brake_lead_seconds_min,
         "brake_lead_seconds_max": env_config.brake_lead_seconds_max,
+        "brake_state_bank_file": env_config.brake_state_bank_file,
         "reference_reset_min_steps_remaining": (
             env_config.reference_reset_min_steps_remaining
         ),
@@ -2775,6 +2777,11 @@ def main() -> None:
         help="Longest walking lead-in before BRAKE_TRANSITION starts blending.",
     )
     parser.add_argument(
+        "--brake-state-bank-file",
+        type=Path,
+        help="NPZ reset bank exported from the frozen FINAL_WALKING policy.",
+    )
+    parser.add_argument(
         "--stand-reward-mode",
         choices=[
             "imitation",
@@ -3352,6 +3359,11 @@ def main() -> None:
         transition_stop_phase=args.transition_stop_phase,
         brake_lead_seconds_min=args.brake_lead_seconds_min,
         brake_lead_seconds_max=args.brake_lead_seconds_max,
+        brake_state_bank_file=(
+            str(args.brake_state_bank_file)
+            if args.brake_state_bank_file is not None
+            else None
+        ),
         reference_loop_closure=args.reference_loop_closure,
         reference_gait=args.reference_gait,
         arm_actuators=args.arm_actuators,

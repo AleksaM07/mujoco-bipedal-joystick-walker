@@ -242,7 +242,15 @@ class FrozenSkillController:
         state = best_state
         self.info = state.info
         self.key = jax.random.PRNGKey(best_seed + 100_000)
-        self.origin_xy = np.asarray(root_xy, dtype=np.float32).copy()
+        candidate_root_xy = np.asarray(
+            jax.device_get(state.data.qpos[:2]), dtype=np.float32
+        )
+        # Map the external physical world into the incoming controller's own
+        # reference world. Old resets usually start near zero; rollout-bank
+        # resets intentionally retain travelled world XY and need this offset.
+        self.origin_xy = (
+            np.asarray(root_xy, dtype=np.float32) - candidate_root_xy
+        )
         self.activation_state = state
         record: dict[str, Any] = {
             "activation": self.activations,
@@ -251,6 +259,8 @@ class FrozenSkillController:
             "reference_time": float(
                 jax.device_get(state.info["bvh_reference_time_offset"])
             ),
+            "candidate_root_xy": candidate_root_xy.tolist(),
+            "controller_world_shift_xy": self.origin_xy.tolist(),
         }
         if best_score is not None:
             record["physical_match"] = best_score
@@ -450,7 +460,9 @@ def run_probe(
     data.qpos[:] = np.asarray(initial_state.data.qpos)
     data.qvel[:] = np.asarray(initial_state.data.qvel)
     mujoco.mj_forward(model, data)
-    initial_controller.origin_xy = data.qpos[:2].astype(np.float32).copy()
+    # The native model was initialized directly from this controller state, so
+    # both worlds already coincide and no translation is required.
+    initial_controller.origin_xy = np.zeros(2, dtype=np.float32)
 
     dt = float(stand.env.dt)
     substeps = round(dt / model.opt.timestep)

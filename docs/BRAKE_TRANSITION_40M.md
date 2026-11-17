@@ -26,19 +26,24 @@ the short braking window. It does not replace or fine-tune either final policy.
 
 ## Training task
 
-The bridge uses the exact final-walk assets:
+The v2 bridge uses the exact final-walk assets:
 
 - BVH `02_01.bvh`, selected processed clip 1 (source frames 79--213);
 - archived final-walk XML hash `494cb6707a59...`;
 - observation sizes 366/809 and 26 actions;
 - each reset starts 0.2--0.8 seconds before the calibrated double-support stop;
+- reset physics comes from `skills/assets/final_walking_state_bank.npz`, an
+  offline rollout of the frozen `FINAL_WALKING` actor rather than ideal BVH
+  qpos/qvel;
 - the episode is 200 control steps, rather than spending most samples
   relearning ordinary walking.
 
 The dense additive reward tracks speed decay, capture-point distance, support
 distance, torso orientation, height, angular speed, contact, smooth action and
 foot slip. It therefore remains informative before the strict stand region is
-reached. A handoff becomes eligible after 0.20 seconds inside the capture gate.
+reached. Physical termination receives a negative terminal reward instead of
+the old imitation reward. A handoff becomes eligible after 0.20 seconds inside
+the capture gate.
 
 ## Server command
 

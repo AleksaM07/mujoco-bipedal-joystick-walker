@@ -19,6 +19,7 @@ class BrakeTransitionTests(unittest.TestCase):
         forwarded = constructor.call_args.kwargs["config_overrides"]
         self.assertEqual(forwarded["brake_lead_seconds_min"], 0.2)
         self.assertEqual(forwarded["brake_lead_seconds_max"], 0.8)
+        self.assertIsNone(forwarded["brake_state_bank_file"])
 
     def test_evaluation_factory_selects_same_bridge(self) -> None:
         config = EnvConfig(locomotion_skill="brake_transition")
