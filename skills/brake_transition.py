@@ -14,6 +14,16 @@ from config import resolve_project_path
 from skills.walk_stop import WalkStopEnv
 
 
+def newline_compatible_sha256(path: Path) -> set[str]:
+    """Return XML hashes equivalent under Git's LF/CRLF checkout conversion."""
+    raw = path.read_bytes()
+    lf = raw.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    crlf = lf.replace(b"\n", b"\r\n")
+    return {
+        hashlib.sha256(contents).hexdigest() for contents in (raw, lf, crlf)
+    }
+
+
 class BrakeTransitionEnv(WalkStopEnv):
     """Train only the short braking maneuver, not walking or long standing.
 
@@ -83,8 +93,8 @@ class BrakeTransitionEnv(WalkStopEnv):
                 )
         if not np.isclose(float(values["dt"]), self.dt):
             raise ValueError("Brake state bank control dt does not match the env.")
-        xml_hash = hashlib.sha256(Path(self.xml_path).read_bytes()).hexdigest()
-        if str(values["xml_sha256"]) != xml_hash:
+        compatible_xml_hashes = newline_compatible_sha256(Path(self.xml_path))
+        if str(values["xml_sha256"]) not in compatible_xml_hashes:
             raise ValueError("Brake state bank XML hash does not match the env XML.")
         if not all(np.isfinite(values[name]).all() for name in expected_shapes):
             raise ValueError("Brake state bank contains non-finite values.")

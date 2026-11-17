@@ -1,12 +1,27 @@
+import hashlib
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import evaluate
 import train
 from config import EnvConfig
+from skills.brake_transition import newline_compatible_sha256
 
 
 class BrakeTransitionTests(unittest.TestCase):
+    def test_xml_hash_accepts_lf_and_crlf_checkout_variants(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            xml_path = Path(directory) / "model.xml"
+            xml_path.write_bytes(b"<mujoco>\n  <worldbody/>\n</mujoco>\n")
+            crlf = xml_path.read_bytes().replace(b"\n", b"\r\n")
+            crlf_hash = hashlib.sha256(crlf).hexdigest()
+
+            hashes = newline_compatible_sha256(xml_path)
+
+        self.assertIn(crlf_hash, hashes)
+
     def test_training_factory_selects_specialized_bridge(self) -> None:
         config = EnvConfig(
             locomotion_skill="brake_transition",
