@@ -721,6 +721,9 @@ def default_biomechanics_env_config() -> config_dict.ConfigDict:
         deepmimic_root_velocity_weight_scale=1.0,
         deepmimic_arm_reward_weight=0.0,
         stand_reward_mode="imitation",
+        transition_blend_seconds=0.8,
+        transition_min_walk_seconds=2.0,
+        transition_stop_phase=70.0 / 133.0,
         # Keep finite clips away from the terminal edge during random reset.
         # This prevents short clamp snippets from ending a few control steps
         # after reset before the controller can learn a gait segment.
@@ -884,6 +887,11 @@ class EnvConfig:
     locomotion_skill: str = "walk"
     # Keep the first stand ablation reproducible; balance shaping is opt-in.
     stand_reward_mode: str = "imitation"
+    # Walk-stop curriculum keeps the proven cyclic gait, then blends from a
+    # calibrated double-support phase into the generated neutral stand target.
+    transition_blend_seconds: float = 0.8
+    transition_min_walk_seconds: float = 2.0
+    transition_stop_phase: float = 70.0 / 133.0
 
     # MJX-Warp je primarni backend. MJX-JAX ostaje samo za stare checkpoint-e
     # i male CPU dijagnostike.

@@ -147,6 +147,7 @@ class TrainingProgressLogger:
                 ("eval/episode_measured_yaw", "yaw_step"),
                 ("eval/episode_command_lin_error", "cmd_lin_mae"),
                 ("eval/episode_command_yaw_error", "cmd_yaw_mae"),
+                ("eval/episode_transition_alpha", "stop_alpha_step"),
             )
             for key, label in per_step_metrics:
                 value = metrics.get(key)
@@ -1628,6 +1629,9 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         ),
         "deepmimic_arm_reward_weight": env_config.deepmimic_arm_reward_weight,
         "stand_reward_mode": env_config.stand_reward_mode,
+        "transition_blend_seconds": env_config.transition_blend_seconds,
+        "transition_min_walk_seconds": env_config.transition_min_walk_seconds,
+        "transition_stop_phase": env_config.transition_stop_phase,
         "reference_reset_min_steps_remaining": (
             env_config.reference_reset_min_steps_remaining
         ),
@@ -1659,8 +1663,8 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         config_overrides["init_qpos_file"] = env_config.init_qpos_file
     if env_config.accurate_physics:
         config_overrides["sim_dt"] = 0.005
-    if env_config.locomotion_skill not in {"walk", "stand"}:
-        raise ValueError("locomotion_skill must be walk or stand.")
+    if env_config.locomotion_skill not in {"walk", "stand", "walk_stop"}:
+        raise ValueError("locomotion_skill must be walk, stand or walk_stop.")
     if (
         env_config.locomotion_skill != "stand"
         and env_config.stand_reward_mode != "imitation"
@@ -1671,6 +1675,10 @@ def make_environment(env_config: EnvConfig, enable_erfi: bool = False):
         from skills.stand import StandEnv
 
         environment_class = StandEnv
+    elif env_config.locomotion_skill == "walk_stop":
+        from skills.walk_stop import WalkStopEnv
+
+        environment_class = WalkStopEnv
     return environment_class(
         env_version=env_config.env_version,
         config_overrides=config_overrides,
@@ -2711,9 +2719,24 @@ def main() -> None:
     )
     parser.add_argument(
         "--locomotion-skill",
-        choices=["walk", "stand"],
+        choices=["walk", "stand", "walk_stop"],
         default="walk",
-        help="Select the existing walker or the experimental stationary tracker.",
+        help="Select walk, stand, or the walk-to-stop transition curriculum.",
+    )
+    parser.add_argument(
+        "--transition-blend-seconds",
+        type=float,
+        default=EnvConfig.transition_blend_seconds,
+    )
+    parser.add_argument(
+        "--transition-min-walk-seconds",
+        type=float,
+        default=EnvConfig.transition_min_walk_seconds,
+    )
+    parser.add_argument(
+        "--transition-stop-phase",
+        type=float,
+        default=EnvConfig.transition_stop_phase,
     )
     parser.add_argument(
         "--stand-reward-mode",
@@ -3288,6 +3311,9 @@ def main() -> None:
         reference_motion_speed_scale=args.reference_motion_speed_scale,
         locomotion_skill=args.locomotion_skill,
         stand_reward_mode=args.stand_reward_mode,
+        transition_blend_seconds=args.transition_blend_seconds,
+        transition_min_walk_seconds=args.transition_min_walk_seconds,
+        transition_stop_phase=args.transition_stop_phase,
         reference_loop_closure=args.reference_loop_closure,
         reference_gait=args.reference_gait,
         arm_actuators=args.arm_actuators,
